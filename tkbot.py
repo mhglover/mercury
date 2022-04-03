@@ -33,6 +33,7 @@ CHANNEL = os.environ['DISCORD_CHANNEL']
 SERVER = os.environ['DISCORD_SERVER']
 PREFIX=os.environ['DISCORD_COMMAND_PREFIX']
 USER=os.environ['USER']
+PORT=os.environ['PORT']
 discord_token = os.environ['DISCORD_TOKEN']
 
 conf = tk.config_from_environment()
@@ -323,6 +324,6 @@ if __name__ == "__main__":
         user.token = token
         users[user.id] = user
         
-    bot.loop.create_task(app.run_task('0.0.0.0', 80))
+    bot.loop.create_task(app.run_task('0.0.0.0', PORT))
     bot.run(discord_token)
     
