@@ -82,6 +82,7 @@ async def before_serving():
 async def on_ready():
     logging.info("Bot Ready!")
 
+
 @bot.command()
 async def track(ctx, *, query: str = None):
     if query is None:
@@ -108,7 +109,6 @@ async def track(ctx, *, query: str = None):
                     await ctx.send(f"{artist} - {name}")
                 return
             
-
         await ctx.send("No search query specified")
         return
 
@@ -204,6 +204,7 @@ async def spotify_callback():
 
 
 async def getuser(userid=USER):
+    logging.info(f"fetching user token: {USER}")
     u = User.get_by_id(userid)
     token = pickle.loads(u.token)
     if token.is_expiring:
@@ -218,7 +219,7 @@ async def trackinfo(trackid):
     return f"{artist} - {name}"
 
 
-async def updatehistory():
+async def updatehistory(token):
     with spotify.token_as(token):
         history = await spotify.playback_recently_played()
         tracks = spotify.all_items(history)
@@ -237,7 +238,7 @@ async def updatehistory():
 async def spotify_player():
     logging.info("starting spotify player task")
     token = await getuser()
-    history = await updatehistory()
+    history = await updatehistory(token)
     ctx = bot.get_channel(CHANNEL)
     # await ctx.send(f"bot connecting to channel")
     
