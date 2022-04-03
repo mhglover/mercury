@@ -79,8 +79,6 @@ async def before_serving():
 
 @bot.event
 async def on_ready():
-    bot.loop.create_task(spotify_player())
-    bot.loop.create_task(queue_manager())
     logging.info("Bot Ready!")
 
 @bot.command()
@@ -159,12 +157,14 @@ async def devices(ctx, *, query: str = None):
 
 @bot.command()
 async def spotme(ctx):
-    # if ctx.author.id in users:
-    #     await ctx.channel.send(f"You're already set up as user {ctx.author.id}!")
+    if ctx.author.id in users:
+        await ctx.channel.send(f"You're already set up as user {ctx.author.id}! Starting a player!")
+        bot.loop.create_task(spotify_player())
+        bot.loop.create_task(queue_manager())
 
-    # else:
+    else:
         # scope = tk.scope.user_read_currently_playing
-    scope = [ "user-read-playback-state",
+        scope = [ "user-read-playback-state",
                 "user-modify-playback-state",
                 "user-read-currently-playing",
                 "user-read-recently-played",
@@ -174,15 +174,15 @@ async def spotme(ctx):
                 "user-top-read",
                 "playlist-read-private",
                 ]
-    auth = tk.UserAuth(cred, scope)
+        auth = tk.UserAuth(cred, scope)
 
-    auths[auth.state] = auth
-    users[auth.state] = ctx.author.id
+        auths[auth.state] = auth
+        users[auth.state] = ctx.author.id
 
-    # Returns: 1
-    channel = await ctx.author.create_dm()
-    logging.info(f"authentication for {ctx.author.name}")
-    await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
+        # Returns: 1
+        channel = await ctx.author.create_dm()
+        logging.info(f"authentication for {ctx.author.name}")
+        await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -265,13 +265,13 @@ async def spotify_player():
                     info = await trackinfo(next_up)
                     track = await spotify.track(next_up)
                     # await ctx.send(f"Now Playing: {info}")
-                    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name={info}))
+                    # await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name={info}))
                     logging.info(f"queuing trackid: {next_up} [{info}]")
                     
                     with spotify.token_as(token):
                         result = await spotify.playback_queue_add(track.uri)
                         PlayHistory.insert(trackid=currently.item.id)
-                    sleep = 10
+                    sleep = (remaining_ms / 1000) +1
                 else:
                     sleep = 0.01
             else:
