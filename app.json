@@ -1,0 +1,22 @@
+{
+  "name": "Mercury Radio",
+  "description": "A barebones Python app.",
+  "image": "heroku/python",
+  "repository": "https://github.com/mhglover/mercury",
+  "keywords": ["python", "discord", "spotify" ],
+  "addons": [],
+  "env": {
+    "SECRET_KEY": {
+      "description": "The secret key for the Django application.",
+      "generator": "secret"
+    }
+  },
+  "environments": {
+    "test": {
+      "scripts": {
+        "test-setup": "",
+        "test": "python tkbot.py"
+      }
+    }
+  }
+}
