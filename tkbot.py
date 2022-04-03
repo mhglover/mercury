@@ -261,7 +261,7 @@ async def spotify_player():
                 artist = " & ".join([x.name for x in currently.item.artists])
                 name = currently.item.name
                 logging.info(f"rating {artist} - {name}")
-                Rating.insert(userid=user.id, trackid=currently.item.id)
+                Rating.insert(userid=USER, trackid=currently.item.id)
                 if len(queue) > 0:
                     next_up = queue.popleft()
                     info = await trackinfo(next_up)
