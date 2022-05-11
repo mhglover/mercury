@@ -4,3 +4,4 @@ quart==0.16.3
 peewee==3.14.10
 python-dotenv==0.19.2
 psycopg2==2.9.3
+Jinja2==3.0.3
