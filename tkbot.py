@@ -5,21 +5,20 @@ from random import choice
 import asyncio
 import os
 from dotenv import load_dotenv
-import discord
-from discord import Game, Embed
-from discord.ext import commands
 import logging
-import discord
 import asyncio
 from quart import Quart, request, redirect
 from peewee import *
+import psycopg2
+from playhouse.db_url import connect
 import pickle
 from datetime import datetime
+import nextcord
+from nextcord.ext import commands
 
-db = SqliteDatabase('radio.db')
+pgdb = connect(os.environ['DATABASE_URL'], autorollback=True)
 
 app = Quart(__name__)
-client = discord.Client()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,41 +40,34 @@ cred = tk.Credentials(*conf)
 token_spotify = tk.request_client_token(*conf[:2])
 
 description = "Spotify track search bot using Tekore"
-bot = commands.Bot(command_prefix=PREFIX, description=description, activity=Game(name=f"{PREFIX} help"))
+bot = commands.Bot(command_prefix=PREFIX, description=description, activity=nextcord.Game(name=f"loading..."))
 spotify = tk.Spotify(token_spotify, asynchronous=True)
 queue = deque()
 
-
-class User(Model):
-    token = BlobField(null=True)
-
+class BaseModel(Model):
+    """A base model that will use our Postgresql database"""
     class Meta:
-        database = db
+        database = pgdb
 
+class User(BaseModel):
+    id = TextField()
+    token = BlobField()
+    class Meta:
+        database = pgdb
 
-class Rating(Model):
+class Rating(BaseModel):
     userid = CharField()
     trackid = CharField()
     rating = IntegerField()
 
-    class Meta:
-        database = db
-
-
-class PlayHistory(Model):
+class PlayHistory(BaseModel):
     trackid = CharField()
     played_at = TimestampField()
 
     class Meta:
-        database = db
         indexes = (
             (('trackid', 'played_at'), True),
         )
-
-
-@app.before_serving
-async def before_serving():
-    logging.info("before_serving")
 
 
 @bot.event
@@ -83,39 +75,48 @@ async def on_ready():
     logging.info("Bot Ready!")
 
 
-@bot.command()
-async def track(ctx, *, query: str = None):
-    if query is None:
-        if ctx.author.id in users:
-            user = users[ctx.author.id]
-            if type(user.token) == bytes:
-                token = pickle.loads(user.token)
-            else:
-                token = user.token
-
-            if token.is_expiring:
-                token = cred.refresh(token)
-                user.token = token
-                user.save()
-                users[user] = token
-            
-            with spotify.token_as(token):
-                playback = await spotify.playback_currently_playing()
-                if playback is None:
-                    await ctx.send("Nothing playing")
-                else:
-                    artist = " & ".join([x.name for x in playback.item.artists])
-                    name = playback.item.name
-                    await ctx.send(f"{artist} - {name}")
-                return
-            
-        await ctx.send("No search query specified")
+@bot.slash_command(description="check what's currently playing", guild_ids=[int(SERVER)])
+async def np(interaction: nextcord.Interaction):
+    itoken = interaction.token
+    iuser = interaction.user
+    uid = str(iuser.id)
+    user = users[uid]
+        
+    with spotify.token_as(token):
+        playback = await spotify.playback_currently_playing()
+        if playback is None:
+            await interaction.send("Nothing.")
+        else:
+            artist = " & ".join([x.name for x in playback.item.artists])
+            name = playback.item.name
+            milliseconds = playback.item.duration_ms - playback.progress_ms
+            seconds = int(milliseconds / 1000) % 60
+            minutes = int(milliseconds / (1000*60)) % 60
+            await interaction.send(f"{artist} - {name} ({minutes}:{seconds:02} remaining)")
         return
 
+
+@bot.slash_command(description="what's next", guild_ids=[int(SERVER)])
+async def un(interaction: nextcord.Interaction):
+    itoken = interaction.token
+    iuser = interaction.user
+    uid = str(iuser.id)
+    user = users[uid]
+        
+    with spotify.token_as(token):
+        tid = queue[0]
+        track_name = await trackinfo(tid)
+        await interaction.send(f"{track_name}")
+
+
+@bot.slash_command(description="search for a track", guild_ids=[int(SERVER)])
+async def searchtrack(ctx: nextcord.Interaction, *, query: str = None):
+    uid = str(ctx.user.id)
+        
     tracks, = await spotify.search(query, limit=5)
-    embed = Embed(title="Track search results", color=0x1DB954)
+    # embed = Embed(title="Track search results", color=0x1DB954)
     # embed.set_thumbnail(url="https://i.imgur.com/890YSn2.png")
-    embed.set_footer(text="Requested by " + ctx.author.display_name)
+    # embed.set_footer(text="Requested by " + ctx.author.display_name)
 
     for t in tracks.items:
         artist = t.artists[0].name
@@ -126,15 +127,15 @@ async def track(ctx, *, query: str = None):
             ":busts_in_silhouette: " + artist,
             ":cd: " + t.album.name
         ])
-        embed.add_field(name=t.name, value=message, inline=False)
+        # embed.add_field(name=t.name, value=message, inline=False)
 
-    await ctx.send(embed=embed)
+    # await ctx.send(embed=embed)
 
 
 @bot.command()
 async def devices(ctx, *, query: str = None):
-    if ctx.author.id in users:
-        user = users[ctx.author.id]
+    if str(ctx.author.id) in users:
+        user = users[str(ctx.author.id)]
         if type(user.token) == bytes:
             token = pickle.loads(user.token)
         else:
@@ -148,7 +149,7 @@ async def devices(ctx, *, query: str = None):
         
         with spotify.token_as(token):
             devices = await spotify.playback_devices()
-            await ctx.send(f"fetched devices: {devices}")
+            await ctx.send("fetched devices: %s" % [x.name for x in devices])
             return
 
     else:
@@ -158,9 +159,9 @@ async def devices(ctx, *, query: str = None):
 
 @bot.command()
 async def spotme(ctx):
-    if ctx.author.id in users:
-        await ctx.channel.send(f"You're already set up as user {ctx.author.id}! Starting a player!")
-        bot.loop.create_task(spotify_player())
+    if str(ctx.author.id) in users:
+        await ctx.channel.send(f"You're already set up as user {ctx.author.id}! Starting a watcher.")
+        bot.loop.create_task(spotify_watcher())
         bot.loop.create_task(queue_manager())
 
     else:
@@ -186,6 +187,11 @@ async def spotme(ctx):
         await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
 
 
+@app.before_serving
+async def before_serving():
+    logging.info("before_serving")
+
+
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
 
@@ -198,14 +204,15 @@ async def spotify_callback():
         return 'Invalid state!', 400
 
     token = auth.request_token(code, state)
-    user = User.create(id=spotifyid, token=pickle.dumps(token))
+    p = pickle.dumps(token)
+    user = User.create(id=spotifyid, token=p)
     users[spotifyid] = user
     return redirect(f"https://discord.com/channels/{SERVER}/{CHANNEL}", 307)
 
 
 async def getuser(userid=USER):
-    logging.info(f"fetching user token: {USER}")
-    u = User.get_by_id(userid)
+    logging.info(f"fetching user token: {userid}")
+    u = User.get(User.id == userid)
     token = pickle.loads(u.token)
     if token.is_expiring:
         token = cred.refresh(token)
@@ -235,10 +242,11 @@ async def updatehistory(token):
                     logging.exception("tried to write to history and failed with exception")
 
 
-async def spotify_player():
-    logging.info("starting spotify player task")
-    token = await getuser()
-    history = await updatehistory(token)
+async def spotify_watcher(token=None):
+    logging.info("starting spotify watcher task")
+    if token is None:
+        token = await getuser()
+    # history = await updatehistory(token)
     ctx = bot.get_channel(CHANNEL)
     # await ctx.send(f"bot connecting to channel")
     
@@ -254,25 +262,27 @@ async def spotify_player():
         else:
             nowplaying = await trackinfo(currently.item.id)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
+            if bot is not None:
+                await bot.change_presence(activity=nextcord.Game(name=nowplaying))
             logging.info(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
         
             if remaining_ms < 20000:
                 logging.debug(f"remaining_ms: {remaining_ms}")
                 artist = " & ".join([x.name for x in currently.item.artists])
                 name = currently.item.name
-                logging.info(f"rating {artist} - {name}")
-                Rating.insert(userid=USER, trackid=currently.item.id)
                 if len(queue) > 0:
-                    next_up = queue.popleft()
-                    info = await trackinfo(next_up)
-                    track = await spotify.track(next_up)
-                    # await ctx.send(f"Now Playing: {info}")
-                    # await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name={info}))
-                    logging.info(f"queuing trackid: {next_up} [{info}]")
+                    upcoming_tid = queue.popleft()
+                    upcoming_track = await trackinfo(upcoming_tid)
+                    track = await spotify.track(upcoming_tid)
+                    await bot.change_presence(activity=nextcord.Game(name=upcoming_track))
+                    logging.info(f"queuing trackid: {upcoming_tid} [{upcoming_track}]")
                     
                     with spotify.token_as(token):
+                        logging.info(f"rating {artist} - {name}")
+                        Rating.create(userid=USER, trackid=currently.item.id, rating=1)
                         result = await spotify.playback_queue_add(track.uri)
-                        PlayHistory.insert(trackid=currently.item.id)
+                        insertedkey = PlayHistory.create(trackid=currently.item.id)
+                        logging.info(f"playhistory inserted: {insertedkey}")
                     sleep = (remaining_ms / 1000) +1
                 else:
                     sleep = 0.01
@@ -282,7 +292,7 @@ async def spotify_player():
         logging.debug(f"sleeping for {sleep} seconds")
         await asyncio.sleep(sleep)
     
-    await bot.sendMessage("spotify player dying")
+    await bot.sendMessage("spotify watcher dying")
 
 
 async def queue_manager():
@@ -290,29 +300,27 @@ async def queue_manager():
     token = await getuser()
     
     while True:
-        while len(queue) < 5:
+        while len(queue) < 1:
 
             with spotify.token_as(token):
                 history = [i.trackid for i in PlayHistory.select()]
                 tops = [item.id async for item in spotify.all_items(await spotify.current_user_top_tracks())]
                 saveds = [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
                 potentials = [x for x in tops + saveds if x not in history and x not in queue]
-                trackid =  choice(potentials)
-                t = await trackinfo(trackid)
+                upcoming_tid =  choice(potentials)
+                upcoming_track = await trackinfo(upcoming_tid)
                 
-                queue.append(trackid)
+                queue.append(upcoming_tid)
 
-                logging.info(f"selected {t}")
+                logging.info(f"selected {upcoming_track}")
                 # logging.info(f"tops: {len(tops)} saveds: {len(saveds)} history: {len(history)} potentials: {len(potentials)}")
-
 
         await asyncio.sleep(60)
 
 
-
 if __name__ == "__main__":
-    db.connect()
-    db.create_tables([User, Rating, PlayHistory])
+    pgdb.connect()
+    pgdb.create_tables([User, Rating, PlayHistory])
 
     auths = {}  # Ongoing authorisations: state -> UserAuth
     # users = {}  # User tokens: state -> token (use state as a user ID)
@@ -320,10 +328,13 @@ if __name__ == "__main__":
     query = User.select()
     for user in query:
         token = pickle.loads(user.token)
-        if token.is_expiring:
+        if token.expires_in <= 0:
             token = cred.refresh(token)
         user.token = token
         users[user.id] = user
+        
+        bot.loop.create_task(spotify_watcher(token))
+        bot.loop.create_task(queue_manager())
         
     bot.loop.create_task(app.run_task('0.0.0.0', PORT))
     bot.run(discord_token)
