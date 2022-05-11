@@ -72,15 +72,26 @@ class PlayHistory(BaseModel):
 
 @bot.event
 async def on_ready():
+    tasks.append(bot.loop.create_task(queue_manager(), name="queue_manager"))
+    query = User.select()
+    for user in query:
+        token = pickle.loads(user.token)
+        if token.expires_in <= 0:
+            token = cred.refresh(token)
+        user.token = token
+        users[user.id] = user
+        
+        tasks.append(bot.loop.create_task(spotify_watcher(token, uid=user.id), name=user.id + "_watcher"))
+        
     logging.info("Bot Ready!")
 
 
 @bot.slash_command(description="check what's currently playing", guild_ids=[int(SERVER)])
 async def np(interaction: nextcord.Interaction):
-    itoken = interaction.token
-    iuser = interaction.user
-    uid = str(iuser.id)
-    user = users[uid]
+    user = users[str(interaction.user.id)]
+    token = await getuser(user.id)
+    if "queue_manager" in tasks:
+        pass
         
     with spotify.token_as(token):
         playback = await spotify.playback_currently_playing()
@@ -93,7 +104,6 @@ async def np(interaction: nextcord.Interaction):
             seconds = int(milliseconds / 1000) % 60
             minutes = int(milliseconds / (1000*60)) % 60
             await interaction.send(f"{artist} - {name} ({minutes}:{seconds:02} remaining)")
-        return
 
 
 @bot.slash_command(description="what's next", guild_ids=[int(SERVER)])
@@ -114,9 +124,9 @@ async def searchtrack(ctx: nextcord.Interaction, *, query: str = None):
     uid = str(ctx.user.id)
         
     tracks, = await spotify.search(query, limit=5)
-    # embed = Embed(title="Track search results", color=0x1DB954)
-    # embed.set_thumbnail(url="https://i.imgur.com/890YSn2.png")
-    # embed.set_footer(text="Requested by " + ctx.author.display_name)
+    embed = nextcord.Embed(title="Track search results", color=0x1DB954)
+    embed.set_thumbnail(url="https://i.imgur.com/890YSn2.png")
+    embed.set_footer(text="Requested by " + ctx.user.display_name)
 
     for t in tracks.items:
         artist = t.artists[0].name
@@ -127,9 +137,9 @@ async def searchtrack(ctx: nextcord.Interaction, *, query: str = None):
             ":busts_in_silhouette: " + artist,
             ":cd: " + t.album.name
         ])
-        # embed.add_field(name=t.name, value=message, inline=False)
+        embed.add_field(name=t.name, value=message, inline=False)
 
-    # await ctx.send(embed=embed)
+    await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -157,8 +167,8 @@ async def devices(ctx, *, query: str = None):
         return
 
 
-@bot.command()
-async def spotme(ctx):
+@bot.slash_command(description="grant permission to mess with your spoglify", guild_ids=[int(SERVER)])
+async def spotme(ctx: nextcord.Interaction):
     if str(ctx.author.id) in users:
         await ctx.channel.send(f"You're already set up as user {ctx.author.id}! Starting a watcher.")
         bot.loop.create_task(spotify_watcher())
@@ -211,11 +221,14 @@ async def spotify_callback():
 
 
 async def getuser(userid=USER):
-    logging.info(f"fetching user token: {userid}")
+    logging.debug(f"fetching user token: {userid}")
     u = User.get(User.id == userid)
     token = pickle.loads(u.token)
     if token.is_expiring:
         token = cred.refresh(token)
+    if userid + "_watcher" not in [x.get_name() for x in tasks]:
+        tasks.append(bot.loop.create_task(spotify_watcher(token), name=userid + "_watcher"))
+    
     return token
 
 
@@ -242,8 +255,8 @@ async def updatehistory(token):
                     logging.exception("tried to write to history and failed with exception")
 
 
-async def spotify_watcher(token=None):
-    logging.info("starting spotify watcher task")
+async def spotify_watcher(token=None, uid=""):
+    logging.info(f"starting spotify watcher task for user {uid}")
     if token is None:
         token = await getuser()
     # history = await updatehistory(token)
@@ -256,9 +269,8 @@ async def spotify_watcher(token=None):
             currently = await spotify.playback_currently_playing()
         
         if currently is None:
-            logging.info(f"not currently playing -- attempting to resume")
-            spotify.playback_resume()
-            sleep = 60
+            # logging.info(f"not currently playing -- attempting to resume")
+            return
         else:
             nowplaying = await trackinfo(currently.item.id)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
@@ -266,7 +278,7 @@ async def spotify_watcher(token=None):
                 await bot.change_presence(activity=nextcord.Game(name=nowplaying))
             logging.info(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
         
-            if remaining_ms < 20000:
+            if remaining_ms <= 30000:
                 logging.debug(f"remaining_ms: {remaining_ms}")
                 artist = " & ".join([x.name for x in currently.item.artists])
                 name = currently.item.name
@@ -282,12 +294,12 @@ async def spotify_watcher(token=None):
                         Rating.create(userid=USER, trackid=currently.item.id, rating=1)
                         result = await spotify.playback_queue_add(track.uri)
                         insertedkey = PlayHistory.create(trackid=currently.item.id)
-                        logging.info(f"playhistory inserted: {insertedkey}")
+                        logging.debug(f"playhistory inserted: {insertedkey}")
                     sleep = (remaining_ms / 1000) +1
                 else:
                     sleep = 0.01
             else:
-                sleep = (remaining_ms / 2 ) / 1000
+                sleep = (remaining_ms - 30000 ) / 1000
 
         logging.debug(f"sleeping for {sleep} seconds")
         await asyncio.sleep(sleep)
@@ -297,17 +309,27 @@ async def spotify_watcher(token=None):
 
 async def queue_manager():
     logging.info(f'starting queue manager')
-    token = await getuser()
+    history = []
+    tops = []
+    recommendations = []
+    saveds = []
+    potentials = []
+    for user in users:
+        token = await getuser(user)
+        with spotify.token_as(token):
+            history = history + [i.trackid for i in PlayHistory.select()]
+            tops = tops + [item.id async for item in spotify.all_items(await spotify.current_user_top_tracks())]
+            r = await spotify.recommendations(track_ids=[choice(tops)])
+            recommendations = recommendations + [item.id for item in r.tracks]
+            saveds = saveds + [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
+            potentials = [x for x in tops + saveds + recommendations if x not in history and x not in queue]
+    logging.info(f"{len(potentials)} potential songs")
     
     while True:
         while len(queue) < 1:
-
-            with spotify.token_as(token):
-                history = [i.trackid for i in PlayHistory.select()]
-                tops = [item.id async for item in spotify.all_items(await spotify.current_user_top_tracks())]
-                saveds = [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
-                potentials = [x for x in tops + saveds if x not in history and x not in queue]
                 upcoming_tid =  choice(potentials)
+                r = await spotify.recommendations(track_ids=[upcoming_tid]) 
+                potentials.append(r.tracks[0].id)
                 upcoming_track = await trackinfo(upcoming_tid)
                 
                 queue.append(upcoming_tid)
@@ -315,7 +337,7 @@ async def queue_manager():
                 logging.info(f"selected {upcoming_track}")
                 # logging.info(f"tops: {len(tops)} saveds: {len(saveds)} history: {len(history)} potentials: {len(potentials)}")
 
-        await asyncio.sleep(60)
+        await asyncio.sleep(10)
 
 
 if __name__ == "__main__":
@@ -325,16 +347,7 @@ if __name__ == "__main__":
     auths = {}  # Ongoing authorisations: state -> UserAuth
     # users = {}  # User tokens: state -> token (use state as a user ID)
     users = {}
-    query = User.select()
-    for user in query:
-        token = pickle.loads(user.token)
-        if token.expires_in <= 0:
-            token = cred.refresh(token)
-        user.token = token
-        users[user.id] = user
-        
-        bot.loop.create_task(spotify_watcher(token))
-        bot.loop.create_task(queue_manager())
+    tasks = []
         
     bot.loop.create_task(app.run_task('0.0.0.0', PORT))
     bot.run(discord_token)
