@@ -1,5 +1,6 @@
-tekore
-discord
-quart
-peewee
-python-dotenv
+tekore==4.3.0
+nextcord==2.0.0a10
+quart==0.16.3
+peewee==3.14.10
+python-dotenv==0.19.2
+psycopg2==2.9.3
