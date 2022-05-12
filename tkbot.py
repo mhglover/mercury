@@ -1,4 +1,4 @@
-from distutils.log import error
+# from distutils.log import error
 from collections import deque
 import tekore as tk
 from random import choice
@@ -22,7 +22,7 @@ app = Quart(__name__)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    format='%(asctime)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -56,7 +56,7 @@ class User(BaseModel):
         database = pgdb
 
 class Rating(BaseModel):
-    userid = CharField()
+    user_id = ForeignKeyField(User, backref="ratings")
     trackid = CharField()
     rating = IntegerField()
 
@@ -262,6 +262,7 @@ async def spotify_watcher(token=None, uid=""):
     # await ctx.send(f"bot connecting to channel")
     
     while True:
+        logging.debug("watcher awake")
         
         with spotify.token_as(token):
             currently = await spotify.playback_currently_playing()
@@ -272,9 +273,6 @@ async def spotify_watcher(token=None, uid=""):
         else:
             nowplaying = await trackinfo(currently.item.id)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
-            if bot is not None:
-                await bot.change_presence(activity=nextcord.Game(name=nowplaying))
-            logging.debug(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
         
             if remaining_ms <= 30000:
                 logging.debug(f"remaining_ms: {remaining_ms}")
@@ -284,22 +282,35 @@ async def spotify_watcher(token=None, uid=""):
                     upcoming_tid = queue.popleft()
                     upcoming_track = await trackinfo(upcoming_tid)
                     track = await spotify.track(upcoming_tid)
-                    await bot.change_presence(activity=nextcord.Game(name=upcoming_track))
-                    logging.debug(f"queuing {upcoming_track} ({upcoming_tid})")
+                    logging.debug(f"updating presence: UPCOMING {upcoming_track}")
+                    await bot.change_presence(activity=nextcord.Game(name=f"upcoming: {upcoming_track}"))
                     
                     with spotify.token_as(token):
                         logging.debug(f"rating {artist} - {name}")
-                        Rating.create(userid=USER, trackid=currently.item.id, rating=1)
-                        result = await spotify.playback_queue_add(track.uri)
-                        insertedkey = PlayHistory.create(trackid=currently.item.id)
-                        logging.debug(f"playhistory inserted: {insertedkey}")
+                        try: 
+                            result = Rating.create(user_id=uid, trackid=currently.item.id, rating=1)
+                        except Exception as e:
+                            logging.error(f"rating error: {e}")
+                        
+                        try:
+                            logging.debug(f"queuing {upcoming_track} ({upcoming_tid})")
+                            result = await spotify.playback_queue_add(track.uri)
+                        except Exception as e:
+                            logging.error(f"queuing error: {e}\n\n{result}")
+                        
+                        try:
+                            insertedkey = PlayHistory.create(trackid=currently.item.id)
+                        except Exception as e:
+                            logging.error(f"playhistory exception: {e}")
                     sleep = (remaining_ms / 1000) +1
                 else:
-                    sleep = 0.01
-            else:
+                    await bot.change_presence(activity=nextcord.Game(name=nowplaying))
+                    sleep = 30
+            else :
+                logging.debug(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
                 sleep = (remaining_ms - 30000 ) / 1000
 
-        logging.debug(f"sleeping for {sleep} seconds")
+        logging.debug(f"watcher sleeping for {sleep} seconds")
         await asyncio.sleep(sleep)
     
     await bot.sendMessage("spotify watcher dying")
@@ -332,8 +343,7 @@ async def queue_manager():
                 
                 queue.append(upcoming_tid)
 
-                logging.debug(f"selected {upcoming_track}")
-                # logging.info(f"tops: {len(tops)} saveds: {len(saveds)} history: {len(history)} potentials: {len(potentials)}")
+                logging.debug(f"upcoming track selected: {upcoming_track}")
 
         await asyncio.sleep(10)
 
