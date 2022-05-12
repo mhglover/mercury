@@ -276,7 +276,7 @@ async def spotify_watcher(token=None, uid=""):
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             if bot is not None:
                 await bot.change_presence(activity=nextcord.Game(name=nowplaying))
-            logging.info(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
+            logging.debug(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
         
             if remaining_ms <= 30000:
                 logging.debug(f"remaining_ms: {remaining_ms}")
@@ -287,10 +287,10 @@ async def spotify_watcher(token=None, uid=""):
                     upcoming_track = await trackinfo(upcoming_tid)
                     track = await spotify.track(upcoming_tid)
                     await bot.change_presence(activity=nextcord.Game(name=upcoming_track))
-                    logging.info(f"queuing trackid: {upcoming_tid} [{upcoming_track}]")
+                    logging.debug(f"queuing {upcoming_track} ({upcoming_tid})")
                     
                     with spotify.token_as(token):
-                        logging.info(f"rating {artist} - {name}")
+                        logging.debug(f"rating {artist} - {name}")
                         Rating.create(userid=USER, trackid=currently.item.id, rating=1)
                         result = await spotify.playback_queue_add(track.uri)
                         insertedkey = PlayHistory.create(trackid=currently.item.id)
@@ -334,7 +334,7 @@ async def queue_manager():
                 
                 queue.append(upcoming_tid)
 
-                logging.info(f"selected {upcoming_track}")
+                logging.debug(f"selected {upcoming_track}")
                 # logging.info(f"tops: {len(tops)} saveds: {len(saveds)} history: {len(history)} potentials: {len(potentials)}")
 
         await asyncio.sleep(10)
