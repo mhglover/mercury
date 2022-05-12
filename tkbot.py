@@ -106,12 +106,10 @@ async def np(interaction: nextcord.Interaction):
             await interaction.send(f"{artist} - {name} ({minutes}:{seconds:02} remaining)")
 
 
-@bot.slash_command(description="what's next", guild_ids=[int(SERVER)])
+@bot.slash_command(description="up next", guild_ids=[int(SERVER)])
 async def un(interaction: nextcord.Interaction):
-    itoken = interaction.token
-    iuser = interaction.user
-    uid = str(iuser.id)
-    user = users[uid]
+    user = users[str(interaction.user.id)]
+    token = await getuser(user.id)
         
     with spotify.token_as(token):
         tid = queue[0]
