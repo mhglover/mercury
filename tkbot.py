@@ -50,10 +50,8 @@ class BaseModel(Model):
         database = pgdb
 
 class User(BaseModel):
-    id = TextField()
+    id = TextField(primary_key=True)
     token = BlobField()
-    class Meta:
-        database = pgdb
 
 class Rating(BaseModel):
     user_id = ForeignKeyField(User, backref="ratings")
@@ -231,26 +229,64 @@ async def getuser(userid=USER):
 
 
 async def trackinfo(trackid):
+    
     track = await spotify.track(trackid)
     artist = " & ".join([x.name for x in track.artists])
     name = track.name
     return f"{artist} - {name}"
 
 
-async def updatehistory(token):
-    with spotify.token_as(token):
-        history = await spotify.playback_recently_played()
-        tracks = spotify.all_items(history)
-        dbhistory = [(i.trackid, int(i.played_at.timestamp())) for i in PlayHistory.select()]
+async def rate_list(items, uid, rating):
+    if type(items) is list:
+        if type(items[0]) is str:
+            trackids = items
+        else:
+            trackids = [x.id for x in items]
+    else:
+        trackids = [x.track.id for x in items]
+    logging.debug(f"rating {len(trackids)} tracks")
+    tracks = [{"trackid": i, "user_id": uid, "rating": rating} for i in trackids]
 
-        async for played in tracks:
-            if (played.track.id, int(played.played_at.timestamp())) not in dbhistory:
-                logging.info(f"adding to history: {played.track.id}")
-                try:
-                    h = PlayHistory(trackid=played.track.id, played_at=int(played.played_at.timestamp()))
-                    h.save()
-                except Exception as e:
-                    logging.exception("tried to write to history and failed with exception")
+    with pgdb.atomic():
+        for each in tracks:
+            logging.debug(f"rating {each['user_id']} {each['trackid']} {rating}")
+            try:
+                Rating.get_or_create(**each)
+            except Exception as e:
+                logging.error(f"rating history: {e}")
+    
+    return len(tracks)
+        
+
+@bot.slash_command(description="dig into my spotify to find out what I like", guild_ids=[int(SERVER)])
+async def pullratings(interaction: nextcord.Interaction):
+    uid = str(interaction.user.id)
+    token = await getuser(uid)
+
+    with spotify.token_as(token):
+        try:
+            ratings = Rating.get(user_id=uid)
+        except Exception as e:
+            logging.error(f"rating error: {e}")
+        
+        # rate history (20 items)
+        r = [item.track.id async for item in spotify.all_items(await spotify.playback_recently_played())]
+        recents = await spotify.playback_recently_played()
+        rated = await rate_list(recents.items, uid, 1)
+        
+        # rate tops
+        tops = [x async for x in spotify.all_items(await spotify.current_user_top_tracks())]
+        rated = rated + await rate_list(tops, uid, 4)
+
+        s = await spotify.saved_tracks()
+        saved_tracks = [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
+        rated = rated + await rate_list(saved_tracks, uid, 4)
+
+        message = f"rated {rated} items"
+        if interaction.is_expired():
+            await interaction.channel.send(message)
+        else:
+            await interaction.send(message)
 
 
 async def spotify_watcher(token=None, uid=""):
