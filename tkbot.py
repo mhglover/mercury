@@ -165,12 +165,16 @@ async def devices(ctx, *, query: str = None):
 
 @bot.slash_command(description="grant permission to mess with your spoglify", guild_ids=[int(SERVER)])
 async def spotme(ctx: nextcord.Interaction):
-    if str(ctx.author.id) in users:
-        await ctx.channel.send(f"You're already set up as user {ctx.author.id}! Starting a watcher.")
-        bot.loop.create_task(spotify_watcher())
-        bot.loop.create_task(queue_manager())
+    userid = str(ctx.user.id)
+    if str(userid) in users:
+        await ctx.channel.send(f"You're already set up as user {userid}.")
+        token = await getuser(userid)
+
+        if userid + "_watcher" not in [x.get_name() for x in tasks]:
+            tasks.append(bot.loop.create_task(spotify_watcher(token), name=userid + "_watcher"))
 
     else:
+        await ctx.channel.send(f"Sending you a DM...")
         # scope = tk.scope.user_read_currently_playing
         scope = [ "user-read-playback-state",
                 "user-modify-playback-state",
@@ -185,11 +189,11 @@ async def spotme(ctx: nextcord.Interaction):
         auth = tk.UserAuth(cred, scope)
 
         auths[auth.state] = auth
-        users[auth.state] = ctx.author.id
+        users[auth.state] = userid
 
         # Returns: 1
-        channel = await ctx.author.create_dm()
-        logging.info(f"authentication for {ctx.author.name}")
+        channel = await ctx.user.create_dm()
+        logging.info(f"Attempting authentication for {ctx.user.name}")
         await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
 
 
@@ -200,8 +204,8 @@ async def before_serving():
 
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
-
     code = request.args.get('code', "")
+    logging.info(f"callback for code {code}")
     state = request.args.get('state', "")
     auth = auths.pop(state, None)
     spotifyid = users.pop(state, None) 
@@ -319,7 +323,7 @@ async def spotify_watcher(token=None, uid=""):
                     upcoming_track = await trackinfo(upcoming_tid)
                     track = await spotify.track(upcoming_tid)
                     logging.debug(f"updating presence: UPCOMING {upcoming_track}")
-                    await bot.change_presence(activity=nextcord.Game(name=f"upcoming: {upcoming_track}"))
+                    await bot.change_presence(activity=nextcord.Game(name=f"{os.environ['HEROKU_RELEASE_VERSION']} upcoming: {upcoming_track}"))
                     
                     with spotify.token_as(token):
                         logging.debug(f"rating {artist} - {name}")
@@ -340,7 +344,7 @@ async def spotify_watcher(token=None, uid=""):
                             logging.error(f"playhistory exception: {e}")
                     sleep = (remaining_ms / 1000) +1
                 else:
-                    await bot.change_presence(activity=nextcord.Game(name=nowplaying))
+                    await bot.change_presence(activity=nextcord.Game(name=f"{os.environ['HEROKU_RELEASE_VERSION']} {nowplaying}"))
                     sleep = 30
             else :
                 logging.debug(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
@@ -359,7 +363,8 @@ async def queue_manager():
     recommendations = []
     saveds = []
     potentials = []
-    for user in users:
+    userlist = list(users)
+    for user in userlist:
         token = await getuser(user)
         with spotify.token_as(token):
             history = history + [i.trackid for i in PlayHistory.select()]
