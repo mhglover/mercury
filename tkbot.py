@@ -93,11 +93,11 @@ async def before_serving():
 @bot.event
 async def on_ready():
     tasks.append(bot.loop.create_task(queue_manager(), name="queue_manager"))
-    query = User.select()
-    for user in query:
-        users[user.id] = user
+    # query = User.select()
+    # for user in query:
+    #     users[user.id] = user
         
-        tasks.append(bot.loop.create_task(spotify_watcher(user.id), name=user.id + "_watcher"))
+    #     tasks.append(bot.loop.create_task(spotify_watcher(user.id), name=user.id + "_watcher"))
         
     logging.info("Bot Ready!")
 
@@ -159,12 +159,14 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
 async def spotme(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
+    
     if str(userid) in users:
-        await ctx.channel.send(f"You're already set up as user {userid}.")
         token = await getuser(userid)
 
         if userid + "_watcher" not in [x.get_name() for x in tasks]:
-            tasks.append(bot.loop.create_task(spotify_watcher(token), name=userid + "_watcher"))
+            await ctx.channel.send(f"starting a spot watcher for {userid} ")
+            tasks.append(bot.loop.create_task(spotify_watcher(userid), name=userid + "_watcher"))
+
 
     else:
         await ctx.channel.send(f"Sending you a DM...")
@@ -220,8 +222,8 @@ async def pullratings(interaction: nextcord.Interaction):
             await interaction.send(message)
 
 
-async def getuser(userid=USER):
-    logging.debug(f"fetching user token: {userid}")
+async def getuser(userid=None):
+    logging.info(f"fetching user token: {userid}")
     u = User.get(User.id == userid)
     token = pickle.loads(u.token)
     if token.is_expiring:
@@ -265,8 +267,6 @@ async def rate_list(items, uid, rating):
 async def spotify_watcher(uid):
     logging.info(f"starting spotify watcher task for user {uid}")
     token = await getuser(uid)
-    ctx = bot.get_channel(CHANNEL)
-    # await ctx.send(f"bot connecting to channel")
     
     while True:
         logging.info("watcher awake")
@@ -280,7 +280,7 @@ async def spotify_watcher(uid):
             currently = await spotify.playback_currently_playing()
         
         if currently is None:
-            # logging.info(f"not currently playing -- attempting to resume")
+            logging.info(f"not currently playing")
             return
         else:
             nowplaying = await trackinfo(currently.item.id)
@@ -329,7 +329,12 @@ async def spotify_watcher(uid):
 
 
 async def queue_manager():
+    global users
     logging.info(f'starting queue manager')
+    if len(users) == 0:
+        users = ['212364275153371138']
+
+
 
     ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
     potentials = [x.trackid for x in ratings]
