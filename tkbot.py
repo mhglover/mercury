@@ -107,9 +107,9 @@ async def on_ready():
 @bot.slash_command(description="check what's currently playing", guild_ids=[int(SERVER)])
 async def np(interaction: nextcord.Interaction):
     userid = str(interaction.user.id)
-    user = users[userid]
-    logging.info(f"checking now playing for {userid}")
     user, token = await getuser(userid)
+    logging.info(f"checking now playing for {userid}")
+    
         
     with spotify.token_as(token):
         playback = await spotify.playback_currently_playing()
@@ -126,8 +126,7 @@ async def np(interaction: nextcord.Interaction):
 
 @bot.slash_command(description="up next", guild_ids=[int(SERVER)])
 async def upnext(interaction: nextcord.Interaction):
-    user = users[str(interaction.user.id)]
-    userid = user.id
+    userid = str(interaction.user.id)
     user, token = await getuser(userid)
         
     with spotify.token_as(token):
@@ -169,7 +168,6 @@ async def spotme(ctx: nextcord.Interaction):
 
         if userid + "_watcher" not in tasknames:
             logging.info(f"adding a spot watcher for {userid}")
-            # await ctx.channel.send(f"starting a spot watcher for {userid} ")
             tasks.append(bot.loop.create_task(spotify_watcher(userid), name=userid + "_watcher"))
         else:
             await ctx.channel.send(f"I already have a watcher for {userid}.")
@@ -265,75 +263,97 @@ async def rate_list(items, uid, rating):
     
     return len(tracks)
 
+async def rate(uid, tid, value=1):
+    trackname = await trackinfo(tid)
+    logging.info(f"rating {uid} {trackname}")
+    try: 
+        rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value)
+    except Exception as e:
+        logging.error(f"rating error: {e}")
 
-async def spotify_watcher(uid):
-    logging.info(f"starting spotify watcher task for user {uid}")
-    user, token = await getuser(uid)
-    
-    while True:
-        logging.info("watcher awake")
-        
-        with spotify.token_as(token):
-            logging.debug("figuring out current user")
-            # try:
-            #     user = await spotify.current_user()
-            # except Exception as e:
-            #     logging.error(f"spotify token error: {e}")
-            currently = await spotify.playback_currently_playing()
-        
+
+async def spotify_watcher(userid):
+    procname = f"{userid}_watcher"
+    logging.info(f"{procname} starting")
+    user, token = await getuser(userid)
+    playing_tid = ""
+
+    with spotify.token_as(token):
+        currently = await spotify.playback_currently_playing()
         if currently is None:
             logging.info(f"not currently playing")
             return
         else:
-            nowplaying = await trackinfo(currently.item.id)
+            playing_tid = currently.item.id
+            trackname = await trackinfo(playing_tid)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
-        
-            if remaining_ms <= 30000:
-                logging.debug(f"remaining_ms: {remaining_ms}")
-                artist = " & ".join([x.name for x in currently.item.artists])
-                name = currently.item.name
-                if len(queue) > 0:
-                    upcoming_tid = queue.popleft()
-                    upcoming_track = await trackinfo(upcoming_tid)
-                    track = await spotify.track(upcoming_tid)
-                    logging.debug(f"updating presence: UPCOMING {upcoming_track}")
-                    await bot.change_presence(activity=nextcord.Game(name=f"{os.environ['HEROKU_RELEASE_VERSION']} upcoming: {upcoming_track}"))
-                    
-                    with spotify.token_as(token):
-                        logging.debug(f"rating {artist} - {name}")
-                        try: 
-                            result = Rating.create(user_id=uid, trackid=currently.item.id, rating=1)
-                        except Exception as e:
-                            logging.error(f"rating error: {e}")
-                        
-                        try:
-                            logging.debug(f"queuing {upcoming_track} ({upcoming_tid})")
-                            result = await spotify.playback_queue_add(track.uri)
-                        except Exception as e:
-                            logging.error(f"queuing error: {e}\n\n{result}")
-                        
-                        try:
-                            insertedkey = PlayHistory.create(trackid=currently.item.id)
-                        except Exception as e:
-                            logging.error(f"playhistory exception: {e}")
-                    sleep = (remaining_ms / 1000) +1
-                else:
-                    name = f"{nowplaying} | {os.environ['HEROKU_RELEASE_VERSION']}"
-                    await bot.change_presence(activity=nextcord.Game(name=name))
-                    sleep = 30
-            else :
-                logging.info(f"now playing {nowplaying}, {remaining_ms/1000}s remaining")
-                sleep = (remaining_ms - 30000 ) / 1000
-
-        logging.debug(f"watcher sleeping for {sleep} seconds")
-        await asyncio.sleep(sleep)
+            logging.info(f"{procname} {trackname} {remaining_ms/1000}s remaining ")
     
-    await bot.sendMessage("spotify watcher dying")
+    while True:
+        logging.debug(f"{userid}_watcher awake")
+
+        with spotify.token_as(token):
+            currently = await spotify.playback_currently_playing()
+    
+            if currently is None:
+                logging.info(f"not currently playing")
+                return
+            
+            trackid = currently.item.id
+            trackname = await trackinfo(trackid)
+            remaining_ms = currently.item.duration_ms - currently.progress_ms
+
+            nextup_tid = queue[0]
+            nextup_name = await trackinfo(nextup_tid)
+
+            if trackid == nextup_tid:
+                logging.info(f"{procname} nextup is same as currently playing: {nextup_name}")
+                logging.info(f"{procname} popping queue")
+                queue.popleft()
+
+                logging.info(f"{procname} writing playhistory {trackname}")
+                
+                try:
+                    insertedkey = PlayHistory.get_or_create(trackid=trackid)
+                except Exception as e:
+                    logging.error(f"{procname} couldn't get/create history: {e}")
+
+            if trackid != playing_tid:
+                await rate(userid, trackid, 1)
+                logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
+            else:
+                logging.debug(f"{procname} {trackname} {remaining_ms/1000}s remaining ")
+
+            if remaining_ms > 30000:
+                logging.debug(f"{procname} more than 30 seconds remaining")
+                sleep = 30
+
+            elif remaining_ms <= 30000:
+                logging.info(f"{procname} less than 30 seconds remaining")
+                                                    
+                try:
+                    logging.info(f"{procname} queuing {nextup_name}")
+                    track = await spotify.track(nextup_tid)
+                    
+                    result = await spotify.playback_queue_add(track.uri)
+                    sleep = (remaining_ms /1000) + 1
+                except Exception as e:
+                    logging.error(f"{procname} queuing error: {e}\n\n{result}")
+                    sleep = 5
+                
+
+        logging.info(f"{procname} sleeping for {sleep} seconds")
+        await asyncio.sleep(sleep)
+        #TODO add a ttl countdown somehow
+    
 
 
 async def queue_manager():
     global users
-    logging.info(f'starting queue manager')
+    procname = "queue_manager"
+    logging.info(f'{procname} starting')
+    # logging.debug(f"updating presence: UPCOMING {upcoming_track}")
+    #                 await bot.change_presence(activity=nextcord.Game(name=f"{os.environ['HEROKU_RELEASE_VERSION']} upcoming: {upcoming_track}"))
     if len(users) == 0:
         users = [USER]
 
@@ -349,16 +369,16 @@ async def queue_manager():
             #     recommendations = recommendations + [item.id for item in r.tracks]
             #     saveds = saveds + [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
             #     potentials = [x for x in tops + saveds + recommendations if x not in history and x not in queue]
-            logging.info(f"{len(potentials)} potential songs")
+            logging.debug(f"{len(potentials)} potential songs")
         
             upcoming_tid =  choice(potentials)
-            r = await spotify.recommendations(track_ids=[upcoming_tid]) 
-            potentials.append(r.tracks[0].id)
+            # r = await spotify.recommendations(track_ids=[upcoming_tid]) 
+            # potentials.append(r.tracks[0].id)
             upcoming_track = await trackinfo(upcoming_tid)
             
             queue.append(upcoming_tid)
 
-            logging.info(f"upcoming track selected: {upcoming_track}")
+            logging.info(f"{procname} nextup: {upcoming_track}")
 
         await asyncio.sleep(10)
 
