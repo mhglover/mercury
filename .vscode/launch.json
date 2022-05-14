@@ -7,10 +7,11 @@
         {
             "name": "tkbot.py",
             "type": "python",
+            "autoReload": {},
             "request": "launch",
             "program": "tkbot.py",
             "console": "integratedTerminal",
-            "args": ["-Wdefault"]
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }
