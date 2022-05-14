@@ -268,6 +268,7 @@ async def rate_list(items, uid, rating):
     
     return len(tracks)
 
+
 async def rate(uid, tid, value=1):
     trackname = await trackinfo(tid)
     logging.info(f"{uid}_watcher rating {trackname} {value}")
@@ -275,6 +276,7 @@ async def rate(uid, tid, value=1):
         rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value)
     except Exception as e:
         logging.error(f"{uid}_watcher rating error: {e}")
+
 
 async def history(uid, tid):
     trackname= await trackinfo(tid)
@@ -375,12 +377,12 @@ async def queue_manager():
 
     while True:
 
-        logging.debug(f"{procname} checking queue ttls")
-        for queued_tid in dict(ttl):
-            if time.time() > ttl[queued_tid] and queued_tid in queue:
-                logging.info(f"{procname} popping expired track: {queued_tid}")
-                queue.remove(queued_tid)
-                del ttl[queued_tid]
+        # logging.debug(f"{procname} checking queue ttls")
+        # for queued_tid in dict(ttl):
+        #     if time.time() > ttl[queued_tid] and queued_tid in queue:
+        #         logging.info(f"{procname} popping expired track: {queued_tid}")
+        #         queue.remove(queued_tid)
+        #         del ttl[queued_tid]
     
         while len(queue) < 2:
             ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
