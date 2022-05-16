@@ -333,9 +333,14 @@ async def spotify_watcher(userid):
             trackid = currently.item.id
             trackname = await trackinfo(trackid)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
+            seconds = int(remaining_ms / 1000) % 60
+            minutes = int(remaining_ms / (1000*60)) % 60
 
             nextup_tid = queue[0]
             nextup_name = await trackinfo(nextup_tid)
+
+            # do logic to see if lastplayed finished?
+            # logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
 
             if trackid == nextup_tid:
                 logging.info(f"{procname} next up is same as currently playing: {nextup_name}")
@@ -343,12 +348,8 @@ async def spotify_watcher(userid):
                 queue.popleft()
                 await history(userid, trackid)
 
-                logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
-            else:
-                logging.debug(f"{procname} {trackname} {remaining_ms/1000}s remaining ")
-
             if remaining_ms > 30000:
-                logging.info(f"{procname} {remaining_ms/1000} remaining")
+                logging.info(f"{procname} argaefaefra  {remaining_ms/1000} remaining")
                 
                 if (remaining_ms - 30000) < 30000:
                     sleep = (remaining_ms - 30000) / 1000
@@ -357,7 +358,7 @@ async def spotify_watcher(userid):
 
 
             elif remaining_ms <= 30000:
-                logging.info(f"{procname} {remaining_ms / 1000} seconds remaining")
+                logging.info(f"{procname} askfjas;fjasi;fja;sj {remaining_ms / 1000} seconds remaining")
                 
                 await rate(userid, trackid, 1)                                
                 try:
@@ -370,8 +371,9 @@ async def spotify_watcher(userid):
                     logging.error(f"{procname} queuing error: {e}\n\n{result}")
                     sleep = 5
                 
-
-        logging.info(f"{procname} sleeping for {sleep} seconds")
+                
+                logging.debug(f"{procname}  ")
+        logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} seconds")
         await asyncio.sleep(sleep)
         #TODO add a ttl countdown somehow
     
