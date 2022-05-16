@@ -374,13 +374,13 @@ async def spotify_watcher(userid):
             recommendations += [item.id for item in r.tracks]
             logging.info(f"{procname} found {len(recommendations)} recommendations")
 
-            logging.info(f"{procname} setting the nowplaying message: {trackname}")
             try:
                 activity = nextcord.Activity(name=f"{trackname}", url="urlhere", type=nextcord.ActivityType.listening)
                 await bot.change_presence(status=nextcord.Status.idle, activity=activity)
             except Exception as e:
                 logging.error(f"{procname} error setting discord status: {e}")
-                logging.info(f"{procname} setting the nowplaying message")
+            
+            logging.info(f"{procname} set the nowplaying message: {trackname}")
 
     
     while True:
@@ -408,8 +408,11 @@ async def spotify_watcher(userid):
                 logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 queue.popleft()
                 await history(userid, trackid)
-                activity = nextcord.Activity(name=f"up next: {nextup_name}", type=nextcord.ActivityType.watching)
-                await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+                try:
+                    activity = nextcord.Activity(name=f"up next: {nextup_name}", url="urltest", type=nextcord.ActivityType.streaming)
+                    await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+                except Exception as e:
+                    logging.info(f"{procname} couldn't set presence: {e}")
 
             if remaining_ms > 30000:
                 if (remaining_ms - 30000) < 30000:
