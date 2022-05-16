@@ -175,10 +175,14 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
 @bot.slash_command(description="veto the upcoming track)", guild_ids=[int(SERVER)])
 async def veto(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
-    user, token = getuser(userid)
+    user, token = await getuser(userid)
     vetoed = queue.popleft()
-    name = trackinfo(vetoed)
-    logging.info(f"{userid}_watcher vetoed {name}")
+    name, track = await trackinfo(vetoed, return_track=True)
+    duration = track.duration_ms
+    seconds = int(duration / 1000) % 60
+    minutes = int(duration / (1000*60)) % 60
+    logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02})")
+    await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
 
 
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
