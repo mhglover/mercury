@@ -310,15 +310,19 @@ async def spotify_watcher(userid):
             logging.info(f"not currently playing")
             sleep = 30
         else:
+            previous_tid = None
             playing_tid = currently.item.id
             trackname = await trackinfo(playing_tid)
+            nextup_tid = queue[0]
+            
             remaining_ms = currently.item.duration_ms - currently.progress_ms
-            logging.info(f"{procname} playing {trackname} {remaining_ms/1000}s remaining ")
+            seconds = int(remaining_ms / 1000) % 60
+            minutes = int(remaining_ms / (1000*60)) % 60
+            logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} seconds")
 
             logging.info(f"{procname} pulling spotify recommendations")
             r = await spotify.recommendations(track_ids=[playing_tid])
             recommendations += [item.id for item in r.tracks]
-    
     
     while True:
         logging.debug(f"{userid}_watcher awake")
@@ -343,23 +347,18 @@ async def spotify_watcher(userid):
             # logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
 
             if trackid == nextup_tid:
-                logging.info(f"{procname} next up is same as currently playing: {nextup_name}")
-                logging.info(f"{procname} popping queue")
+                logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 queue.popleft()
+                logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 await history(userid, trackid)
 
             if remaining_ms > 30000:
-                logging.info(f"{procname} argaefaefra  {remaining_ms/1000} remaining")
-                
                 if (remaining_ms - 30000) < 30000:
                     sleep = (remaining_ms - 30000) / 1000
                 else:
                     sleep = 30
 
-
-            elif remaining_ms <= 30000:
-                logging.info(f"{procname} askfjas;fjasi;fja;sj {remaining_ms / 1000} seconds remaining")
-                
+            elif remaining_ms <= 30000:                
                 await rate(userid, trackid, 1)                                
                 try:
                     logging.info(f"{procname} queuing {nextup_name}")
@@ -373,7 +372,7 @@ async def spotify_watcher(userid):
                 
                 
                 logging.debug(f"{procname}  ")
-        logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} seconds")
+        logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} s")
         await asyncio.sleep(sleep)
         #TODO add a ttl countdown somehow
     
@@ -418,7 +417,7 @@ async def queue_manager():
                 h = "never played"
             r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)][0].rating
 
-            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
+            logging.debug(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
             
 
         await asyncio.sleep(10)
