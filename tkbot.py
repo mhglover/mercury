@@ -123,7 +123,7 @@ async def on_ready():
 async def np(interaction: nextcord.Interaction):
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
-    logging.info(f"checking now playing for {userid}")
+    logging.debug(f"checking now playing for {userid}")
     
         
     with spotify.token_as(token):
@@ -175,6 +175,7 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
 
 @bot.slash_command(description="rate the currently playing track)", guild_ids=[int(SERVER)])
 async def ratethis(ctx: nextcord.Interaction):
+    # TODO 
     userid = str(ctx.user.id)
     value = 2
     user, token = await getuser(userid)
@@ -188,8 +189,8 @@ async def ratethis(ctx: nextcord.Interaction):
         await ctx.channel.send(f"rated {artist} - {name} {value}")
 
 
-@bot.slash_command(description="veto the upcoming track)", guild_ids=[int(SERVER)])
-async def veto(ctx: nextcord.Interaction):
+@bot.slash_command(description="skip the upcoming track)", guild_ids=[int(SERVER)])
+async def skipnext(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
     user, token = await getuser(userid)
     vetoed = queue.popleft()
@@ -199,6 +200,27 @@ async def veto(ctx: nextcord.Interaction):
     minutes = int(duration / (1000*60)) % 60
     logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02})")
     await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
+
+
+@bot.slash_command(description="veto your currently playing track)", guild_ids=[int(SERVER)])
+async def veto(ctx: nextcord.Interaction):
+    userid = str(ctx.user.id)
+    logging.info(f"{userid}_watcher vetoed currently playing track)")
+    await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
+    user, token = await getuser(userid)
+    with spotify.token_as(token):
+        currently = await spotify.playback_currently_playing()
+        vetoed = currently.item.id
+        h = await history(userid, vetoed)
+        r = await rate(userid, vetoed, -2)
+        name, track = await trackinfo(vetoed, return_track=True)
+        duration = track.duration_ms
+        seconds = int(duration / 1000) % 60
+        minutes = int(duration / (1000*60)) % 60
+    
+        logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02} and rated it -2)")
+        
+    
 
 
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
@@ -402,9 +424,9 @@ async def spotify_watcher(userid):
 
             # do logic to see if lastplayed finished?
             # logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
-
+            
             if trackid == nextup_tid:
-                logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
+                logging.debug(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 queue.popleft()
                 await history(userid, trackid)
                 try:
