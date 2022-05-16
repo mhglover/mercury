@@ -14,7 +14,7 @@ from peewee import *
 import time
 from playhouse.db_url import connect
 import pickle
-from datetime import datetime
+from datetime import datetime, timedelta
 import nextcord
 from nextcord.ext import commands
 
@@ -65,7 +65,10 @@ class Rating(BaseModel):
     user_id = ForeignKeyField(User, backref="ratings")
     trackid = CharField()
     rating = IntegerField()
+    last_played = TimestampField()
 
+# class Track(BaseModel):
+#     id = TextField(primary_key=True)
 
 class PlayHistory(BaseModel):
     trackid = CharField()
@@ -406,7 +409,8 @@ async def queue_manager():
     while True:
     
         while len(queue) < 2:
-            ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
+            marker = Value(datetime.now() - timedelta(minutes=1)) 
+            ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).where(Rating.last_played < marker).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
             history = [x.trackid for x in PlayHistory.select()]
             potentials = [x.trackid for x in ratings if x.trackid not in history]
             
