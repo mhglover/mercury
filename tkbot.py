@@ -3,7 +3,6 @@ from multiprocessing import set_forkserver_preload
 import signal
 import sys
 from collections import deque
-from hikari import ExceptionEvent
 import tekore as tk
 from random import choice
 import asyncio
