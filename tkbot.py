@@ -1,7 +1,9 @@
 # from distutils.log import error
+from multiprocessing import set_forkserver_preload
 import signal
 import sys
 from collections import deque
+from hikari import ExceptionEvent
 import tekore as tk
 from random import choice
 import asyncio
@@ -65,7 +67,7 @@ class Rating(BaseModel):
     user_id = ForeignKeyField(User, backref="ratings")
     trackid = CharField()
     rating = IntegerField()
-    last_played = TimestampField()
+    last_played = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
 # class Track(BaseModel):
 #     id = TextField(primary_key=True)
@@ -172,6 +174,21 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
     await ctx.send(embed=embed)
 
 
+@bot.slash_command(description="rate the currently playing track)", guild_ids=[int(SERVER)])
+async def ratethis(ctx: nextcord.Interaction):
+    userid = str(ctx.user.id)
+    value = 2
+    user, token = await getuser(userid)
+    with spotify.token_as(token):
+        playback = await spotify.playback_currently_playing()
+        artist = " & ".join([x.name for x in playback.item.artists])
+        name = playback.item.name
+
+        logging.info(f"slash_command {userid} rate {artist} - {name}")
+        await rate(userid, playback.item.id, set_last_played=False, value=value)
+        await ctx.channel.send(f"rated {artist} - {name} {value}")
+
+
 @bot.slash_command(description="veto the upcoming track)", guild_ids=[int(SERVER)])
 async def veto(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
@@ -257,6 +274,7 @@ async def getuser(userid):
     token = pickle.loads(user.token)
     if token.is_expiring:
         token = cred.refresh(token)
+        User.token = token
     
     return user, token
 
@@ -271,8 +289,11 @@ async def trackinfo(trackid, return_track=False):
     Returns:
         str: track artist and title
         str, track object: track artist and title, track object
-    """    
-    track = await spotify.track(trackid)
+    """
+    try:
+        track = await spotify.track(trackid)
+    except Exception as e:
+        logging.error(f"-------------- couldn't retrieve track from spotify: {trackid}")
     artist = " & ".join([x.name for x in track.artists])
     name = f"{artist} - {track.name}" 
 
@@ -291,7 +312,7 @@ async def rate_list(items, uid, rating):
     else:
         trackids = [x.track.id for x in items]
     logging.debug(f"rating {len(trackids)} tracks")
-    tracks = [{"trackid": i, "user_id": uid, "rating": rating} for i in trackids]
+    tracks = [{"trackid": i, "user_id": uid, "rating": rating, "set_last_played": False} for i in trackids]
 
     with pgdb.atomic():
         for each in tracks:
@@ -304,11 +325,14 @@ async def rate_list(items, uid, rating):
     return len(tracks)
 
 
-async def rate(uid, tid, value=1):
+async def rate(uid, tid, value=1, set_last_played=True):
     trackname = await trackinfo(tid)
     logging.info(f"{uid}_watcher rating {trackname} {value}")
     try: 
-        rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value)
+        if set_last_played:        
+            rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value)
+        else:
+            rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value, last_played="1970-01-01")
     except Exception as e:
         logging.error(f"{uid}_watcher rating error: {e}")
 
@@ -350,13 +374,13 @@ async def spotify_watcher(userid):
             recommendations += [item.id for item in r.tracks]
             logging.info(f"{procname} found {len(recommendations)} recommendations")
 
-            logging.info(f"setting the nowplaying message")
+            logging.info(f"{procname} setting the nowplaying message: {trackname}")
             try:
                 activity = nextcord.Activity(name=f"{trackname}", url="urlhere", type=nextcord.ActivityType.listening)
                 await bot.change_presence(status=nextcord.Status.idle, activity=activity)
             except Exception as e:
                 logging.error(f"{procname} error setting discord status: {e}")
-            
+                logging.info(f"{procname} setting the nowplaying message")
 
     
     while True:
@@ -364,7 +388,6 @@ async def spotify_watcher(userid):
 
         with spotify.token_as(token):
             currently = await spotify.playback_currently_playing()
-    
             if currently is None:
                 logging.info(f"not currently playing")
                 return
@@ -424,8 +447,8 @@ async def queue_manager():
     while True:
     
         while len(queue) < 2:
-            marker = Value(datetime.now() - timedelta(minutes=1)) 
-            ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).where(Rating.last_played < marker).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
+            timeout = SQL("current_timestamp - INTERVAL '1 minute'")
+            ratings = Rating.select(Rating.trackid).where(Rating.last_played < timeout).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
             history = [x.trackid for x in PlayHistory.select()]
             potentials = [x.trackid for x in ratings if x.trackid not in history]
             
@@ -441,11 +464,16 @@ async def queue_manager():
             
             ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
             h = [x for x in PlayHistory.select(PlayHistory.played_at).where(PlayHistory.trackid == upcoming_tid)]
+            r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)]
             if len(h) == 0:
-                h = "never played"
-            r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)][0].rating
+                h = "fresh"
+            if len(r) == 0:
+                r = "fresh"
+            else:
+                r = sum([x.rating for x in r])
 
-            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
+
+            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] of {len(potentials)} potential songs")
             
 
         await asyncio.sleep(10)
