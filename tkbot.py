@@ -141,6 +141,10 @@ async def np(interaction: nextcord.Interaction):
 
 @bot.slash_command(description="up next", guild_ids=[int(SERVER)])
 async def upnext(interaction: nextcord.Interaction):
+    await interaction.send(
+        content=f"Responded! The content of the message targeted: {interaction.target_message.content}",
+        hidden=True
+    )
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
         
@@ -206,7 +210,6 @@ async def skipnext(ctx: nextcord.Interaction):
 async def veto(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
     logging.info(f"{userid}_watcher vetoed currently playing track)")
-    await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
     user, token = await getuser(userid)
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
@@ -217,6 +220,8 @@ async def veto(ctx: nextcord.Interaction):
         duration = track.duration_ms
         seconds = int(duration / 1000) % 60
         minutes = int(duration / (1000*60)) % 60
+        await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
+        spotify.playback_seek(-500)
     
         logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02} and rated it -2)")
         
