@@ -1,4 +1,6 @@
 # from distutils.log import error
+import signal
+import sys
 from collections import deque
 import tekore as tk
 from random import choice
@@ -73,6 +75,14 @@ class PlayHistory(BaseModel):
         indexes = (
             (('trackid', 'played_at'), True),
         )
+
+
+def sigterm_handler(signal, frame):
+    # save the state here or do whatever you want
+    logging.error(f'caught SIGTERM, exiting...')
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, sigterm_handler)
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -298,16 +308,17 @@ async def spotify_watcher(userid):
         currently = await spotify.playback_currently_playing()
         if currently is None:
             logging.info(f"not currently playing")
-            return
+            sleep = 30
         else:
             playing_tid = currently.item.id
             trackname = await trackinfo(playing_tid)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
-            logging.info(f"{procname} {trackname} {remaining_ms/1000}s remaining ")
+            logging.info(f"{procname} playing {trackname} {remaining_ms/1000}s remaining ")
 
             logging.info(f"{procname} pulling spotify recommendations")
             r = await spotify.recommendations(track_ids=[playing_tid])
             recommendations += [item.id for item in r.tracks]
+    
     
     while True:
         logging.debug(f"{userid}_watcher awake")
@@ -327,7 +338,7 @@ async def spotify_watcher(userid):
             nextup_name = await trackinfo(nextup_tid)
 
             if trackid == nextup_tid:
-                logging.info(f"{procname} nextup is same as currently playing: {nextup_name}")
+                logging.info(f"{procname} next up is same as currently playing: {nextup_name}")
                 logging.info(f"{procname} popping queue")
                 queue.popleft()
                 await history(userid, trackid)
@@ -400,8 +411,13 @@ async def queue_manager():
             queue.append(upcoming_tid)
             
             ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
+            h = [x for x in PlayHistory.select(PlayHistory.played_at).where(PlayHistory.trackid == upcoming_tid)]
+            if len(h) == 0:
+                h = "never played"
+            r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)][0].rating
 
-            logging.info(f"{procname} nextup: {upcoming_name} ({upcoming_tid}) of {len(potentials)} potential songs")
+            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
+            
 
         await asyncio.sleep(10)
 
