@@ -169,6 +169,15 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
     await ctx.send(embed=embed)
 
 
+@bot.slash_command(description="veto the upcoming track)", guild_ids=[int(SERVER)])
+async def veto(ctx: nextcord.Interaction):
+    userid = str(ctx.user.id)
+    user, token = getuser(userid)
+    vetoed = queue.popleft()
+    name = trackinfo(vetoed)
+    logging.info(f"{userid}_watcher vetoed {name}")
+
+
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
 async def spotme(ctx: nextcord.Interaction):
     userid = str(ctx.user.id)
@@ -237,16 +246,25 @@ async def pullratings(interaction: nextcord.Interaction):
 
 
 async def getuser(userid):
-    u = User.get(User.id == userid)
-    token = pickle.loads(u.token)
+    user = User.get(User.id == userid)
+    token = pickle.loads(user.token)
     if token.is_expiring:
         token = cred.refresh(token)
     
-    return u, token
+    return user, token
 
 
 async def trackinfo(trackid, return_track=False):
-    
+    """pull track name (optionally also track object)
+
+    Args:
+        trackid (str): Spotify's unique track id
+        return_track (bool, optional): also return the track. Defaults to False.
+
+    Returns:
+        str: track artist and title
+        str, track object: track artist and title, track object
+    """    
     track = await spotify.track(trackid)
     artist = " & ".join([x.name for x in track.artists])
     name = f"{artist} - {track.name}" 
@@ -307,7 +325,7 @@ async def spotify_watcher(userid):
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
         if currently is None:
-            logging.info(f"not currently playing")
+            logging.info(f"{procname} not currently playing")
             sleep = 30
         else:
             previous_tid = None
@@ -318,11 +336,12 @@ async def spotify_watcher(userid):
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
-            logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} seconds")
+            logging.info(f"{procname} playing {trackname} {minutes}:{seconds:02}s remaining")
 
             logging.info(f"{procname} pulling spotify recommendations")
             r = await spotify.recommendations(track_ids=[playing_tid])
             recommendations += [item.id for item in r.tracks]
+            logging.info(f"{procname} found {len(recommendations)} recommendations")
     
     while True:
         logging.debug(f"{userid}_watcher awake")
@@ -349,7 +368,6 @@ async def spotify_watcher(userid):
             if trackid == nextup_tid:
                 logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 queue.popleft()
-                logging.info(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 await history(userid, trackid)
 
             if remaining_ms > 30000:
@@ -361,7 +379,7 @@ async def spotify_watcher(userid):
             elif remaining_ms <= 30000:                
                 await rate(userid, trackid, 1)                                
                 try:
-                    logging.info(f"{procname} queuing {nextup_name}")
+                    logging.info(f"{procname} sending to spotify client queue {nextup_name}")
                     track = await spotify.track(nextup_tid)
                     result = await spotify.playback_queue_add(track.uri)
                     
@@ -372,7 +390,7 @@ async def spotify_watcher(userid):
                 
                 
                 logging.debug(f"{procname}  ")
-        logging.info(f"{procname} playing {trackname} {minutes}:{seconds}s remaining, sleeping for {sleep} s")
+        logging.debug(f"{procname} playing {trackname} {minutes}:{seconds:02}s remaining, sleeping for {sleep}s")
         await asyncio.sleep(sleep)
         #TODO add a ttl countdown somehow
     
@@ -382,19 +400,10 @@ async def queue_manager():
     procname = "queue_manager"
     logging.info(f'{procname} starting')
     ttl = {}
-    # logging.debug(f"updating presence: UPCOMING {upcoming_track}")
-    #                 await bot.change_presence(activity=nextcord.Game(name=f"{os.environ['HEROKU_RELEASE_VERSION']} upcoming: {upcoming_track}"))
     if len(users) == 0:
         users = [USER]
 
     while True:
-
-        # logging.debug(f"{procname} checking queue ttls")
-        # for queued_tid in dict(ttl):
-        #     if time.time() > ttl[queued_tid] and queued_tid in queue:
-        #         logging.info(f"{procname} popping expired track: {queued_tid}")
-        #         queue.remove(queued_tid)
-        #         del ttl[queued_tid]
     
         while len(queue) < 2:
             ratings = Rating.select(Rating.trackid, fn.SUM(Rating.rating)).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
@@ -417,7 +426,7 @@ async def queue_manager():
                 h = "never played"
             r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)][0].rating
 
-            logging.debug(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
+            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] ({upcoming_tid}) of {len(potentials)} potential songs")
             
 
         await asyncio.sleep(10)
