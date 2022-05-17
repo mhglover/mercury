@@ -10,7 +10,7 @@ import os
 from dotenv import load_dotenv
 import logging
 import asyncio
-from quart import Quart, request, redirect
+from quart import Quart, request, redirect, render_template
 from peewee import *
 import time
 from playhouse.db_url import connect
@@ -89,6 +89,11 @@ def sigterm_handler(signal, frame):
 signal.signal(signal.SIGTERM, sigterm_handler)
 
 
+@app.route('/', methods=['GET'])
+async def web_index():
+    return await render_template('index.html', np="a track")
+
+
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
     code = request.args.get('code', "")
@@ -104,7 +109,8 @@ async def spotify_callback():
     p = pickle.dumps(token)
     user = User.create(id=spotifyid, token=p)
     users[spotifyid] = user
-    return redirect(f"https://discord.com/channels/{SERVER}/{CHANNEL}", 307)
+    return await render_template('index.html', np="a track")
+    # return redirect(f"https://discord.com/channels/{SERVER}/{CHANNEL}", 307)
 
 
 @app.before_serving
