@@ -147,17 +147,14 @@ async def np(interaction: nextcord.Interaction):
 
 @bot.slash_command(description="up next", guild_ids=[int(SERVER)])
 async def upnext(interaction: nextcord.Interaction):
-    await interaction.send(
-        content=f"Responded! The content of the message targeted: {interaction.target_message.content}",
-        hidden=True
-    )
+    await interaction.response.send_message("Checking for the upcoming track...", ephemeral=True)
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
         
     with spotify.token_as(token):
         tid = queue[0]
         track_name = await trackinfo(tid)
-        await interaction.send(f"{track_name}")
+        await interaction.followup.send(f"{track_name}")
 
 
 @bot.slash_command(description="search for a track", guild_ids=[int(SERVER)])
@@ -407,12 +404,10 @@ async def spotify_watcher(userid):
 
             try:
                 activity = nextcord.Activity(name=f"{trackname}", url="urlhere", type=nextcord.ActivityType.listening)
-                await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+                pres = await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+                logging.info(f"{procname} set the nowplaying message: {trackname}")
             except Exception as e:
                 logging.error(f"{procname} error setting discord status: {e}")
-            
-            logging.info(f"{procname} set the nowplaying message: {trackname}")
-
     
     while ttl > datetime.now():
         logging.debug(f"{userid}_watcher awake")
