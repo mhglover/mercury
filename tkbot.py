@@ -90,8 +90,15 @@ signal.signal(signal.SIGTERM, sigterm_handler)
 
 
 @app.route('/', methods=['GET'])
-async def web_index():
-    return await render_template('index.html', np="a track")
+async def web_nowplaying():
+    user, token = await getuser(users[0])
+    with spotify.token_as(token):
+        currently = await spotify.playback_currently_playing()
+    np_id = currently.item.id
+    np_name = await trackinfo(np_id)
+    rating = sum([x for x in Rating.select().where(Rating.trackid == np_id).where(Rating.user_id in [x for x in users])])
+    history = [x.played_at for x in PlayHistory.select().where(PlayHistory.trackid == np_id)]
+    return await render_template('index.html', np_name=np_name, np_id=np_id, rating=rating, history=history)
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -197,34 +204,47 @@ async def ratethis(ctx: nextcord.Interaction):
 
 
 @bot.slash_command(description="skip the upcoming track)", guild_ids=[int(SERVER)])
-async def skipnext(ctx: nextcord.Interaction):
-    userid = str(ctx.user.id)
+async def skipnext(interaction: nextcord.Interaction):
+    await interaction.response.send_message("Checking for the upcoming track...", ephemeral=True)
+    userid = str(interaction.user.id)
     user, token = await getuser(userid)
-    vetoed = queue.popleft()
-    name, track = await trackinfo(vetoed, return_track=True)
+    skipped_id = queue.popleft()
+    name, track = await trackinfo(skipped_id, return_track=True)
     duration = track.duration_ms
     seconds = int(duration / 1000) % 60
     minutes = int(duration / (1000*60)) % 60
-    logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02})")
-    await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
+    logging.info(f"{userid}_watcher skipped the upcoming {name} ({minutes}:{seconds:02})")
+    await interaction.channel.send(f"removing {name} from the queue, nobody wants to hear that")
 
 
 @bot.slash_command(description="veto your currently playing track)", guild_ids=[int(SERVER)])
-async def veto(ctx: nextcord.Interaction):
-    userid = str(ctx.user.id)
+async def veto(interaction: nextcord.Interaction):
+    await interaction.response.defer()
+    # .send_message("Checking for the upcoming track...", ephemeral=True)
+    userid = str(interaction.user.id)
     logging.info(f"{userid}_watcher vetoed currently playing track)")
     user, token = await getuser(userid)
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
+        nextup_tid = queue[0]
         vetoed = currently.item.id
-        h = await history(userid, vetoed)
-        r = await rate(userid, vetoed, -2)
         name, track = await trackinfo(vetoed, return_track=True)
         duration = track.duration_ms
         seconds = int(duration / 1000) % 60
         minutes = int(duration / (1000*60)) % 60
-        await ctx.channel.send(f"vetoing {name}, it makes the customers all moshy")
-        spotify.playback_seek(-500)
+        await interaction.response.send(f"vetoing {name}, it makes the customers all moshy")
+        
+        # Rate the track
+        rating = await rate(userid, vetoed, -2)
+
+        # write a playhistory
+        history = await history(userid, vetoed)
+        
+        # Queue the next track
+        result = await spotify.playback_queue_add(nextup_tid)
+        
+        # move the playback position to the end of the song
+        result = await spotify.playback_seek(duration-50)
     
         logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02} and rated it -2)")
 
@@ -381,6 +401,7 @@ async def spotify_watcher(userid):
     playing_tid = ""
     ttl = datetime.now() + timedelta(minutes=20)
 
+    # Check the current status
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
         if currently is None:
@@ -409,6 +430,7 @@ async def spotify_watcher(userid):
             except Exception as e:
                 logging.error(f"{procname} error setting discord status: {e}")
     
+    # Loop while alive
     while ttl > datetime.now():
         logging.debug(f"{userid}_watcher awake")
 
@@ -467,7 +489,7 @@ async def spotify_watcher(userid):
         await asyncio.sleep(sleep)
     
     logging.info(f"{procname} timed out, watcher exiting")
-    
+
 
 async def queue_manager():
     global users
@@ -480,7 +502,7 @@ async def queue_manager():
     while True:
     
         while len(queue) < 2:
-            timeout = SQL("current_timestamp - INTERVAL '1 minute'")
+            timeout = SQL("current_timestamp - INTERVAL '1 day'")
             ratings = Rating.select(Rating.trackid).where(Rating.last_played < timeout).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
             history = [x.trackid for x in PlayHistory.select()]
             potentials = [x.trackid for x in ratings if x.trackid not in history]
