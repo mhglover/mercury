@@ -4,6 +4,12 @@
         <p>Name: {{ np_name }}</p>
         <p>Id:     {{ np_id }}</p>
         <p>Ratings: {{ rating }}</p>
-        <p>History: {{ history }}</p>
+        
+        <p>History</p>
+        <table>
+            {% for date in history %}
+            <tr><td>{{ date }}</td></tr>
+            {% endfor %}
+        </table>
     </body>
 </html>

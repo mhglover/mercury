@@ -68,8 +68,6 @@ class Rating(BaseModel):
     rating = IntegerField()
     last_played = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
-# class Track(BaseModel):
-#     id = TextField(primary_key=True)
 
 class PlayHistory(BaseModel):
     trackid = CharField()
@@ -96,9 +94,10 @@ async def web_nowplaying():
         currently = await spotify.playback_currently_playing()
     np_id = currently.item.id
     np_name = await trackinfo(np_id)
-    rating = sum([x for x in Rating.select().where(Rating.trackid == np_id).where(Rating.user_id in [x for x in users])])
-    history = [x.played_at for x in PlayHistory.select().where(PlayHistory.trackid == np_id)]
-    return await render_template('index.html', np_name=np_name, np_id=np_id, rating=rating, history=history)
+    ratings = [x for x in Rating.select().where(Rating.trackid == np_id)]
+    rsum = sum([x.rating for x in ratings])
+    history = [x.played_at.strftime('%H:%M:%S %Y-%m-%d')  for x in PlayHistory.select().where(PlayHistory.trackid == np_id)]
+    return await render_template('index.html', np_name=np_name, np_id=np_id, rating=rsum, history=history)
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -134,6 +133,7 @@ async def on_ready():
 
 @bot.slash_command(description="check what's currently playing", guild_ids=[int(SERVER)])
 async def np(interaction: nextcord.Interaction):
+    await interaction.response.defer()
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
     logging.debug(f"checking now playing for {userid}")
@@ -149,29 +149,31 @@ async def np(interaction: nextcord.Interaction):
             milliseconds = playback.item.duration_ms - playback.progress_ms
             seconds = int(milliseconds / 1000) % 60
             minutes = int(milliseconds / (1000*60)) % 60
-            await interaction.send(f"{artist} - {name} ({minutes}:{seconds:02} remaining)")
+            await interaction.followup.send(f"{artist} - {name} ({minutes}:{seconds:02} remaining)")
 
 
 @bot.slash_command(description="up next", guild_ids=[int(SERVER)])
 async def upnext(interaction: nextcord.Interaction):
-    await interaction.response.send_message("Checking for the upcoming track...", ephemeral=True)
+    await interaction.response.defer()
+    # await interaction.response.send_message("Checking for the upcoming track...", ephemeral=True)
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
         
     with spotify.token_as(token):
         tid = queue[0]
-        track_name = await trackinfo(tid)
+        track_name = await trackinfo(tid, return_time=True)
         await interaction.followup.send(f"{track_name}")
 
 
 @bot.slash_command(description="search for a track", guild_ids=[int(SERVER)])
-async def search(ctx: nextcord.Interaction, *, query: str = None):
-    uid = str(ctx.user.id)
+async def search(interaction: nextcord.Interaction, *, query: str = None):
+    await interaction.response.defer()
+    uid = str(interaction.user.id)
         
     tracks, = await spotify.search(query, limit=5)
     embed = nextcord.Embed(title="Track search results", color=0x1DB954)
     embed.set_thumbnail(url="https://i.imgur.com/890YSn2.png")
-    embed.set_footer(text="Requested by " + ctx.user.display_name)
+    embed.set_footer(text="Requested by " + interaction.user.display_name)
 
     for t in tracks.items:
         artist = t.artists[0].name
@@ -184,13 +186,13 @@ async def search(ctx: nextcord.Interaction, *, query: str = None):
         ])
         embed.add_field(name=t.name, value=message, inline=False)
 
-    await ctx.send(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 
 @bot.slash_command(description="rate the currently playing track)", guild_ids=[int(SERVER)])
-async def ratethis(ctx: nextcord.Interaction):
-    # TODO 
-    userid = str(ctx.user.id)
+async def ratethis(interaction: nextcord.Interaction):
+    await interaction.response.defer()
+    userid = str(interaction.user.id)
     value = 2
     user, token = await getuser(userid)
     with spotify.token_as(token):
@@ -200,12 +202,12 @@ async def ratethis(ctx: nextcord.Interaction):
 
         logging.info(f"slash_command {userid} rate {artist} - {name}")
         await rate(userid, playback.item.id, set_last_played=False, value=value)
-        await ctx.channel.send(f"rated {artist} - {name} {value}")
+        await interaction.followup.send(f"rated {artist} - {name} {value}")
 
 
 @bot.slash_command(description="skip the upcoming track)", guild_ids=[int(SERVER)])
 async def skipnext(interaction: nextcord.Interaction):
-    await interaction.response.send_message("Checking for the upcoming track...", ephemeral=True)
+    await interaction.response.defer()
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
     skipped_id = queue.popleft()
@@ -214,7 +216,7 @@ async def skipnext(interaction: nextcord.Interaction):
     seconds = int(duration / 1000) % 60
     minutes = int(duration / (1000*60)) % 60
     logging.info(f"{userid}_watcher skipped the upcoming {name} ({minutes}:{seconds:02})")
-    await interaction.channel.send(f"removing {name} from the queue, nobody wants to hear that")
+    await interaction.followup.send(f"removing {name} from the queue, nobody wants to hear that")
 
 
 @bot.slash_command(description="veto your currently playing track)", guild_ids=[int(SERVER)])
@@ -232,7 +234,7 @@ async def veto(interaction: nextcord.Interaction):
         duration = track.duration_ms
         seconds = int(duration / 1000) % 60
         minutes = int(duration / (1000*60)) % 60
-        await interaction.response.send(f"vetoing {name}, it makes the customers all moshy")
+        await interaction.followup.send(f"vetoing {name}, it makes the customers all moshy")
         
         # Rate the track
         rating = await rate(userid, vetoed, -2)
@@ -250,8 +252,9 @@ async def veto(interaction: nextcord.Interaction):
 
 
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
-async def spotme(ctx: nextcord.Interaction):
-    userid = str(ctx.user.id)
+async def spotme(interaction: nextcord.Interaction):
+    await interaction.response.defer()
+    userid = str(interaction.user.id)
     
     if userid in users:
         # user, token = await getuser(userid)
@@ -261,7 +264,7 @@ async def spotme(ctx: nextcord.Interaction):
             logging.info(f"adding a spot watcher for {userid}")
             tasks.append(bot.loop.create_task(spotify_watcher(userid), name=userid + "_watcher"))
         else:
-            await ctx.channel.send(f"I already have a watcher for {userid}.")
+            await interaction.followup.send(f"I already have a watcher for {userid}.")
 
     else:
         scope = [ "user-read-playback-state",
@@ -280,13 +283,14 @@ async def spotme(ctx: nextcord.Interaction):
         users[auth.state] = userid
 
         # Returns: 1
-        channel = await ctx.user.create_dm()
-        logging.info(f"Attempting authentication for {ctx.user.name}")
+        channel = await interaction.user.create_dm()
+        logging.info(f"Attempting authentication for {interaction.user.name}")
         await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
 
 
 @bot.slash_command(description="dig into your spotify to find out what you like", guild_ids=[int(SERVER)])
 async def pullratings(interaction: nextcord.Interaction):
+    await interaction.response.defer()
     userid = str(interaction.user.id)
     user, token = await getuser(userid)
 
@@ -310,11 +314,9 @@ async def pullratings(interaction: nextcord.Interaction):
         rated = rated + await rate_list(saved_tracks, userid, 4)
 
         message = f"rated {rated} items"
-        if interaction.is_expired():
-            await interaction.channel.send(message)
-        else:
-            await interaction.send(message)
-
+        
+        await interaction.followup.send(message)
+        
 
 async def getuser(userid):
     user = User.get(User.id == userid)
@@ -326,12 +328,13 @@ async def getuser(userid):
     return user, token
 
 
-async def trackinfo(trackid, return_track=False):
-    """pull track name (optionally also track object)
+async def trackinfo(trackid, return_track=False, return_time=False):
+    """pull track name (and details))
 
     Args:
         trackid (str): Spotify's unique track id
         return_track (bool, optional): also return the track. Defaults to False.
+        return_time (bool, optional): also return the track duration
 
     Returns:
         str: track artist and title
@@ -343,6 +346,12 @@ async def trackinfo(trackid, return_track=False):
         logging.error(f"-------------- couldn't retrieve track from spotify: {trackid}")
     artist = " & ".join([x.name for x in track.artists])
     name = f"{artist} - {track.name}" 
+
+    if return_time:
+        milliseconds = track.duration_ms
+        seconds = int(milliseconds / 1000) % 60
+        minutes = int(milliseconds / (1000*60)) % 60
+        name = f"{name} {minutes}:{seconds:02}"
 
     if return_track is True:
         return name, track
@@ -502,11 +511,11 @@ async def queue_manager():
     while True:
     
         while len(queue) < 2:
-            timeout = SQL("current_timestamp - INTERVAL '1 day'")
-            ratings = Rating.select(Rating.trackid).where(Rating.last_played < timeout).group_by(Rating.trackid).where(Rating.user_id in [x for x in users])
-            history = [x.trackid for x in PlayHistory.select()]
-            potentials = [x.trackid for x in ratings if x.trackid not in history]
-            
+            timeout = SQL("current_timestamp - INTERVAL '3 days'")
+            recently_played_tracks = [x.trackid for x in Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played > timeout)]
+            unplayed_good_tracks = [x.trackid for x in Rating.select(Rating.trackid, Rating.user_id, Rating.last_played).where(Rating.user_id in [x for x in users])]
+
+            potentials = [x for x in unplayed_good_tracks if x not in recently_played_tracks]
             for each in recommendations:
                 if each not in potentials:
                     potentials.append(each)
@@ -518,17 +527,21 @@ async def queue_manager():
             queue.append(upcoming_tid)
             
             ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
-            h = [x for x in PlayHistory.select(PlayHistory.played_at).where(PlayHistory.trackid == upcoming_tid)]
-            r = [x for x in Rating.select(Rating.rating).where(Rating.trackid == upcoming_tid)]
+            h = [x for x in PlayHistory.select().where(PlayHistory.trackid == upcoming_tid)]
+            r = [x for x in Rating.select().where(Rating.trackid == upcoming_tid)]
+            sr = sum([x.rating for x in r])
             if len(h) == 0:
-                h = "fresh"
-            if len(r) == 0:
-                r = "fresh"
+                lp = "never played"
             else:
-                r = sum([x.rating for x in r])
+                lp = h[0].played_at
 
 
-            logging.info(f"{procname} queued: {upcoming_name} [{r} - {h}] of {len(potentials)} potential songs")
+            logging.info(f"{procname} queued: {upcoming_name} [{sr} - {lp}] of {len(potentials)} potential songs")
+            for each in h:
+                logging.info(f"{procname} played at: {each.played_at}")
+            for each in r:
+                logging.info(f"{procname} rating: {each.user_id} [{each.rating}] ({each.last_played})")
+            
             
 
         await asyncio.sleep(10)
@@ -539,7 +552,6 @@ if __name__ == "__main__":
     pgdb.create_tables([User, Rating, PlayHistory])
 
     auths = {}  # Ongoing authorisations: state -> UserAuth
-    # users = {}  # User tokens: state -> token (use state as a user ID)
     users = {}
     tasks = []
         
