@@ -386,7 +386,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
     logging.info(f"{uid}_watcher rating {trackname} {value}")
     try: 
         if set_last_played:        
-            rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value)
+            rating = Rating.replace(user_id=uid, trackid=tid, rating=value)
         else:
             rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value, last_played="1970-01-01")
     except Exception as e:
