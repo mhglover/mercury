@@ -230,8 +230,6 @@ async def veto(ctx: nextcord.Interaction):
         spotify.playback_seek(-500)
     
         logging.info(f"{userid}_watcher vetoed {name} ({minutes}:{seconds:02} and rated it -2)")
-        
-    
 
 
 @bot.slash_command(description="listen with us (and grant bot permission to mess with your spoglify)", guild_ids=[int(SERVER)])
@@ -384,6 +382,7 @@ async def spotify_watcher(userid):
     logging.info(f"{procname} starting")
     user, token = await getuser(userid)
     playing_tid = ""
+    ttl = datetime.now() + timedelta(minutes=20)
 
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
@@ -415,14 +414,17 @@ async def spotify_watcher(userid):
             logging.info(f"{procname} set the nowplaying message: {trackname}")
 
     
-    while True:
+    while ttl > datetime.now():
         logging.debug(f"{userid}_watcher awake")
 
         with spotify.token_as(token):
             currently = await spotify.playback_currently_playing()
             if currently is None:
-                logging.info(f"not currently playing")
+                logging.info(f"{procname} not currently playing")
                 return
+            else:
+                logging.debug(f"{procname} updating ttl: {ttl}")
+                ttl = datetime.now() + timedelta(minutes=20)
             
             trackid = currently.item.id
             trackname = await trackinfo(trackid)
@@ -468,7 +470,8 @@ async def spotify_watcher(userid):
                 logging.debug(f"{procname}  ")
         logging.debug(f"{procname} playing {trackname} {minutes}:{seconds:02}s remaining, sleeping for {sleep}s")
         await asyncio.sleep(sleep)
-        #TODO add a ttl countdown somehow
+    
+    logging.info(f"{procname} timed out, watcher exiting")
     
 
 async def queue_manager():
