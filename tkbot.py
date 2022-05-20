@@ -371,7 +371,7 @@ async def rate_list(items, uid, rating):
     else:
         trackids = [x.track.id for x in items]
     logging.debug(f"rating {len(trackids)} tracks")
-    tracks = [{"trackid": i, "user_id": uid, "rating": rating, "set_last_played": False} for i in trackids]
+    tracks = [{"trackid": i, "user_id": uid, "rating": rating, "last_played": "1970-01-01"} for i in trackids]
 
     with pgdb.atomic():
         for each in tracks:
