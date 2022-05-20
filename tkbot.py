@@ -43,7 +43,7 @@ cred = tk.Credentials(*conf)
 token_spotify = tk.request_client_token(*conf[:2])
 
 description = "Spotify track search bot using Tekore"
-bot = commands.Bot(command_prefix=PREFIX, description=description, activity=nextcord.Game(name=f"loading..."))
+bot = commands.Bot(command_prefix=PREFIX, description=description)
 spotify = tk.Spotify(token_spotify, asynchronous=True)
 queue = deque()
 recommendations = []
@@ -232,6 +232,7 @@ async def veto(interaction: nextcord.Interaction):
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
         nextup_tid = queue[0]
+        nextup_name, nextup_track = await trackinfo(nextup_tid, return_track=True)
         vetoed = currently.item.id
         name, track = await trackinfo(vetoed, return_track=True)
         duration = track.duration_ms
@@ -243,10 +244,11 @@ async def veto(interaction: nextcord.Interaction):
         rating = await rate(userid, vetoed, -2)
 
         # write a playhistory
-        history = await history(userid, vetoed)
+        result = await history(userid, vetoed)
         
         # Queue the next track
-        result = await spotify.playback_queue_add(nextup_tid)
+        
+        result = await spotify.playback_queue_add(nextup_track.uri)
         
         # move the playback position to the end of the song
         result = await spotify.playback_seek(duration-50)
@@ -261,7 +263,7 @@ async def spotme(interaction: nextcord.Interaction):
     
     if userid in users:
         # user, token = await getuser(userid)
-        tasknames = [x.get_name() for x in tasks]
+        tasknames = [x.get_name() for x in tasks if not x.done()]
 
         if userid + "_watcher" not in tasknames:
             logging.info(f"adding a spot watcher for {userid}")
@@ -319,7 +321,7 @@ async def pullratings(interaction: nextcord.Interaction):
         message = f"rated {rated} items"
         
         await interaction.followup.send(message)
-        
+
 
 async def getuser(userid):
     user = User.get(User.id == userid)
@@ -389,9 +391,24 @@ async def rate(uid, tid, value=1, set_last_played=True):
     logging.info(f"{uid}_watcher rating {trackname} {value}")
     try: 
         if set_last_played:        
-            rating = Rating.replace(user_id=uid, trackid=tid, rating=value)
+            rating = (Rating
+                .replace(user_id=uid, trackid=tid, rating=value)
+                .on_conflict(
+                    conflict_target=[Rating.user_id, Rating.trackid],
+                    preserve=[Rating.user_id, Rating.trackid],
+                    update={Rating.last_played: datetime.now()})
+                .execute())
         else:
-            rating = Rating.get_or_create(user_id=uid, trackid=tid, rating=value, last_played="1970-01-01")
+            rating = (Rating
+                .replace(user_id=uid, trackid=tid, rating=value, last_played="1970-01-01")
+                .on_conflict(
+                    conflict_target=[Rating.user_id, Rating.trackid],
+                    preserve=[Rating.user_id, Rating.trackid],
+                    update={Rating.last_played: "1970-01-01"})
+                .execute())
+            
+
+
     except Exception as e:
         logging.error(f"{uid}_watcher rating error: {e}")
 
@@ -403,6 +420,23 @@ async def history(uid, tid):
         insertedkey = PlayHistory.get_or_create(trackid=tid, played_at=time.time())
     except Exception as e:
         logging.error(f"{uid} couldn't get/create history: {e}")
+
+
+async def update_status(message, url="http://example.com"):
+    try:
+        activity = nextcord.Activity(name=f"{message}", url=url, type=nextcord.ActivityType.listening)
+        pres = await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+        logging.info(f"bot: set the nowplaying message: {message}")
+    except Exception as e:
+        logging.error(f"bot: error setting discord status: {e}")
+
+
+def recently_played_tracks():
+    interval = 5
+    timeout = SQL(f"current_timestamp - INTERVAL '{interval} days'")
+    selector = Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played < timeout)
+    tids = [x.trackid for x in selector]
+    return tids
 
 
 async def spotify_watcher(userid):
@@ -435,23 +469,26 @@ async def spotify_watcher(userid):
             recommendations += [item.id for item in r.tracks]
             logging.info(f"{procname} found {len(recommendations)} recommendations")
 
-            try:
-                activity = nextcord.Activity(name=f"{trackname}", url="urlhere", type=nextcord.ActivityType.listening)
-                pres = await bot.change_presence(status=nextcord.Status.idle, activity=activity)
-                logging.info(f"{procname} set the nowplaying message: {trackname}")
-            except Exception as e:
-                logging.error(f"{procname} error setting discord status: {e}")
+            await update_status(trackname)
+            # try:
+            #     activity = nextcord.Activity(name=f"{trackname}", url="urlhere", type=nextcord.ActivityType.listening)
+            #     pres = await bot.change_presence(status=nextcord.Status.idle, activity=activity)
+            #     logging.info(f"{procname} set the nowplaying message: {trackname}")
+            # except Exception as e:
+            #     logging.error(f"{procname} error setting discord status: {e}")
     
     # Loop while alive
     while ttl > datetime.now():
         logging.debug(f"{userid}_watcher awake")
-
+        
         with spotify.token_as(token):
             currently = await spotify.playback_currently_playing()
             if currently is None:
                 logging.info(f"{procname} not currently playing")
                 return
             else:
+                # TODO add a token refresh to the ttl check
+
                 logging.debug(f"{procname} updating ttl: {ttl}")
                 ttl = datetime.now() + timedelta(minutes=20)
             
@@ -471,11 +508,7 @@ async def spotify_watcher(userid):
                 logging.debug(f"{procname} popping queue, next up is same as currently playing: {nextup_name}")
                 queue.popleft()
                 await history(userid, trackid)
-                try:
-                    activity = nextcord.Activity(name=f"up next: {nextup_name}", url="urltest", type=nextcord.ActivityType.streaming)
-                    await bot.change_presence(status=nextcord.Status.idle, activity=activity)
-                except Exception as e:
-                    logging.info(f"{procname} couldn't set presence: {e}")
+                await update_status(f"{nextup_name}")
 
             if remaining_ms > 30000:
                 if (remaining_ms - 30000) < 30000:
@@ -514,16 +547,15 @@ async def queue_manager():
     while True:
     
         while len(queue) < 2:
-            timeout = SQL("current_timestamp - INTERVAL '3 days'")
-            recently_played_tracks = [x.trackid for x in Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played > timeout)]
-            unplayed_good_tracks = [x.trackid for x in Rating.select(Rating.trackid, Rating.user_id, Rating.last_played).where(Rating.user_id in [x for x in users])]
+            recent_tids = recently_played_tracks()
+            unplayed_good_tracks = [x.trackid for x in Rating.select(Rating.trackid).where(Rating.user_id in [x for x in users]).group_by(Rating.trackid).having(fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)]
 
-            potentials = [x for x in unplayed_good_tracks if x not in recently_played_tracks]
+            potentials = [x for x in unplayed_good_tracks if x not in recent_tids]
             for each in recommendations:
                 if each not in potentials:
                     potentials.append(each)
             
-            upcoming_tid =  choice(potentials)
+            upcoming_tid = choice(potentials)
             result = await trackinfo(upcoming_tid, return_track=True)
             (upcoming_name, upcoming_track) = result
             
@@ -557,7 +589,7 @@ if __name__ == "__main__":
     auths = {}  # Ongoing authorisations: state -> UserAuth
     users = {}
     tasks = []
-        
+
     bot.loop.create_task(app.run_task('0.0.0.0', PORT))
     bot.run(discord_token)
     
