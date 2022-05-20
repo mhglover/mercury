@@ -434,7 +434,7 @@ async def update_status(message, url="http://example.com"):
 def recently_played_tracks():
     interval = 5
     timeout = SQL(f"current_timestamp - INTERVAL '{interval} days'")
-    selector = Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played < timeout)
+    selector = Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played > timeout)
     tids = [x.trackid for x in selector]
     return tids
 
