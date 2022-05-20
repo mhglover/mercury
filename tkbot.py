@@ -92,6 +92,9 @@ async def web_nowplaying():
     user, token = await getuser(users[0])
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
+    if currently is None:
+        return await render_template('index.html', np_name="Nothing Playing", np_id="no id", rating=0, history=[])
+
     np_id = currently.item.id
     np_name = await trackinfo(np_id)
     ratings = [x for x in Rating.select().where(Rating.trackid == np_id)]
