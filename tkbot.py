@@ -328,7 +328,8 @@ async def getuser(userid):
     token = pickle.loads(user.token)
     if token.is_expiring:
         token = cred.refresh(token)
-        User.token = token
+        user.token = pickle.dumps(token)
+        user.save()
     
     return user, token
 
