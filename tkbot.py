@@ -389,7 +389,7 @@ async def rate_list(items, uid, rating):
 
 async def rate(uid, tid, value=1, set_last_played=True):
     trackname = await trackinfo(tid)
-    logging.info(f"{uid}_watcher rating {trackname} {value}")
+    logging.info(f"writing a rating: {uid} {trackname} {value}")
     try: 
         if set_last_played:        
             rating = (Rating
@@ -447,6 +447,7 @@ async def spotify_watcher(userid):
     user, token = await getuser(userid)
     playing_tid = ""
     ttl = datetime.now() + timedelta(minutes=20)
+    localhistory = []
 
     # Check the current status
     with spotify.token_as(token):
@@ -517,17 +518,22 @@ async def spotify_watcher(userid):
                 else:
                     sleep = 30
 
-            elif remaining_ms <= 30000:                
-                await rate(userid, trackid, 1)                                
-                try:
-                    logging.info(f"{procname} sending to spotify client queue {nextup_name}")
-                    track = await spotify.track(nextup_tid)
-                    result = await spotify.playback_queue_add(track.uri)
-                    
-                    sleep = (remaining_ms /1000) + 1
-                except Exception as e:
-                    logging.error(f"{procname} queuing error: {e}\n\n{result}")
+            elif remaining_ms <= 30000:
+                if nextup_tid in localhistory:
+                    logging.warning(f"don't requeue something: {nextup_name}")
                     sleep = 5
+                
+                else:
+                    await rate(userid, trackid, 1)                                
+                    try:
+                        logging.info(f"{procname} sending to spotify client queue {nextup_name}")
+                        track = await spotify.track(nextup_tid)
+                        result = await spotify.playback_queue_add(track.uri)
+                        localhistory.append(nextup_tid)
+                        sleep = (remaining_ms /1000) + 1
+                    except Exception as e:
+                        logging.error(f"{procname} queuing error: {e}\n\n{result}")
+                        sleep = 5
                 
                 
                 logging.debug(f"{procname}  ")
