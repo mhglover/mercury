@@ -285,7 +285,7 @@ async def spotme(interaction: nextcord.Interaction):
         auth = tk.UserAuth(cred, scope)
 
         auths[auth.state] = auth
-        users[auth.state] = userid
+        # users[auth.state] = userid
 
         # Returns: 1
         channel = await interaction.user.create_dm()
