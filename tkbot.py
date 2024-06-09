@@ -195,7 +195,7 @@ async def auth():
     state = auth.state
 
     auths[state] = auth
-    # users[state] = userid x
+    # # users[state] = userid x
 
         # Returns: 1
     # channel = await interaction.user.create_dm()
