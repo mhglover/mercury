@@ -1,7 +1,6 @@
-tekore==4.3.0
-nextcord==2.0.0a10
-quart==0.16.3
-peewee==3.14.10
-python-dotenv==0.19.2
-psycopg2-binary==2.9.3
-Jinja2==3.0.3
+tekore==5.4.0
+quart==0.19.6
+peewee==3.17.5
+python-dotenv==1.0.1
+psycopg2==2.9.3
+psycopg2-binary==2.9.9

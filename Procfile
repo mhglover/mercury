@@ -1,1 +1,1 @@
-web: python tkbot.py
+web: python app.py
