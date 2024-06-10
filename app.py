@@ -118,14 +118,14 @@ async def index():
     query = Rating.select().where(Rating.trackid == np_id)
     ratings = [x for x in query]
     rsum = sum([x.rating for x in ratings])
-    
+
     ph_query = PlayHistory.select().where(PlayHistory.trackid != np_id).order_by(PlayHistory.played_at.desc()).limit(10)
     # playhistory = [x.played_at.strftime('%H:%M:%S %Y-%m-%d')
     playhistory = [await trackinfo(x.trackid) for x in ph_query]
-    return await render_template('index.html', 
-                                 np_name=np_name, 
-                                 np_id=np_id, 
-                                 rating=rsum, 
+    return await render_template('index.html',
+                                 np_name=np_name,
+                                 np_id=np_id,
+                                 rating=rsum,
                                  history=playhistory)
 
 
@@ -158,9 +158,9 @@ async def spotify_callback():
     else:
         logging.info("spotify_callback - creating user record for %s", spotifyid)
         p = pickle.dumps(token)
-        user = User.create(id=spotifyid, 
-                           token=p, 
-                           display_name=spotify_user.display_name, 
+        user = User.create(id=spotifyid,
+                           token=p,
+                           display_name=spotify_user.display_name,
                            href=spotify_user.href)
         logging.debug("user=%s", user)
         logging.info("pulling ratings to populate user")
@@ -226,9 +226,9 @@ async def pullratings(spotifyid=None):
         #     logging.error("rating error: %s", e)
         
         # rate recent history (20 items)
-        # r = [item.track.id async for item in spotify.all_items(await spotify.playback_recently_played())]
-        recents = await spotify.playback_recently_played()
-        rated = await rate_list(recents.items, spotifyid, 1)
+        r = [item.track.id async for item in spotify.all_items(await spotify.playback_recently_played())]
+        # recents = await spotify.playback_recently_played()
+        rated = await rate_list(r, spotifyid, 1)
         
         # # rate tops
         # tops = await spotify.current_user_top_tracks()
@@ -319,13 +319,22 @@ async def rate_list(items, uid, rating=1):
 
 async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
-    track = Track.get().where(Track.trackid == tid)
-    if not track.exists():
+    logging.debug("checking the database for a track: %s", tid)
+    try:
+        track, _created = Track.get_or_create(
+            trackid=tid,
+            defaults={'trackname': ""})
+    except IntegrityError as e:
+        logging.error("rate - error: %s", e)
+
+    if track.trackname == "":
+        logging.debug("checking spotify for track details: %s", tid)
         trackname = await trackinfo(tid)
-        track = Track.create(trackid=tid, trackname=trackname)
-        logging.info ("added a track - %s %s", tid, trackname)
-    
-    trackname = track.trackname
+        logging.info("adding a track to database: %s - %s", tid, trackname)
+        track.trackname = trackname
+        track.save()
+    else:
+        trackname = track.trackname
 
     logging.info("writing a rating: %s %s %s", uid, trackname, value)
     # try:
@@ -424,6 +433,11 @@ async def spotify_watcher(userid):
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
 
+            if len(queue) < 1:
+                logging.info("queue is empty, skipping %s", userid)
+                await asyncio.sleep(10)
+                continue
+                
             nextup_tid = queue[0]
             nextup_name = await trackinfo(nextup_tid)
 
@@ -473,7 +487,7 @@ async def spotify_watcher(userid):
 def recently_played_tracks():
     """fetch"""
     interval = 5
-    timeout = SQL(f"current_timestamp - INTERVAL '{interval} days'")
+    # timeout = SQL(f"current_timestamp - INTERVAL '{interval} days'")
     # selector = Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played > timeout)
     # tids = [x.trackid for x in selector]
     tids = []
@@ -500,13 +514,13 @@ async def queue_manager():
                 await asyncio.sleep(60)
                 continue
             # for each in recommendations:
-                
+
                 # if each not in potentials:
                     # potentials.append(each)
 
             upcoming_tid = choice(potentials)
-            result = await trackinfo(upcoming_tid, return_track=True)
-            (upcoming_name, upcoming_track) = result
+            # result = await trackinfo(upcoming_tid, return_track=True)
+            # (upcoming_name, upcoming_track) = result
 
             queue.append(upcoming_tid)
 
@@ -537,16 +551,20 @@ async def main():
 
     active_users = await getactiveusers()
     for user in active_users:
-        asyncio.create_task(spotify_watcher(user.id),
+        task = asyncio.create_task(spotify_watcher(user.id),
                             name=f"watcher_{user.id}")
+        tasks.append(task)
+        task.add_done_callback(tasks.remove(task))
 
-    q = asyncio.create_task(queue_manager(),name="queue_manager")
-    w = app.run_task('0.0.0.0', os.environ['PORT'])
-    tasks.append(w)
-    tasks.append(q)
-    
+    queue_man = asyncio.create_task(queue_manager(),name="queue_manager")
+    tasks.append(queue_man)
+    queue_man.add_done_callback(tasks.remove(queue_man))
+
+    web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
+    tasks.append(web_ui)
+
     logging.info("Port: %s", os.environ['PORT'])
-    await asyncio.gather(w,q)
+    await asyncio.gather(queue_man, web_ui, *tasks)
 
 
 if __name__ == "__main__":
