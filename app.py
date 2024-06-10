@@ -132,7 +132,7 @@ async def index():
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
     global auths
-    users = await getactiveusers()
+    users = getactiveusers()
     code = request.args.get('code', "")
     state = request.args.get('state', "")
     logging.debug("state: %s", state)
@@ -197,7 +197,7 @@ async def dashboard():
     # ratings = [x for x in Rating.select()]
 
     queued = [await trackinfo(trackid) for trackid in queue]
-    users = await getactiveusers()
+    users = getactiveusers()
     history = await getrecents()
     tasks = [x.get_name() for x in asyncio.all_tasks()]
     return await render_template('dashboard.html',
@@ -262,7 +262,7 @@ async def getrecents():
     return playhistory
 
 
-async def getactiveusers():
+def getactiveusers():
     """fetch details for the active users"""
     # todo - select only active users, expire others
     return User.select()
@@ -405,19 +405,26 @@ async def spotify_watcher(userid):
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
-            logging.info("%s playing %s %s:%0.2s remaining", procname, trackname, minutes, seconds)
+            logging.info("%s initial status - playing %s, %s:%0.02s remaining", procname, trackname, minutes, seconds)
             
-            logging.info("%s pulling spotify recommendations", procname)
-            r = await spotify.recommendations(track_ids=[playing_tid])
-            recommendations += [item.id for item in r.tracks]
-            logging.info("%s found %s recommendations", procname, len(recommendations))
+            # logging.info("%s pulling spotify recommendations", procname)
+            # r = await spotify.recommendations(track_ids=[playing_tid])
+            # recommendations += [item.id for item in r.tracks]
+            # logging.info("%s found %s recommendations", procname, len(recommendations))
     
     # Loop while alive
+    logging.info("%s starting loop", procname)
     while ttl > datetime.now():
-        logging.debug("%s awake", procname)
-        
+        logging.debug("%s loop is awake", procname)
+
         with spotify.token_as(token):
+            logging.info("%s checking currently playing", procname)
             currently = await spotify.playback_currently_playing()
+            
+            logging.info("%s checking player queue state", procname)
+            queued = await spotify.playback_queue()
+            queued_trackids = [x for x in queued.queue]
+
             if currently is None:
                 logging.info("%s not currently playing", procname)
                 return
@@ -437,15 +444,13 @@ async def spotify_watcher(userid):
                 logging.info("queue is empty, skipping %s", userid)
                 await asyncio.sleep(10)
                 continue
-                
+
             nextup_tid = queue[0]
             nextup_name = await trackinfo(nextup_tid)
 
-            # do logic to see if lastplayed finished?
-            # logging.info(f"{procname} started playing {trackname} {remaining_ms/1000}s remaining")
-
             if trackid == nextup_tid:
-                logging.debug("%s popping queue, next up is same as currently playing: %s", procname, nextup_name)
+                # This is gonna mess something up as soon as we have multiple users - find a better place for it.
+                logging.debug("%s popping queue, nextup is currently playing: %s", procname, nextup_name)
                 queue.popleft()
                 await record(userid, trackid)
 
@@ -456,28 +461,30 @@ async def spotify_watcher(userid):
                     sleep = 30
 
             elif remaining_ms <= 30000:
-                # if nextup_tid in localhistory:
-                    # logging.warning("don't requeue something: %s", nextup_name)
-                    # sleep = 5
-                
-                # else:
+                # rough fix
+                if nextup_tid in localhistory:
+                    logging.warning("don't requeue something: %s", nextup_name)
+                    sleep = 5
+
                 logging.info("30 seconds remaining in track, saving a rating %s %s 1", userid, trackid)
                 await rate(userid, trackid, 1)
 
-                # try:
-                logging.info("sending to spotify client queue %s %s", procname, nextup_name)
-                track = await spotify.track(nextup_tid)
+                if nextup_tid in queued_trackids:
+                    logging.info("%s - next track already in queue or context, not gonna requeue %s", procname, nextup_name)
+                else:
+                    track = await spotify.track(nextup_tid)
+                    logging.info("%s sending to spotify client queue %s", procname, nextup_name)
+
+                # queue up the next track for this user
                 result = await spotify.playback_queue_add(track.uri)
                 logging.debug("result=%s", result)
+                
                 localhistory.append(nextup_tid)
                 sleep = (remaining_ms /1000) + 1
-                    # except Exception as e:
-                    #     logging.error("%s queuing error: %s", procname, e)
-                    #     sleep = 5
 
                 logging.debug(procname)
 
-        logging.info("%s playing %s %s:%0.02d remaining, sleeping for %ss",
+        logging.debug("%s playing %s %s:%0.02d remaining, sleeping for %ss",
                       procname, trackname, minutes, seconds, sleep)
         await asyncio.sleep(sleep)
 
@@ -487,10 +494,11 @@ async def spotify_watcher(userid):
 def recently_played_tracks():
     """fetch"""
     interval = 5
-    # timeout = SQL(f"current_timestamp - INTERVAL '{interval} days'")
-    # selector = Rating.select().distinct(Rating.trackid).where(Rating.user_id in [u for u in users]).where(Rating.last_played > timeout)
-    # tids = [x.trackid for x in selector]
-    tids = []
+    users = getactiveusers()
+    timeout = SQL(f"current_timestamp - interval '{interval} hours'")
+    selector = Rating.select().distinct(Rating.trackid).where(Rating.last_played > timeout)
+    # selector = Rating.select().where(Rating.last_played > timeout)
+    tids = [x.trackid for x in selector]
     return tids
 
 
@@ -504,13 +512,16 @@ async def queue_manager():
 
         while len(queue) < 2:
 
-            rated_tracks = [x.trackid for x in Rating.select()]
-            # unplayed_good_tracks = [x.trackid for x in Rating.select(Rating.trackid).where(Rating.user_id in [x for x in users]).group_by(Rating.trackid).having(fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)]
-            # recent_tids = recently_played_tracks()
+            logging.info("pulling recently played tracks")
+            recent_tids = recently_played_tracks()
+            
+            logging.info("pulling good tracks")
+            selector = Rating.select(Rating.trackid).group_by(Rating.trackid).having(fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)
+            good_tracks = [x.trackid for x in selector]
 
-            # potentials = [x for x in unplayed_good_tracks if x not in recent_tids]
-            potentials = rated_tracks
+            potentials = [x for x in good_tracks if x not in recent_tids]
             if len(potentials) == 0:
+                logging.info("no potential tracks to queue, sleeping for 60 seconds")
                 await asyncio.sleep(60)
                 continue
             # for each in recommendations:
@@ -522,6 +533,7 @@ async def queue_manager():
             # result = await trackinfo(upcoming_tid, return_track=True)
             # (upcoming_name, upcoming_track) = result
 
+            logging.info("adding to queue: %s", upcoming_tid)
             queue.append(upcoming_tid)
 
             # ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
@@ -549,7 +561,7 @@ async def main():
     db.connect()
     db.create_tables([User, Rating, PlayHistory, Track])
 
-    active_users = await getactiveusers()
+    active_users = getactiveusers()
     for user in active_users:
         task = asyncio.create_task(spotify_watcher(user.id),
                             name=f"watcher_{user.id}")
