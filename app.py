@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # from distutils.log import error
 # from multiprocessing import set_forkserver_preload
 from datetime import datetime, timedelta
@@ -29,14 +30,6 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
-
-PORT=os.environ['PORT']
-
-conf = tk.config_from_environment()
-cred = tk.Credentials(*conf)
-token_spotify = tk.request_client_token(*conf[:2])
-
-spotify = tk.Spotify(token_spotify, asynchronous=True)
 
 class BaseModel(Model):
     """A base model that will use our database"""
@@ -191,16 +184,11 @@ async def auth():
             "playlist-read-private",
             ]
     auth = tk.UserAuth(cred, scope)
-    logging.debug("auth=%s", auth)
+    logging.info("auth=%s", auth)
     state = auth.state
 
     auths[state] = auth
-    # # users[state] = userid x
-
-        # Returns: 1
-    # channel = await interaction.user.create_dm()
-    # logging.info(f"Attempting authentication for {interaction.user.name}")
-    # await channel.send(f"To grant the bot access to your Spotify account, click here: {auth.url}")
+    logging.info("auth_url=%s", auth.url)
     return await render_template('auth.html', spoturl=auth.url)
 
 
@@ -542,19 +530,22 @@ async def queue_manager():
 
 async def main():
     """kick it"""
+
     logging.info("connecting to db")
     db.connect()
     db.create_tables([User, Rating, PlayHistory, Track])
-    
-    users = await getactiveusers()
-    for user in users:
-        t = asyncio.create_task(spotify_watcher(user.id),
-                                         name=f"watcher_{user.id}")
+
+    active_users = await getactiveusers()
+    for user in active_users:
+        asyncio.create_task(spotify_watcher(user.id),
+                            name=f"watcher_{user.id}")
 
     q = asyncio.create_task(queue_manager(),name="queue_manager")
-    w = app.run_task('0.0.0.0', PORT)
+    w = app.run_task('0.0.0.0', os.environ['PORT'])
     tasks.append(w)
     tasks.append(q)
+    
+    logging.info("Port: %s", os.environ['PORT'])
     await asyncio.gather(w,q)
 
 
@@ -565,5 +556,15 @@ if __name__ == "__main__":
     queue = deque()
     recommendations = []
 
+    conf = tk.config_from_environment()
+    cred = tk.Credentials(*conf)
+    token_spotify = tk.request_client_token(*conf[:2])
+
+    secret=os.environ['SPOTIFY_CLIENT_SECRET']
+    logging.info("SPOTIFY_CLIENT_ID=%s", os.environ['SPOTIFY_CLIENT_ID'])
+    logging.info("SPOTIFY_CLIENT_SECRET=%s...%s", secret[-2:], secret[:2])
+    logging.info("SPOTIFY_REDIRECT_URI=%s", os.environ['SPOTIFY_REDIRECT_URI'])
+
+    spotify = tk.Spotify(token_spotify, asynchronous=True)
 
     asyncio.run(main())
