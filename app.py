@@ -27,9 +27,12 @@ app.secret_key = "flumple"
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
+    format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
+
+httpx_logger = logging.getLogger('httpx')
+httpx_logger.setLevel(logging.WARNING)
 
 class BaseModel(Model):
     """A base model that will use our database"""
@@ -418,10 +421,10 @@ async def spotify_watcher(userid):
         logging.debug("%s loop is awake", procname)
 
         with spotify.token_as(token):
-            logging.info("%s checking currently playing", procname)
+            logging.debug("%s checking currently playing", procname)
             currently = await spotify.playback_currently_playing()
             
-            logging.info("%s checking player queue state", procname)
+            logging.debug("%s checking player queue state", procname)
             queued = await spotify.playback_queue()
             queued_trackids = [x for x in queued.queue]
 
