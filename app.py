@@ -32,7 +32,7 @@ logging.basicConfig(
     )
 
 httpx_logger = logging.getLogger('httpx')
-httpx_logger.setLevel(logging.WARNING)
+httpx_logger.setLevel(os.getenv("HTTPX_LOGLEVEL", default=logging.INFO))
 
 class BaseModel(Model):
     """A base model that will use our database"""
@@ -41,24 +41,27 @@ class BaseModel(Model):
 
 
 class User(BaseModel):
+    """track users"""
     id = TextField(primary_key=True)
     token = BlobField()
     last_active = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
 
 
 class Track(BaseModel):
+    """track tracks"""
     trackid = CharField(primary_key=True)
     trackname = TextField()
 
 
 class Rating(BaseModel):
+    """track likes"""
     user_id = ForeignKeyField(User, backref="ratings")
     # trackid = ForeignKeyField(Track, backref="trackid")
     trackid = CharField()
     trackname = TextField()
     rating = IntegerField()
     last_played = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
-    
+
     class Meta:
         indexes = (
             (('user_id', 'trackid'), True),
@@ -66,6 +69,7 @@ class Rating(BaseModel):
 
 
 class PlayHistory(BaseModel):
+    """track the history of songs played"""
     trackid = CharField()
     played_at = TimestampField()
 
@@ -75,8 +79,15 @@ class PlayHistory(BaseModel):
         )
 
 
+class UpcomingQueue(BaseModel):
+    """track the upcoming songs"""
+    trackid = ForeignKeyField(Track, backref="trackid")
+    queued_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+
+
 @app.before_request
 def make_session_permanent():
+    """save cookies even if you close your browser"""
     session.permanent = True
 
 
@@ -89,7 +100,7 @@ async def before_serving():
 @app.route('/', methods=['GET'])
 async def index():
     """show the now playing page"""
-    global tasks
+
     spotifyid = request.cookies.get('spotifyid')
     if 'spotifyid' in session:
         spotifyid = session['spotifyid']
@@ -100,12 +111,12 @@ async def index():
     logging.debug("user=%s", user)
     with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
-    
+
     if currently is None:
         return await render_template('index.html',
                                      np_name="Nothing Playing",
                                      np_id="no id", rating=0, history=[])
-    
+
     tasknames = [x.get_name() for x in asyncio.all_tasks()]
     logging.debug("tasknames=%s", tasknames)
     if f"watcher_{spotifyid}" in tasknames:
@@ -122,7 +133,8 @@ async def index():
     ratings = [x for x in query]
     rsum = sum([x.rating for x in ratings])
 
-    ph_query = PlayHistory.select().where(PlayHistory.trackid != np_id).order_by(PlayHistory.played_at.desc()).limit(10)
+    ph_query = PlayHistory.select().where(
+        PlayHistory.trackid != np_id).order_by(PlayHistory.played_at.desc()).limit(10)
     # playhistory = [x.played_at.strftime('%H:%M:%S %Y-%m-%d')
     playhistory = [await trackinfo(x.trackid) for x in ph_query]
     return await render_template('index.html',
@@ -134,6 +146,7 @@ async def index():
 
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
+    """create a user record and set up initial ratings"""
     global auths
     users = getactiveusers()
     code = request.args.get('code', "")
@@ -175,7 +188,8 @@ async def spotify_callback():
 
 
 @app.route('/auth', methods=['GET'])
-async def auth():    
+async def auth():
+    """redirect user to spotify for authorization"""
     scope = [ "user-read-playback-state",
             "user-modify-playback-state",
             "user-read-currently-playing",
@@ -186,39 +200,40 @@ async def auth():
             "user-top-read",
             "playlist-read-private",
             ]
-    auth = tk.UserAuth(cred, scope)
-    logging.info("auth=%s", auth)
-    state = auth.state
+    thisauth = tk.UserAuth(cred, scope)
+    logging.info("auth=%s", thisauth)
+    state = thisauth.state
 
-    auths[state] = auth
-    logging.info("auth_url=%s", auth.url)
-    return await render_template('auth.html', spoturl=auth.url)
+    auths[state] = thisauth
+    logging.info("auth_url=%s", thisauth.url)
+    return await render_template('auth.html', spoturl=thisauth.url)
 
 
 @app.route('/dash', methods=['GET'])
 async def dashboard():
+    """show what's happening"""
     # ratings = [x for x in Rating.select()]
 
     queued = [await trackinfo(trackid) for trackid in queue]
     users = getactiveusers()
     history = await getrecents()
-    tasks = [x.get_name() for x in asyncio.all_tasks()]
+    tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
                                  auths=auths,
                                  users=users,
-                                 tasks=tasks,
+                                 tasks=tasknames,
                                  queue=queued,
-                                 recommendations=recommendations,
                                  recents=history)
 
 
 @app.route('/pullratings', methods=['GET'])
 async def pullratings(spotifyid=None):
+    """load up a bunch of ratings for a user"""
     if 'spotifyid' in session:
         spotifyid = session['spotifyid']
     else:
         return redirect("/auth")
-    
+
     user, token = await getuser(spotifyid)
     logging.debug("user=%s", user)
 
@@ -227,18 +242,20 @@ async def pullratings(spotifyid=None):
         #     ratings = Rating.get(user_id=spotifyid)
         # except Exception as e:
         #     logging.error("rating error: %s", e)
-        
+
         # rate recent history (20 items)
-        r = [item.track.id async for item in spotify.all_items(await spotify.playback_recently_played())]
+        r = [item.track.id async for item in
+             spotify.all_items(await spotify.playback_recently_played())]
         # recents = await spotify.playback_recently_played()
         rated = await rate_list(r, spotifyid, 1)
-        
+
         # # rate tops
         # tops = await spotify.current_user_top_tracks()
         # tops = await spotify.all_items(await spotify.current_user_top_tracks())
         # rated = rated + await rate_list(tops, spotifyid, 4)
 
-        saved_tracks = [item.track.id async for item in spotify.all_items(await spotify.saved_tracks())]
+        saved_tracks = [item.track.id async for item in
+                        spotify.all_items(await spotify.saved_tracks())]
         rated = rated + await rate_list(saved_tracks, spotifyid, 4)
 
         message = f"rated {rated} items"
@@ -260,6 +277,7 @@ async def getuser(userid):
 
 
 async def getrecents():
+    """pull recently played tracks from history table"""
     ph_query = PlayHistory.select().order_by(PlayHistory.played_at.desc()).limit(10)
     playhistory = [await trackinfo(x.trackid) for x in ph_query]
     return playhistory
@@ -322,7 +340,7 @@ async def rate_list(items, uid, rating=1):
 
 async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
-    logging.debug("checking the database for a track: %s", tid)
+    logging.info("checking the database for a track: %s", tid)
     try:
         track, _created = Track.get_or_create(
             trackid=tid,
@@ -331,7 +349,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
         logging.error("rate - error: %s", e)
 
     if track.trackname == "":
-        logging.debug("checking spotify for track details: %s", tid)
+        logging.info("checking spotify for track details: %s", tid)
         trackname = await trackinfo(tid)
         logging.info("adding a track to database: %s - %s", tid, trackname)
         track.trackname = trackname
@@ -404,17 +422,18 @@ async def spotify_watcher(userid):
             playing_tid = currently.item.id
             trackname = await trackinfo(playing_tid)
             # nextup_tid = queue[0]
-            
+
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
-            logging.info("%s initial status - playing %s, %s:%0.02s remaining", procname, trackname, minutes, seconds)
-            
+            logging.info("%s initial status - playing %s, %s:%0.02d remaining",
+                         procname, trackname, minutes, seconds)
+
             # logging.info("%s pulling spotify recommendations", procname)
             # r = await spotify.recommendations(track_ids=[playing_tid])
             # recommendations += [item.id for item in r.tracks]
             # logging.info("%s found %s recommendations", procname, len(recommendations))
-    
+
     # Loop while alive
     logging.info("%s starting loop", procname)
     while ttl > datetime.now():
@@ -423,7 +442,7 @@ async def spotify_watcher(userid):
         with spotify.token_as(token):
             logging.debug("%s checking currently playing", procname)
             currently = await spotify.playback_currently_playing()
-            
+
             logging.debug("%s checking player queue state", procname)
             queued = await spotify.playback_queue()
             queued_trackids = [x for x in queued.queue]
@@ -536,7 +555,9 @@ async def queue_manager():
             # result = await trackinfo(upcoming_tid, return_track=True)
             # (upcoming_name, upcoming_track) = result
 
-            logging.info("adding to queue: %s", upcoming_tid)
+            track = Track.get_by_id(upcoming_tid)
+            
+            logging.info("adding to queue: %s %s", upcoming_tid, track.trackname)
             queue.append(upcoming_tid)
 
             # ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
@@ -562,7 +583,7 @@ async def main():
 
     logging.info("connecting to db")
     db.connect()
-    db.create_tables([User, Rating, PlayHistory, Track])
+    db.create_tables([User, Rating, PlayHistory, Track, UpcomingQueue])
 
     active_users = getactiveusers()
     for user in active_users:
