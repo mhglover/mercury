@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """mercury radio"""
-from datetime import datetime, timedelta
+import datetime
 import logging
 import os
 import asyncio
@@ -9,7 +9,9 @@ from random import choice
 import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
-from peewee import * # pylint disable=W0401
+from peewee import Model, TextField, BlobField, DateTimeField
+from peewee import SQL, CharField, ForeignKeyField, IntegerField
+from peewee import TimestampField, AutoField, IntegrityError, fn
 from playhouse.db_url import connect
 
 load_dotenv()  # take environment variables from .env
@@ -105,8 +107,6 @@ async def before_serving():
 @app.route('/', methods=['GET'])
 async def index():
     """show the now playing page"""
-    global tasks
-
     spotifyid = request.cookies.get('spotifyid')
     if 'spotifyid' in session:
         spotifyid = session['spotifyid']
@@ -141,7 +141,7 @@ async def index():
     np_id = currently.item.id
     np_name = await trackinfo(np_id)
     query = Rating.select().where(Rating.trackid == np_id)
-    ratings = [x for x in query] # pylint disable=not-an-iterable
+    ratings = [x for x in iter(query)] # pylint disable=not-an-iterable
     rsum = sum([x.rating for x in ratings])
 
     ph_query = PlayHistory.select().where(
@@ -158,7 +158,7 @@ async def index():
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
     """create a user record and set up initial ratings"""
-    global auths
+
     # users = getactiveusers()
     code = request.args.get('code', "")
     state = request.args.get('state', "")
@@ -288,7 +288,7 @@ async def getuser(userid):
     if token.is_expiring:
         try:
             token = cred.refresh(token)
-        except Exception as e: # pylint disable=broad-exception-caught
+        except Exception as e: # pylint: disable=broad-exception-caught
             logging.error("exception: %s", e)
         user.token = pickle.dumps(token)
         user.save()
@@ -378,7 +378,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
                 .on_conflict(
                     conflict_target=[Rating.user_id, Rating.trackid],
                     preserve=[Rating.user_id, Rating.trackid],
-                    update={Rating.last_played: datetime.now()}) # pylint disable=E1101
+                    update={Rating.last_played: datetime.datetime.now()}) # pylint disable=E1101
                 .execute())
 
     else:
@@ -398,7 +398,7 @@ async def record(uid, tid):
     logging.info("play history recorded:  %s - %s", uid, trackname)
     try:
         insertedkey = PlayHistory.get_or_create(
-            trackid=tid, played_at=datetime.now()) # pylint disable=E1101
+            trackid=tid, played_at=datetime.datetime.now()) # pylint disable=E1101
         logging.debug("inserted play history record %s", insertedkey)
     except IntegrityError as e:
         logging.error("couldn't get/create history: %s - %s", uid, e)
@@ -408,7 +408,7 @@ async def getnext():
     """get the next trackid and trackname from the queue"""
     logging.debug("pulling queue from db")
     selector = UpcomingQueue.select().order_by(UpcomingQueue.id)
-    dbqueue = [x.trackid.trackid for x in selector]
+    dbqueue = [x.trackid.trackid for x in iter(selector)]
     logging.debug("queue pulled, %s items", len(dbqueue))
     if len(dbqueue) < 1:
         logging.debug("queue is empty, returning None")
@@ -439,18 +439,18 @@ async def spotify_watcher(userid):
 
     try:
         _, token = await getuser(userid)
-    except Exception as e: # pylint disable=broad-exception-caught
+    except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("exception %s",e)
 
     playing_tid = ""
-    ttl = datetime.now() + timedelta(minutes=20)
+    ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
     localhistory = []
 
     # Check the current status
     with spotify.token_as(token):
         try:
             currently = await spotify.playback_currently_playing()
-        except Exception as e: # pylint disable=broad-exception-caught
+        except Exception as e: # pylint: disable=broad-exception-caught
             logging.error("exception %s", e)
         if currently is None:
             logging.debug("%s not currently playing", procname)
@@ -460,7 +460,7 @@ async def spotify_watcher(userid):
             playing_tid = currently.item.id
             try:
                 trackname = await trackinfo(playing_tid)
-            except Exception as e: # pylint disable=broad-exception-caught
+            except Exception as e: # pylint: disable=broad-exception-caught
                 logging.error("exception %s", e)
 
             remaining_ms = currently.item.duration_ms - currently.progress_ms
@@ -471,7 +471,7 @@ async def spotify_watcher(userid):
 
     # Loop while alive
     logging.info("%s starting loop", procname)
-    while ttl > datetime.now(): # pylint: disable=E1101
+    while ttl > datetime.datetime.now(): # pylint: disable=E1101
         status = "unset"
         logging.debug("%s loop is awake", procname)
 
@@ -496,7 +496,7 @@ async def spotify_watcher(userid):
                 sleep = 30
             else:
                 logging.debug("%s updating ttl: %s", procname, ttl)
-                ttl = datetime.now() + timedelta(minutes=20)
+                ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
 
                 trackid = currently.item.id
                 if trackid not in localhistory:
@@ -591,8 +591,9 @@ async def queue_manager():
 
     while True:
 
+        query = UpcomingQueue.select().order_by(UpcomingQueue.id)
         try:
-            uqueue = [x.trackid for x in UpcomingQueue.select().order_by(UpcomingQueue.id)]
+            uqueue = [x.trackid for x in iter(query)]
         except Exception as e: # pylint: disable=W0718
             logging.error("%s, %s exception, failed pulling queue from database\n%s",
                           procname, type(e), e)
@@ -632,7 +633,7 @@ async def queue_manager():
 
             track = Track.get_by_id(upcoming_tid)
             ratings = Rating.select().where(Rating.trackid==upcoming_tid)
-            for r in ratings:
+            for r in iter(ratings):
                 logging.info("RATING HISTORY - %s, %s, %s, %s",
                              r.trackname, r.user_id, r.rating, r.last_played)
             logging.info("adding to radio queue: %s %s", upcoming_tid, track.trackname)
@@ -659,8 +660,6 @@ async def queue_manager():
 
         logging.debug("%s sleeping for %s", procname, sleep)
         await asyncio.sleep(sleep)
-        logging.debug("%s awake", procname)
-
 
 async def main():
     """kick it"""
@@ -700,7 +699,7 @@ async def main():
 
     try:
         await asyncio.gather(*taskset)
-    except Exception as e: # pylint disable=W0718
+    except Exception as e: # pylint: disable=W0718
         logging.error("exception %s", e)
 
     await asyncio.gather(*asyncio.all_tasks())
