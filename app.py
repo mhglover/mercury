@@ -18,6 +18,12 @@ db = connect(os.environ['DATABASE_URL'], autorollback=True)
 
 app = Quart(__name__)
 app.secret_key = os.getenv("APP_SECRET", default="1234567890")
+conf = tk.config_from_environment()
+cred = tk.Credentials(*conf)
+token_spotify = tk.request_client_token(*conf[:2])
+spotify = tk.Spotify(token_spotify, asynchronous=True)
+tasks = set()
+auths = {}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -193,7 +199,7 @@ async def spotify_callback():
 
 
 @app.route('/auth', methods=['GET'])
-async def auth():
+async def spotify_authorization():
     """redirect user to spotify for authorization"""
     scope = [ "user-read-playback-state",
             "user-modify-playback-state",
@@ -282,7 +288,7 @@ async def getuser(userid):
     if token.is_expiring:
         try:
             token = cred.refresh(token)
-        except Exception as e: # pylint disable=W0718
+        except Exception as e: # pylint disable=broad-exception-caught
             logging.error("exception: %s", e)
         user.token = pickle.dumps(token)
         user.save()
@@ -367,16 +373,16 @@ async def rate(uid, tid, value=1, set_last_played=True):
     logging.info("writing a rating: %s %s %s", uid, trackname, value)
     # try:
     if set_last_played:
-        rating = (Rating
+        _ = (Rating
                 .replace(user_id=uid, trackid=tid, trackname=trackname, rating=value)
                 .on_conflict(
                     conflict_target=[Rating.user_id, Rating.trackid],
                     preserve=[Rating.user_id, Rating.trackid],
                     update={Rating.last_played: datetime.now()}) # pylint disable=E1101
                 .execute())
-        logging.info("rating written: %s", rating)
+
     else:
-        rating = (Rating
+        _ = (Rating
             .replace(user_id=uid, trackid=tid,
                      rating=value, trackname=trackname, last_played="1970-01-01")
             .on_conflict(
@@ -384,9 +390,6 @@ async def rate(uid, tid, value=1, set_last_played=True):
                 preserve=[Rating.user_id, Rating.trackid],
                 update={Rating.last_played: "1970-01-01"})
             .execute())
-    logging.debug("rating=%s", rating)
-    # except Exception as e:
-    #     logging.error("{rating error: uid=%s error=%s", uid, e)
 
 
 async def record(uid, tid):
@@ -450,7 +453,7 @@ async def spotify_watcher(userid):
         except Exception as e: # pylint disable=broad-exception-caught
             logging.error("exception %s", e)
         if currently is None:
-            logging.info("%s not currently playing", procname)
+            logging.debug("%s not currently playing", procname)
             sleep = 30
         else:
             # previous_tid = None
@@ -573,7 +576,7 @@ async def spotify_watcher(userid):
                 status = f"{trackname} {minutes}:{seconds:0>2} remaining"
                 # logging.info("%s playing %s %s:%0.02d remaining",
                     #   procname, trackname, minutes, seconds)
-        
+
         logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
@@ -701,19 +704,13 @@ async def main():
         logging.error("exception %s", e)
 
     await asyncio.gather(*asyncio.all_tasks())
+    logging.info("main done")
 
 
 if __name__ == "__main__":
-    tasks = set()
-    auths = {}
     secret=os.environ['SPOTIFY_CLIENT_SECRET']
     logging.info("SPOTIFY_CLIENT_ID=%s", os.environ['SPOTIFY_CLIENT_ID'])
     logging.info("SPOTIFY_CLIENT_SECRET=%s...%s", secret[-2:], secret[:2])
     logging.info("SPOTIFY_REDIRECT_URI=%s", os.environ['SPOTIFY_REDIRECT_URI'])
-
-    conf = tk.config_from_environment()
-    cred = tk.Credentials(*conf)
-    token_spotify = tk.request_client_token(*conf[:2])
-    spotify = tk.Spotify(token_spotify, asynchronous=True)
 
     asyncio.run(main())
