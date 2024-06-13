@@ -21,7 +21,8 @@ app.secret_key = os.getenv("APP_SECRET", default="1234567890")
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
+    # format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
+    format='%(asctime)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -435,7 +436,7 @@ async def spotify_watcher(userid):
 
     try:
         _, token = await getuser(userid)
-    except Exception as e:
+    except Exception as e: # pylint disable=broad-exception-caught
         logging.error("exception %s",e)
 
     playing_tid = ""
@@ -446,7 +447,7 @@ async def spotify_watcher(userid):
     with spotify.token_as(token):
         try:
             currently = await spotify.playback_currently_playing()
-        except Exception as e:
+        except Exception as e: # pylint disable=broad-exception-caught
             logging.error("exception %s", e)
         if currently is None:
             logging.info("%s not currently playing", procname)
@@ -456,7 +457,7 @@ async def spotify_watcher(userid):
             playing_tid = currently.item.id
             try:
                 trackname = await trackinfo(playing_tid)
-            except Exception as e:
+            except Exception as e: # pylint disable=broad-exception-caught
                 logging.error("exception %s", e)
 
             remaining_ms = currently.item.duration_ms - currently.progress_ms
@@ -468,6 +469,7 @@ async def spotify_watcher(userid):
     # Loop while alive
     logging.info("%s starting loop", procname)
     while ttl > datetime.now(): # pylint: disable=E1101
+        status = "unset"
         logging.debug("%s loop is awake", procname)
 
         with spotify.token_as(token):
@@ -482,10 +484,12 @@ async def spotify_watcher(userid):
             playbackqueueids = [x.id for x in playbackqueue.queue]
 
             if currently is None:
+                status = "not playing"
                 logging.info("%s not currently playing", procname)
                 sleep = 30
             elif currently.is_playing is False:
-                logging.info("%s is paused", procname)
+                status = "paused"
+                logging.debug("%s is paused", procname)
                 sleep = 30
             else:
                 logging.debug("%s updating ttl: %s", procname, ttl)
@@ -508,11 +512,13 @@ async def spotify_watcher(userid):
                         sleep = 30
 
                 elif remaining_ms <= 30000:
-                    logging.info("%s 30 seconds remaining in track %s",
+                    logging.info("%s LAST 30 SECONDS IN TRACK - %s",
                                 procname, trackname)
 
                     # we got to the end of the track, so record a +1 rating
-                    await rate(userid, trackid, 1)
+                    value = 1
+                    logging.info("%s setting a rating, %s %s %s", userid, trackid, value, procname)
+                    await rate(userid, trackid, value)
 
                     # if we're finishing the Currently Playing queued track
                         # remove it from the queue
@@ -531,40 +537,44 @@ async def spotify_watcher(userid):
                                     procname, trackname)
                         await record(userid, trackid)
 
-                # get the next queued track
-                nextup_tid, nextup_name = await getnext()
-                if nextup_tid in playbackqueueids:
-                    # this next track is already in the queue (or context, annoyingly)
-                    # just sleep until this track is done
-                    logging.info("%s next track already queued, don't requeue",
-                                 procname)
-                    # sleep = (remaining_ms /1000) + 1
-                else:
-                    # dbtrack = Track.get_by_id(nextup_tid)
-                    # get the track details with the track uri
+                    # get the next queued track
+                    nextup_tid, nextup_name = await getnext()
+                    if nextup_tid in playbackqueueids:
+                        # this next track is already in the queue (or context, annoyingly)
+                        # just sleep until this track is done
+                        logging.debug("%s next track already queued, don't requeue",
+                                    procname)
+                        # sleep = (remaining_ms /1000) + 1
+                    elif nextup_tid == trackid:
+                        logging.debug("%s next track currently playing, don't requeue",
+                                    procname)
+                    else:
+                        # dbtrack = Track.get_by_id(nextup_tid)
+                        # get the track details with the track uri
 
-                    logging.info("%s - fetching track details from spotify for %s",
-                                    procname, nextup_name)
-                    try:
-                        track = await spotify.track(nextup_tid)
-                    except Exception as e: # pylint: disable=W0718
-                        logging.error("exception: %s", e)
+                        logging.info("%s - fetching track details from spotify for %s",
+                                        procname, nextup_name)
+                        try:
+                            track = await spotify.track(nextup_tid)
+                        except Exception as e: # pylint: disable=W0718
+                            logging.error("exception: %s", e)
 
-                    # queue up the next track for this user
-                    logging.info("%s sending to spotify client queue %s", procname, nextup_name)
-                    try:
-                        _ = await spotify.playback_queue_add(track.uri)
-                    except Exception as e: # pylint: disable=W0718
-                        logging.error("%s %s exception - " +
-                                        "failed sending a track to the spotify queue: %s\n%s",
-                                        procname, type(e), nextup_name, e)
+                        # queue up the next track for this user
+                        logging.info("%s sending to spotify client queue %s", procname, nextup_name)
+                        try:
+                            _ = await spotify.playback_queue_add(track.uri)
+                        except Exception as e: # pylint: disable=W0718
+                            logging.error("%s %s exception - " +
+                                            "failed sending a track to the spotify queue: %s\n%s",
+                                            procname, type(e), nextup_name, e)
 
-                    # sleep = (remaining_ms /1000) + 1
+                        sleep = (remaining_ms /1000) + 1
 
-                logging.info("%s playing %s %s:%0.02d remaining",
-                      procname, trackname, minutes, seconds)
+                status = f"{trackname} {minutes}:{seconds:0>2} remaining"
+                # logging.info("%s playing %s %s:%0.02d remaining",
+                    #   procname, trackname, minutes, seconds)
         
-        logging.info("%s sleeping for %s seconds", procname, sleep)
+        logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
     logging.info("%s timed out, watcher exiting", procname)
@@ -651,7 +661,7 @@ async def queue_manager():
 
 async def main():
     """kick it"""
-    global tasks
+    taskset = set()
     logging.info("connecting to db")
     db.connect()
     db.create_tables([User, Rating, PlayHistory, Track, UpcomingQueue])
@@ -667,28 +677,30 @@ async def main():
                             name=f"watcher_{user.id}")
 
             # add this user task to the global tasks set
-            tasks.add(user_task)
+            taskset.add(user_task)
 
             # To prevent keeping references to finished tasks forever,
             # make each task remove its own reference from the set after
             # completion:
-            user_task.add_done_callback(tasks.remove(user_task))
+            user_task.add_done_callback(taskset.remove(user_task))
 
     if "queue_manager" in run_tasks:
         logging.info("creating a queue manager task")
         qm = asyncio.create_task(queue_manager(),name="queue_manager")
-        tasks.add(qm)
-        qm.add_done_callback(tasks.remove(qm))
+        taskset.add(qm)
+        qm.add_done_callback(taskset.remove(qm))
 
     if "web_ui" in run_tasks:
         logging.info("starting web_ui on port: %s", os.environ['PORT'])
         web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
-        tasks.add(web_ui)
+        taskset.add(web_ui)
 
     try:
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*taskset)
     except Exception as e: # pylint disable=W0718
         logging.error("exception %s", e)
+
+    await asyncio.gather(*asyncio.all_tasks())
 
 
 if __name__ == "__main__":
