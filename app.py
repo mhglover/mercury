@@ -303,11 +303,6 @@ async def getrecents():
     return playhistory
 
 
-def getactiveusers():
-    """fetch details for the active users"""
-    return User.select()
-
-
 async def trackinfo(trackid, return_track=False, return_time=False):
     """pull track name (and details))
 
@@ -357,24 +352,27 @@ async def rate_list(items, uid, rating=1):
 async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
     logging.info("checking the database for a track: %s", tid)
-    track = Track.get_or_none(trackid=tid)
-    if track is None:
-        logging.info("track not in database yet, checking spotify for track details: %s", tid)
+    try:
+        track = Track.get_by_id(tid)
+    except Exception as _: # pylint: disable=broad-exception-caught
         trackname = await trackinfo(tid)
         logging.info("adding a track to database: %s - %s", tid, trackname)
         try:
             track = Track(
                 trackid=tid,
                 trackname=trackname)
-            track.save()
-        except IntegrityError as e:
-            logging.error("rate - error: %s", e)
+            track.save(force_insert=True)
+        except IntegrityError as ie:
+            logging.error("rate - error: %s", ie)
 
-    logging.info("writing a rating: %s %s %s", uid, trackname, value)
-    # try:
+    logging.info("writing a rating: %s %s %s", uid, track.trackname, value)
+
     if set_last_played:
         _ = (Rating
-                .replace(user_id=uid, trackid=tid, trackname=trackname, rating=value)
+                .replace(user_id=uid,
+                         trackid=track.trackid,
+                         trackname=track.trackname,
+                         rating=value)
                 .on_conflict(
                     conflict_target=[Rating.user_id, Rating.trackid],
                     preserve=[Rating.user_id, Rating.trackid],
@@ -383,8 +381,8 @@ async def rate(uid, tid, value=1, set_last_played=True):
 
     else:
         _ = (Rating
-            .replace(user_id=uid, trackid=tid,
-                     rating=value, trackname=trackname, last_played="1970-01-01")
+            .replace(user_id=uid, trackid=track.trackid,
+                     rating=value, trackname=track.trackname, last_played="1970-01-01")
             .on_conflict(
                 conflict_target=[Rating.user_id, Rating.trackid],
                 preserve=[Rating.user_id, Rating.trackid],
@@ -429,6 +427,11 @@ def recently_played_tracks():
     # selector = Rating.select().where(Rating.last_played > timeout)
     tids = [x.trackid for x in selector]
     return tids
+
+
+def getactiveusers():
+    """fetch details for the active users"""
+    return User.select()
 
 
 async def spotify_watcher(userid):
