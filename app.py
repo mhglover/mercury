@@ -14,7 +14,8 @@ from peewee import SQL, CharField, ForeignKeyField, IntegerField
 from peewee import TimestampField, AutoField, IntegrityError, fn
 from playhouse.db_url import connect
 
-# pylint: disable=W0718
+# pylint: disable=W0718,global-statement
+# pylint: disable=broad-exception-caught
 
 load_dotenv()  # take environment variables from .env
 
@@ -31,13 +32,31 @@ auths = {}
 
 logging.basicConfig(
     level=logging.INFO,
-    # format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
-    format='%(asctime)s %(levelname)s %(message)s',
+    format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
+    # format='%(asctime)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
+formatter = logging.Formatter('%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s')
+
 httpx_logger = logging.getLogger('httpx')
 httpx_logger.setLevel(os.getenv("LOGLEVEL_HTTPX", default="INFO"))
+
+# initial app running message
+hypercorn_error = logging.getLogger("hypercorn.error")
+hypercorn_error.disabled = True
+
+# access log
+hypercorn_access = logging.getLogger("hypercorn.access")
+hypercorn_access.disabled = True
+
+quart_logger = logging.getLogger('quart.app')
+# quart_logger.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
+#     # format='%(asctime)s %(levelname)s %(message)s',
+#     datefmt="%Y-%m-%d %H:%M:%S"
+#     )
 
 class BaseModel(Model):
     """A base model that will use our database"""
@@ -97,15 +116,18 @@ class UpcomingQueue(BaseModel):
 @app.before_request
 def before_request():
     """save cookies even if you close your browser"""
-    global db # pylint: disable=global-statement
+    global db 
     session.permanent = True
 
     # make sure database is open
     logging.info("before_request reconnecting to database")
-    try:
-        db = connect(os.environ['DATABASE_URL'], autorollback=True)
-    except Exception as e:
-        logging.error("before_request exception %s", e)
+    if db.is_closed():
+        logging.warning("web_ui DB IS CLOSED reestablishing database connection")
+        db.connect()
+    # try:
+    #     db = connect(os.environ['DATABASE_URL'], autorollback=True)
+    # except Exception as e:
+    #     logging.error("before_request exception %s", e)
 
 # @app.teardown_request
 # def teardown_request():
@@ -295,6 +317,25 @@ async def pullratings(spotifyid=None):
         return redirect("/")
 
 
+@app.route('/watch', methods=['GET'])
+async def watch(spotifyid):
+    """start a watcher for a user"""
+    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
+    if "spotify_watcher" not in run_tasks:432
+    
+    else:
+        tasknames = [x.get_name() for x in asyncio.all_tasks()]
+        logging.debug("tasknames=%s", tasknames)
+        
+        if f"watcher_{spotifyid}" in tasknames:
+            logging.debug("watcher_%s is running", spotifyid)
+        else:
+            logging.info("trying to launch a watcher for %s", spotifyid)
+            user_task = asyncio.create_task(spotify_watcher(spotifyid),
+                            name=f"watcher_{spotifyid}")
+            tasks.add(user_task) # pylint disable=used-before-assignment
+            user_task.add_done_callback(tasks.remove(user_task))
+    
 async def getuser(userid):
     """fetch user details"""
     user = User.get(User.id == userid)
@@ -302,7 +343,7 @@ async def getuser(userid):
     if token.is_expiring:
         try:
             token = cred.refresh(token)
-        except Exception as e: # pylint: disable=broad-exception-caught
+        except Exception as e: 
             logging.error("exception: %s", e)
         user.token = pickle.dumps(token)
         user.save()
@@ -457,7 +498,7 @@ async def spotify_watcher(userid):
     try:
         _, token = await getuser(userid)
     except Exception as e: # pylint: disable=broad-exception-caught
-        logging.error("exception %s",e)
+        logging.error("%s getuser exception %s",procname, e)
 
     playing_tid = ""
     ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
@@ -607,8 +648,10 @@ async def queue_manager():
     logging.info('%s starting', procname)
 
     while True:
+        logging.debug("%s checking queue state", procname)
 
-        logging.info("%s checking queue state", procname)
+        if db.is_closed():
+            db.connect()
 
         query = UpcomingQueue.select().order_by(UpcomingQueue.id)
         try:
