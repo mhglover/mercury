@@ -731,17 +731,18 @@ async def queue_manager():
 async def main():
     """kick it"""
     taskset = set()
-    logging.info("connecting to db")
+    logging.info("main - connecting to db")
     db.connect()
+    logging.info("main - creating tables if necessary")
     db.create_tables([User, Rating, PlayHistory, Track, UpcomingQueue])
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    logging.info("running tasks: %s", run_tasks)
+    logging.info("main - running tasks: %s", run_tasks)
 
     if "spotify_watcher" in run_tasks:
         active_users = getactiveusers()
         for user in active_users:
-            logging.info("creating a spotify watcher task for: %s", user.id)
+            logging.info("main - creating a spotify watcher task for: %s", user.id)
             user_task = asyncio.create_task(spotify_watcher(user.id),
                             name=f"watcher_{user.id}")
 
@@ -754,23 +755,23 @@ async def main():
             user_task.add_done_callback(taskset.remove(user_task))
 
     if "queue_manager" in run_tasks:
-        logging.info("creating a queue manager task")
+        logging.info("main - creating a queue manager task")
         qm = asyncio.create_task(queue_manager(),name="queue_manager")
         taskset.add(qm)
         qm.add_done_callback(taskset.remove(qm))
 
     if "web_ui" in run_tasks:
-        logging.info("starting web_ui on port: %s", os.environ['PORT'])
+        logging.info("main - starting web_ui on port: %s", os.environ['PORT'])
         web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
         taskset.add(web_ui)
 
     try:
         await asyncio.gather(*taskset)
     except Exception as e:
-        logging.error("exception %s", e)
+        logging.error("main - gather exception %s", e)
 
     await asyncio.gather(*asyncio.all_tasks())
-    logging.info("main done")
+    logging.info("main - done")
 
 
 if __name__ == "__main__":
