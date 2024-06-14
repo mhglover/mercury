@@ -116,7 +116,7 @@ class UpcomingQueue(BaseModel):
 @app.before_request
 def before_request():
     """save cookies even if you close your browser"""
-    global db 
+
     session.permanent = True
 
     # make sure database is open
@@ -317,25 +317,24 @@ async def pullratings(spotifyid=None):
         return redirect("/")
 
 
-@app.route('/watch', methods=['GET'])
-async def watch(spotifyid):
-    """start a watcher for a user"""
-    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    if "spotify_watcher" not in run_tasks:432
+# @app.route('/watch', methods=['GET'])
+# async def watch(spotifyid):
+#     """start a watcher for a user"""
+#     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
+#     if "spotify_watcher" not in run_tasks:
     
-    else:
-        tasknames = [x.get_name() for x in asyncio.all_tasks()]
-        logging.debug("tasknames=%s", tasknames)
-        
-        if f"watcher_{spotifyid}" in tasknames:
-            logging.debug("watcher_%s is running", spotifyid)
-        else:
-            logging.info("trying to launch a watcher for %s", spotifyid)
-            user_task = asyncio.create_task(spotify_watcher(spotifyid),
-                            name=f"watcher_{spotifyid}")
-            tasks.add(user_task) # pylint disable=used-before-assignment
-            user_task.add_done_callback(tasks.remove(user_task))
-    
+#     else:
+#         tasknames = [x.get_name() for x in asyncio.all_tasks()]
+#         logging.debug("tasknames=%s", tasknames)
+#         if f"watcher_{spotifyid}" in tasknames:
+#             logging.debug("watcher_%s is running", spotifyid)
+#         else:
+            # logging.info("trying to launch a watcher for %s", spotifyid)
+            # user_task = asyncio.create_task(spotify_watcher(spotifyid),
+            #                 name=f"watcher_{spotifyid}")
+            # tasks.add(user_task) # pylint disable=used-before-assignment
+            # user_task.add_done_callback(tasks.remove(user_task))
+
 async def getuser(userid):
     """fetch user details"""
     user = User.get(User.id == userid)
@@ -509,7 +508,7 @@ async def spotify_watcher(userid):
         try:
             currently = await spotify.playback_currently_playing()
         except Exception as e: # pylint: disable=broad-exception-caught
-            logging.error("exception %s", e)
+            logging.error("%s spotify_currently_playing exception %s", procname, e)
         if currently is None:
             logging.debug("%s not currently playing", procname)
             sleep = 30
@@ -528,7 +527,7 @@ async def spotify_watcher(userid):
                          procname, trackname, minutes, seconds)
 
     # Loop while alive
-    logging.info("%s starting loop", procname)
+    logging.debug("%s starting loop", procname)
     while ttl > datetime.datetime.now(): # pylint: disable=E1101
         status = "unset"
         logging.debug("%s loop is awake", procname)
@@ -635,7 +634,10 @@ async def spotify_watcher(userid):
                 # logging.info("%s playing %s %s:%0.02d remaining",
                     #   procname, trackname, minutes, seconds)
 
-        logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
+        if status == "not playing":
+            logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
+        else:
+            logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
     logging.info("%s timed out, watcher exiting", procname)
