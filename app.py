@@ -120,8 +120,14 @@ def before_request():
     # make sure database is open
     logging.info("before_request reconnecting to database")
     if db.is_closed():
-        logging.warning("web_ui DB IS CLOSED reestablishing database connection")
-        db.connect()
+        logging.warning("web_ui db is closed - reestablishing database connection")
+        try:
+            db.connect()
+        except Exception as e:
+            logging.error("before_request exception %s", e)
+            logging.error("db:\n%s", db)
+    else:
+        logging.info("db connection is allegdly healthy")
     # try:
     #     db = connect(os.environ['DATABASE_URL'], autorollback=True)
     # except Exception as e:
@@ -187,6 +193,28 @@ async def index():
                                  history=playhistory)
 
 
+@app.route('/auth', methods=['GET'])
+async def spotify_authorization():
+    """redirect user to spotify for authorization"""
+    scope = [ "user-read-playback-state",
+            "user-modify-playback-state",
+            "user-read-currently-playing",
+            "user-read-recently-played",
+            "streaming",
+            "app-remote-control",
+            "user-library-read",
+            "user-top-read",
+            "playlist-read-private",
+            ]
+    auth = tk.UserAuth(cred, scope)
+    logging.debug("auth=%s", auth)
+    state = auth.state
+
+    auths[state] = auth
+    logging.info("auth_url=%s", auth.url)
+    return await render_template('auth.html', spoturl=auth.url)
+
+
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
     """create a user record and set up initial ratings"""
@@ -230,28 +258,6 @@ async def spotify_callback():
     # return redirect(f"https://discord.com/channels/{SERVER}/{CHANNEL}", 307)
 
 
-@app.route('/auth', methods=['GET'])
-async def spotify_authorization():
-    """redirect user to spotify for authorization"""
-    scope = [ "user-read-playback-state",
-            "user-modify-playback-state",
-            "user-read-currently-playing",
-            "user-read-recently-played",
-            "streaming",
-            "app-remote-control",
-            "user-library-read",
-            "user-top-read",
-            "playlist-read-private",
-            ]
-    auth = tk.UserAuth(cred, scope)
-    logging.info("auth=%s", auth)
-    state = auth.state
-
-    auths[state] = auth
-    logging.info("auth_url=%s", auth.url)
-    return await render_template('auth.html', spoturl=auth.url)
-
-
 @app.route('/dash', methods=['GET'])
 async def dashboard():
     """show what's happening"""
@@ -261,7 +267,7 @@ async def dashboard():
     try:
         dbqueue = UpcomingQueue.select()
     except Exception as e: # pylint: disable=W0718
-        logging.error("exception: %s", e)
+        logging.error("dashboard - database queue retrieval exception: %s", e)
 
     tracknames = [Track.get_by_id(x).trackname for x in [x.trackid for x in dbqueue]]
     activeusers = getactiveusers()
