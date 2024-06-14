@@ -103,9 +103,13 @@ def before_request():
     # make sure database is open
     logging.info("before_request reconnecting to database")
     try:
-        db = connect(os.environ['DATABASE_URL'], autorollback=True, reuse_if_open=True)
+        db = connect(os.environ['DATABASE_URL'], autorollback=True)
     except Exception as e:
         logging.error("before_request exception %s", e)
+
+# @app.teardown_request
+# def teardown_request():
+#     db.close()
 
 
 @app.before_serving
