@@ -337,7 +337,13 @@ async def pullratings(spotifyid=None):
 
 async def getuser(userid):
     """fetch user details"""
-    user = User.get(User.id == userid)
+    try:
+        user = User.get(User.id == userid)
+    except Exception as e:
+        logging.error("getuser - exception %s", e)
+        db.connect()
+        user = User.get(User.id == userid)
+
     token = pickle.loads(user.token)
     if token.is_expiring:
         try:
@@ -360,7 +366,7 @@ async def getrecents():
     try:
         playhistory = [await trackinfo(x.trackid) for x in ph_query]
     except Exception as e:
-        logging.error("exception %s", e)
+        logging.error("exception playhistory %s", e)
 
     return playhistory
 
