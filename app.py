@@ -352,8 +352,16 @@ async def getuser(userid):
 
 async def getrecents():
     """pull recently played tracks from history table"""
-    ph_query = PlayHistory.select().order_by(PlayHistory.played_at.desc()).limit(10)
-    playhistory = [await trackinfo(x.trackid) for x in ph_query]
+    try:
+        ph_query = PlayHistory.select().order_by(PlayHistory.played_at.desc()).limit(10)
+    except Exception as e:
+        logging.error("exception ph_query %s", e)
+
+    try:
+        playhistory = [await trackinfo(x.trackid) for x in ph_query]
+    except Exception as e:
+        logging.error("exception %s", e)
+
     return playhistory
 
 
@@ -658,9 +666,11 @@ async def queue_manager():
         query = UpcomingQueue.select().order_by(UpcomingQueue.id)
         try:
             uqueue = [x.trackid for x in iter(query)]
-        except Exception as e: # pylint: disable=W0718
-            logging.error("%s, %s exception, failed pulling queue from database\n%s",
+        except Exception as e:
+            logging.error("%s failed pulling queue from database, exception type: %e\n%s",
                           procname, type(e), e)
+            db.connect()
+            continue
 
         while len(uqueue) > 2:
             newest = uqueue.pop()
