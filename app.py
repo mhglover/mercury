@@ -93,9 +93,13 @@ class UpcomingQueue(BaseModel):
 
 
 @app.before_request
-def make_session_permanent():
+def before_request():
     """save cookies even if you close your browser"""
+    global db # pylint: disable=global-statement
     session.permanent = True
+
+    # make sure database is open
+    db = connect(os.environ['DATABASE_URL'], autorollback=True, reuse_if_open=True)
 
 
 @app.before_serving
@@ -663,6 +667,7 @@ async def queue_manager():
 
         logging.debug("%s sleeping for %s", procname, sleep)
         await asyncio.sleep(sleep)
+
 
 async def main():
     """kick it"""
