@@ -115,24 +115,28 @@ class UpcomingQueue(BaseModel):
 def before_request():
     """save cookies even if you close your browser"""
     session.permanent = True
+    db.close()
+    db.connect()
 
-    # make sure database is open
-    if db.is_closed():
-        logging.warning("web_ui db is closed - reestablishing database connection")
-        try:
-            db.connect()
-        except Exception as e:
-            logging.error("before_request exception %s", e)
-            logging.error("db:\n%s", db)
-    else:
-        logging.info("db connection is allegedly healthy")
+    # # make sure database is open
+    # if db.is_closed():
+    #     logging.warning("before_request db is closed - reestablishing database connection")
+    #     try:
+    #         db.connect()
+    #     except Exception as e:
+    #         logging.error("before_request exception %s", e)
+    #         logging.error("db:\n%s", db)
+    # else:
+    #     logging.info("before_request - db connection is allegedly healthy")
     # try:
     #     db = connect(os.environ['DATABASE_URL'], autorollback=True)
     # except Exception as e:
     #     logging.error("before_request exception %s", e)
 
+
 # @app.teardown_request
 # def teardown_request():
+#     """tear down database connection"""
 #     db.close()
 
 
