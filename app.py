@@ -32,8 +32,8 @@ auths = {}
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
-    # format='%(asctime)s %(levelname)s %(message)s',
+    # format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
+    format='%(asctime)s %(levelname)s %(message)s',
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -152,10 +152,18 @@ async def index():
     with spotify.token_as(token): # pylint disable=used-before-assignment
         currently = await spotify.playback_currently_playing()
 
+    playhistory = await getrecents()
+
     if currently is None:
-        return await render_template('index.html',
-                                     np_name="Nothing Playing",
-                                     np_id="no id", rating=0, history=[])
+        np_id="no id"
+        rsum = 0
+        np_name=""
+    else:
+        np_id = currently.item.id
+        np_name = await trackinfo(np_id)
+        query = Rating.select().where(Rating.trackid == np_id)
+        ratings = [x for x in iter(query)] # pylint disable=not-an-iterable
+        rsum = sum([x.rating for x in ratings])
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
 
@@ -172,16 +180,6 @@ async def index():
             tasks.add(user_task) # pylint disable=used-before-assignment
             user_task.add_done_callback(tasks.remove(user_task))
 
-    np_id = currently.item.id
-    np_name = await trackinfo(np_id)
-    query = Rating.select().where(Rating.trackid == np_id)
-    ratings = [x for x in iter(query)] # pylint disable=not-an-iterable
-    rsum = sum([x.rating for x in ratings])
-
-    ph_query = PlayHistory.select().where(
-        PlayHistory.trackid != np_id).order_by(PlayHistory.played_at.desc()).limit(10)
-    # playhistory = [x.played_at.strftime('%H:%M:%S %Y-%m-%d')
-    playhistory = [await trackinfo(x.trackid) for x in ph_query]
     return await render_template('index.html',
                                  np_name=np_name,
                                  np_id=np_id,
