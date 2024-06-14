@@ -14,6 +14,8 @@ from peewee import SQL, CharField, ForeignKeyField, IntegerField
 from peewee import TimestampField, AutoField, IntegrityError, fn
 from playhouse.db_url import connect
 
+# pylint: disable=W0718
+
 load_dotenv()  # take environment variables from .env
 
 db = connect(os.environ['DATABASE_URL'], autorollback=True)
@@ -99,7 +101,11 @@ def before_request():
     session.permanent = True
 
     # make sure database is open
-    db = connect(os.environ['DATABASE_URL'], autorollback=True, reuse_if_open=True)
+    logging.info("before_request reconnecting to database")
+    try:
+        db = connect(os.environ['DATABASE_URL'], autorollback=True, reuse_if_open=True)
+    except Exception as e:
+        logging.error("before_request exception %s", e)
 
 
 @app.before_serving
@@ -495,7 +501,7 @@ async def spotify_watcher(userid):
 
             if currently is None:
                 status = "not playing"
-                logging.info("%s not currently playing", procname)
+                logging.debug("%s not currently playing", procname)
                 sleep = 30
             elif currently.is_playing is False:
                 status = "paused"
@@ -598,6 +604,8 @@ async def queue_manager():
 
     while True:
 
+        logging.info("%s checking queue state", procname)
+
         query = UpcomingQueue.select().order_by(UpcomingQueue.id)
         try:
             uqueue = [x.trackid for x in iter(query)]
@@ -609,27 +617,29 @@ async def queue_manager():
             newest = uqueue.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
                          procname, newest)
-
             d = UpcomingQueue.delete().where(UpcomingQueue.trackid==newest)
             d.execute()
 
         while len(uqueue) < 2:
+            logging.info("%s queue is too small, adding a track", procname)
 
-            logging.info("pulling recently played tracks")
             recent_tids = recently_played_tracks()
+            logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
 
-            logging.info("pulling good tracks")
             selector = Rating.select(
                         Rating.trackid).group_by(
                         Rating.trackid).having(
                         fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)
-            good_tracks = [x.trackid for x in selector]
+            positive_tracks = [x.trackid for x in selector]
+            logging.info("%s pulled %s positive_tracks", procname, positive_tracks)
 
-            potentials = [x for x in good_tracks if x not in recent_tids + uqueue]
+            potentials = [x for x in positive_tracks if x not in recent_tids + uqueue]
             if len(potentials) == 0:
-                logging.info("no potential tracks to queue, sleeping for 60 seconds")
+                logging.info("%s no potential tracks to queue, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)
                 continue
+            else:
+                logging.info("%s %s potential tracks to queue", procname, len(potentials))
             # for each in recommendations:
 
                 # if each not in potentials:
@@ -707,7 +717,7 @@ async def main():
 
     try:
         await asyncio.gather(*taskset)
-    except Exception as e: # pylint: disable=W0718
+    except Exception as e:
         logging.error("exception %s", e)
 
     await asyncio.gather(*asyncio.all_tasks())
