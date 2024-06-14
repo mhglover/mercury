@@ -37,8 +37,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-formatter = logging.Formatter('%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s')
-
 httpx_logger = logging.getLogger('httpx')
 httpx_logger.setLevel(os.getenv("LOGLEVEL_HTTPX", default="INFO"))
 
@@ -322,7 +320,7 @@ async def pullratings(spotifyid=None):
 #     """start a watcher for a user"""
 #     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
 #     if "spotify_watcher" not in run_tasks:
-    
+
 #     else:
 #         tasknames = [x.get_name() for x in asyncio.all_tasks()]
 #         logging.debug("tasknames=%s", tasknames)
@@ -342,7 +340,7 @@ async def getuser(userid):
     if token.is_expiring:
         try:
             token = cred.refresh(token)
-        except Exception as e: 
+        except Exception as e:
             logging.error("exception: %s", e)
         user.token = pickle.dumps(token)
         user.save()
