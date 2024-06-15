@@ -129,9 +129,12 @@ async def index():
         else:
             np_id = currently.item.id
             np_name = await trackinfo(np_id)
-            query = await Rating.filter(trackid=np_id).values_list('rating', flat=True)
-            ratings = [x for x in iter(query)]
-            rsum = sum([x.rating for x in ratings])
+            rsum = 0
+            # rsum = ( await Rating.filter(trackid=np_id).values_list("rating", flat=True))
+            
+            # query = await Rating.filter(trackid=np_id).values_list('rating', flat=True)
+            # ratings = [x for x in iter(query)]
+            # rsum = sum([x.rating for x in ratings])
 
         run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
 
@@ -257,11 +260,11 @@ async def dashboard():
     tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
                                  auths=auths,
-                                 username="dashboard",
+                                 username="now_playing",
                                  users=activeusers,
                                  tasks=tasknames,
                                  current=tracknames[0],
-                                 nextup=trackname[1],
+                                 nextup=tracknames[1],
                                  recents=history)
 
 
