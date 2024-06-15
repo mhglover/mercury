@@ -75,13 +75,13 @@ async def before_serving():
     logging.debug("before_serving")
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    logging.info("before_serving - running tasks: %s", run_tasks)
+    logging.info("before_serving running tasks: %s", run_tasks)
 
     if "spotify_watcher" in run_tasks:
-        logging.info("before_serving - pulling active users for spotify watchers")
+        logging.info("before_serving pulling active users for spotify watchers")
         active_users = await getactiveusers()
         for user in active_users:
-            logging.info("before_serving - creating a spotify watcher task for: %s", user.spotifyid)
+            logging.info("before_serving creating a spotify watcher task for: %s", user.spotifyid)
             user_task = asyncio.create_task(spotify_watcher(user.spotifyid),
                             name=f"watcher_{user.spotifyid}")
 
@@ -94,7 +94,7 @@ async def before_serving():
             user_task.add_done_callback(taskset.remove(user_task))
 
     if "queue_manager" in run_tasks:
-        logging.info("before_serving - creating a queue manager task")
+        logging.info("before_serving creating a queue manager task")
         qm = asyncio.create_task(queue_manager(),name="queue_manager")
         taskset.add(qm)
         qm.add_done_callback(taskset.remove(qm))
@@ -217,7 +217,7 @@ async def spotify_callback():
     session['spotifyid'] = spotifyid
     p = pickle.dumps(token)
 
-    logging.info("spotify_callback - get_or_create user record for %s", spotifyid)
+    logging.info("spotify_callback get_or_create user record for %s", spotifyid)
     user, created = await User.get_or_create(spotifyid=spotifyid,
                                              defaults={
                                                  "token": p,
@@ -225,18 +225,18 @@ async def spotify_callback():
                                                  "active_now": True
                                              })
     if created is False:
-        logging.info('spotify_callback - found user %s', spotifyid)
+        logging.info('spotify_callback found user %s', spotifyid)
         user.last_active = datetime.datetime.now
         user.active_now = True
         await user.save()
     else:
-        logging.info("spotify_callback - creating new user %s", spotifyid)
+        logging.info("spotify_callback creating new user %s", spotifyid)
         await user.save()             
         
-        logging.info("spotify_callback - pulling ratings to populate user")
+        logging.info("spotify_callback pulling ratings to populate user")
         asyncio.create_task(pullratings(spotifyid),name=f"pullratings_{spotifyid}")
     
-    logging.info("spotify_callback - redirecting %s back to /", spotifyid)
+    logging.info("spotify_callback redirecting %s back to /", spotifyid)
     return redirect("/")
 
 
@@ -249,7 +249,7 @@ async def dashboard():
     try:
         dbqueue = await UpcomingQueue.all().values_list('trackid', flat=True)
     except Exception as e: # pylint: disable=W0718
-        logging.error("dashboard - database queue retrieval exception: %s", e)
+        logging.error("dashboard database queue retrieval exception: %s", e)
 
     tracknames = await Track.filter(trackid__in=dbqueue).values_list('trackname', flat=True)
     activeusers = await getactiveusers()
@@ -308,14 +308,14 @@ async def getuser(userid):
     try:
         user = await User.get(spotifyid=userid)
     except Exception as e:
-        logging.error("getuser - exception fetching user\n%s", e)
+        logging.error("getuser exception fetching user\n%s", e)
 
     token = pickle.loads(user.token)
     if token.is_expiring:
         try:
             token = cred.refresh(token)
         except Exception as e:
-            logging.error("getuser - exception refreshing token\n%s", e)
+            logging.error("getuser exception refreshing token\n%s", e)
         user.token = pickle.dumps(token)
         await user.save()
 
@@ -356,7 +356,7 @@ async def trackinfo(trackid, return_track=False, return_time=False):
                                           "trackuri": ""
                                           })
     
-    if created:
+    if created or track.trackuri == '' or track.duration_ms == '':
         spotify_details = await spotify.track(trackid)
         trackartist = " & ".join([x.name for x in spotify_details.artists])
         track.trackname = f"{trackartist} - {spotify_details.name}"
@@ -401,7 +401,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
     try:
         displayname, track = await trackinfo(tid, return_track=True)
     except Exception as e: # pylint: disable=broad-exception-caught
-        logging.info("rate - exception adding a track to database: [%s]\n%s",
+        logging.info("rate exception adding a track to database: [%s]\n%s",
                      tid, e)
 
     logging.info("writing a rating: %s %s %s", uid, displayname, value)
@@ -427,21 +427,22 @@ async def rate(uid, tid, value=1, set_last_played=True):
     if not created:
         rating.value = value
         rating.last_played = datetime.datetime.now()
-        await rating.save()
+    
+    await rating.save()
 
 
 async def record(uid, tid):
     """write a record to the play history table"""
-    trackname= await trackinfo(tid)
-    logging.info("play history recorded:  %s - %s", uid, trackname)
+    trackname = await trackinfo(tid)
+    logging.info("record play history recorded:  %s - %s", uid, trackname)
     try:
-        insertedkey, created = await PlayHistory.create(
-            trackid=tid, played_at=datetime.datetime.now())
+        insertedkey = await PlayHistory.create(trackid=tid)
+        await insertedkey.save()
     except Exception as e:
-        logging.error("record - exception creating playhistory: %s\n%s",
+        logging.error("record exception creating playhistory: %s\n%s",
                       uid, e)
     
-    logging.debug("record - inserted play history record %s", insertedkey)
+    logging.debug("record inserted play history record %s", insertedkey)
 
 
 async def getnext():
@@ -462,7 +463,7 @@ async def getnext():
 async def recently_played_tracks():
     """fetch"""
     interval = datetime.datetime.now() - datetime.timedelta(days=5)
-    tids = await Rating.filter(last_played__lte=interval).values_list('trackid', flat=True)
+    tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
     return tids
 
 
@@ -476,7 +477,7 @@ async def spotify_watcher(userid):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
 
     procname = f"watcher_{userid}"
-    logging.info("starting a spotify watcher: %s", procname)
+    logging.info("%s watcher starting", procname)
 
     try:
         user, token = await getuser(userid)
@@ -519,6 +520,15 @@ async def spotify_watcher(userid):
     while ttl > datetime.datetime.now():
         status = "unset"
         logging.debug("%s loop is awake", procname)
+
+        if token.is_expiring:
+            try:
+                token = cred.refresh(token)
+            except Exception as e:
+                logging.error("getuser exception refreshing token\n%s", e)
+            user.token = pickle.dumps(token)
+            await user.save()
+            
 
         with spotify.token_as(token):
             logging.debug("%s checking currently playing", procname)
@@ -578,7 +588,8 @@ async def spotify_watcher(userid):
                         try:
                             await UpcomingQueue.filter(trackid=nextup_tid).delete()
                         except Exception as e: # pylint: disable=W0718
-                            logging.error("exception - %s", e)
+                            logging.error("%s exception removing track from upcomingqueue\n%s",
+                                          procname, e)
 
                         logging.info("%s recording a play history %s",
                                     procname, trackname)
@@ -596,15 +607,17 @@ async def spotify_watcher(userid):
                         logging.debug("%s next track currently playing, don't requeue",
                                     procname)
                     else:
-                        track = Track.get(spotifyid=nextup_tid)
+                        nextup_name, ntrack = await trackinfo(nextup_tid, return_track=True)
 
                         # queue up the next track for this user
-                        logging.info("%s sending to spotify client queue %s", procname, nextup_name)
+                        logging.info("%s sending to spotify client queue [%s] %s",
+                                     procname, ntrack.trackuri, nextup_name)
                         try:
-                            _ = await spotify.playback_queue_add(track.uri)
+                            _ = await spotify.playback_queue_add(ntrack.trackuri)
                         except Exception as e: 
-                            logging.error("%s exception spotify.playback_queue_add track.uri=%s\n%s",
-                                            procname, type(e), nextup_name, e)
+                            logging.error(
+                                "%s exception spotify.playback_queue_add track.uri=%s\n%s",
+                                procname, nextup_name, e)
 
                         sleep = (remaining_ms /1000) + 1
 
@@ -679,12 +692,18 @@ async def queue_manager():
             upcoming_tid = choice(potentials)
             # result = await trackinfo(upcoming_tid, return_track=True)
 
-            track = await Track.get(trackid=upcoming_tid)
+            trackname, track = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
+            now = datetime.datetime.now(datetime.timezone.utc)
             for r in iter(ratings):
-                logging.info("RATING HISTORY - %s, %s, %s, %s",
-                             r.trackname, r.userid, r.rating, r.last_played)
-            logging.info("adding to radio queue: %s %s", upcoming_tid, track.trackname)
+                logging.info("%s RATING HISTORY - %s, %s, %s, %s",
+                             procname, 
+                             r.trackname, 
+                             r.userid, 
+                             r.rating, 
+                             now - r.last_played)
+            logging.info("%s adding to radio queue: %s %s", 
+                         procname, upcoming_tid, trackname)
             u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
             uqueue.append(upcoming_tid)
@@ -714,20 +733,20 @@ async def queue_manager():
 async def main():
     """kick it"""
     
-    logging.info("main - connecting to db")
+    logging.info("main connecting to db")
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    logging.info("main - running tasks: %s", run_tasks)
+    logging.info("main running tasks: %s", run_tasks)
 
-    logging.info("main - starting web_ui on port: %s", os.environ['PORT'])
+    logging.info("main starting web_ui on port: %s", os.environ['PORT'])
     web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
     taskset.add(web_ui)
 
     # if "spotify_watcher" in run_tasks:
-    #     logging.info("main - pulling active users for spotify watchers")
+    #     logging.info("main pulling active users for spotify watchers")
     #     active_users = await getactiveusers()
     #     for user in active_users:
-    #         logging.info("main - creating a spotify watcher task for: %s", user.id)
+    #         logging.info("main creating a spotify watcher task for: %s", user.id)
     #         user_task = asyncio.create_task(spotify_watcher(user.id),
     #                         name=f"watcher_{user.id}")
 
@@ -740,7 +759,7 @@ async def main():
     #         user_task.add_done_callback(taskset.remove(user_task))
 
     # if "queue_manager" in run_tasks:
-    #     logging.info("main - creating a queue manager task")
+    #     logging.info("main creating a queue manager task")
     #     qm = asyncio.create_task(queue_manager(),name="queue_manager")
     #     taskset.add(qm)
     #     qm.add_done_callback(taskset.remove(qm))
@@ -748,10 +767,10 @@ async def main():
     try:
         await asyncio.gather(*taskset)
     except Exception as e:
-        logging.error("main - gather exception %s", e)
+        logging.error("main gather exception %s", e)
 
     await asyncio.gather(*asyncio.all_tasks())
-    logging.info("main - done")
+    logging.info("main done")
 
 
 if __name__ == "__main__":
