@@ -4,7 +4,7 @@
 from tortoise import fields
 from tortoise.models import Model
 
-# pylint: disable=invalid-str-returned,missing-docstring
+# pylint: disable=trailing-whitespace
 
 class User(Model):
     """track users"""
@@ -14,7 +14,7 @@ class User(Model):
     active_now = fields.TextField()
 
     def __str__(self):
-        return self.spotifyid
+        return str(self.spotifyid)
 
 
 class Track(Model):
@@ -25,7 +25,7 @@ class Track(Model):
     duration_ms = fields.IntField()
 
     def __str__(self):
-        return self.trackname
+        return str(self.trackname)
 
 
 class Rating(Model):
@@ -37,7 +37,7 @@ class Rating(Model):
     last_played = fields.DatetimeField(auto_now=True)
 
     def __str__(self):
-        return self.trackname
+        return str(self.trackname)
 
 
 class PlayHistory(Model):
@@ -46,10 +46,13 @@ class PlayHistory(Model):
     played_at = fields.DatetimeField(auto_now=True)
 
     def __str__(self):
-        return self.trackid
+        return str(self.trackid)
 
 
 class UpcomingQueue(Model):
     """track the upcoming songs"""
     trackid = fields.TextField()
     queued_at = fields.DatetimeField(auto_now=True)
+
+    def __str__(self):
+        return str(self.trackid)
