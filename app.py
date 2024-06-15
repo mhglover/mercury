@@ -335,7 +335,7 @@ async def trackinfo(trackid, return_track=False, return_time=False):
         track.trackname = f"{trackartist} - {spotify_details.name}"
         track.duration_ms = spotify_details.duration_ms
         track.trackuri = spotify_details.uri
-        track.save()
+        await track.save()
 
     name = track.trackname
 
@@ -380,7 +380,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
     logging.info("writing a rating: %s %s %s", uid, displayname, value)
     
     if set_last_played:
-        rating, created = Rating.get_or_create(userid=uid,
+        rating, created = await Rating.get_or_create(userid=uid,
                                                trackid=tid, 
                                                defaults={
                                                    "rating": value,
@@ -388,7 +388,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
                                                    }
                                                )
     else:
-        rating, created = Rating.get_or_create(userid=uid,
+        rating, created = await Rating.get_or_create(userid=uid,
                                                trackid=tid, 
                                                defaults={
                                                    "rating": value,
@@ -400,7 +400,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
     if not created:
         rating.value = value
         rating.last_played = datetime.datetime.now()
-        rating.save()
+        await rating.save()
 
 
 async def record(uid, tid):
@@ -660,7 +660,7 @@ async def queue_manager():
                              r.trackname, r.userid, r.rating, r.last_played)
             logging.info("adding to radio queue: %s %s", upcoming_tid, track.trackname)
             u = await UpcomingQueue.create(trackid=upcoming_tid)
-            u.save()
+            await u.save()
             uqueue.append(upcoming_tid)
 
             # ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
