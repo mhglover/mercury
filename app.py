@@ -9,17 +9,16 @@ from random import choice
 import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
-from peewee import Model, TextField, BlobField, DateTimeField
-from peewee import SQL, CharField, ForeignKeyField, IntegerField
-from peewee import TimestampField, AutoField, IntegrityError, fn
-from playhouse.db_url import connect
+from tortoise.contrib.quart import register_tortoise
+from tortoise.functions import Sum
+from models import User, Track, Rating, PlayHistory, UpcomingQueue
+
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
+# pylint: disable=trailing-whitespace
 
 load_dotenv()  # take environment variables from .env
-
-db = connect(os.environ['DATABASE_URL'], autorollback=True)
 
 app = Quart(__name__)
 app.secret_key = os.getenv("APP_SECRET", default="1234567890")
@@ -27,7 +26,7 @@ conf = tk.config_from_environment()
 cred = tk.Credentials(*conf)
 token_spotify = tk.request_client_token(*conf[:2])
 spotify = tk.Spotify(token_spotify, asynchronous=True)
-tasks = set()
+taskset = set()
 auths = {}
 
 logging.basicConfig(
@@ -38,7 +37,7 @@ logging.basicConfig(
     )
 
 httpx_logger = logging.getLogger('httpx')
-httpx_logger.setLevel(os.getenv("LOGLEVEL_HTTPX", default="INFO"))
+httpx_logger.setLevel(os.getenv("LOGLEVEL_HTTPX", default="WARN"))
 
 # initial app running message
 hypercorn_error = logging.getLogger("hypercorn.error")
@@ -56,94 +55,49 @@ quart_logger = logging.getLogger('quart.app')
 #     datefmt="%Y-%m-%d %H:%M:%S"
 #     )
 
-class BaseModel(Model):
-    """A base model that will use our database"""
-    class Meta:
-        """meta"""
-        database = db
 
-
-class User(BaseModel):
-    """track users"""
-    id = TextField(primary_key=True)
-    token = BlobField()
-    last_active = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
-
-
-class Track(BaseModel):
-    """track tracks"""
-    trackid = CharField(primary_key=True)
-    trackname = TextField()
-
-
-class Rating(BaseModel):
-    """track likes"""
-    user_id = ForeignKeyField(User, backref="ratings")
-    # trackid = ForeignKeyField(Track, backref="trackid")
-    trackid = CharField()
-    trackname = TextField()
-    rating = IntegerField()
-    last_played = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
-
-    class Meta:
-        """meta"""
-        indexes = (
-            (('user_id', 'trackid'), True),
-        )
-
-
-class PlayHistory(BaseModel):
-    """track the history of songs played"""
-    trackid = CharField()
-    played_at = TimestampField()
-
-    class Meta:
-        """meta"""
-        indexes = (
-            (('trackid', 'played_at'), True),
-        )
-
-
-class UpcomingQueue(BaseModel):
-    """track the upcoming songs"""
-    id = AutoField
-    trackid = ForeignKeyField(Track, backref="trackid")
-    queued_at = DateTimeField(constraints=[SQL('DEFAULT CURRENT_TIMESTAMP')])
+register_tortoise(
+    app,
+    db_url=os.environ['DATABASE_URL'],
+    modules={"models": ["models"]},
+    generate_schemas=False,
+)
 
 
 @app.before_request
 def before_request():
     """save cookies even if you close your browser"""
     session.permanent = True
-    db.close()
-    db.connect()
-
-    # # make sure database is open
-    # if db.is_closed():
-    #     logging.warning("before_request db is closed - reestablishing database connection")
-    #     try:
-    #         db.connect()
-    #     except Exception as e:
-    #         logging.error("before_request exception %s", e)
-    #         logging.error("db:\n%s", db)
-    # else:
-    #     logging.info("before_request - db connection is allegedly healthy")
-    # try:
-    #     db = connect(os.environ['DATABASE_URL'], autorollback=True)
-    # except Exception as e:
-    #     logging.error("before_request exception %s", e)
-
-
-# @app.teardown_request
-# def teardown_request():
-#     """tear down database connection"""
-#     db.close()
-
 
 @app.before_serving
 async def before_serving():
     """pre"""
     logging.debug("before_serving")
+
+    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
+    logging.info("before_serving - running tasks: %s", run_tasks)
+
+    if "spotify_watcher" in run_tasks:
+        logging.info("before_serving - pulling active users for spotify watchers")
+        active_users = await getactiveusers()
+        for user in active_users:
+            logging.info("before_serving - creating a spotify watcher task for: %s", user.spotifyid)
+            user_task = asyncio.create_task(spotify_watcher(user.spotifyid),
+                            name=f"watcher_{user.spotifyid}")
+
+            # add this user task to the global tasks set
+            taskset.add(user_task)
+
+            # To prevent keeping references to finished tasks forever,
+            # make each task remove its own reference from the set after
+            # completion:
+            user_task.add_done_callback(taskset.remove(user_task))
+
+    if "queue_manager" in run_tasks:
+        logging.info("before_serving - creating a queue manager task")
+        qm = asyncio.create_task(queue_manager(),name="queue_manager")
+        taskset.add(qm)
+        qm.add_done_callback(taskset.remove(qm))
 
 
 @app.route('/', methods=['GET'])
@@ -169,8 +123,8 @@ async def index():
     else:
         np_id = currently.item.id
         np_name = await trackinfo(np_id)
-        query = Rating.select().where(Rating.trackid == np_id)
-        ratings = [x for x in iter(query)] # pylint disable=not-an-iterable
+        query = await Rating.filter(trackid=np_id).values_list('rating', flat=True)
+        ratings = [x for x in iter(query)]
         rsum = sum([x.rating for x in ratings])
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
@@ -185,8 +139,8 @@ async def index():
             logging.info("trying to launch a watcher for %s", spotifyid)
             user_task = asyncio.create_task(spotify_watcher(spotifyid),
                             name=f"watcher_{spotifyid}")
-            tasks.add(user_task) # pylint disable=used-before-assignment
-            user_task.add_done_callback(tasks.remove(user_task))
+            taskset.add(user_task) # pylint disable=used-before-assignment
+            user_task.add_done_callback(taskset.remove(user_task))
 
     return await render_template('index.html',
                                  np_name=np_name,
@@ -225,7 +179,7 @@ async def spotify_callback():
     code = request.args.get('code', "")
     state = request.args.get('state', "")
     logging.debug("state: %s", state)
-    thisauth = auths.pop(state, None) # pylint disable=used-before-assignment
+    thisauth = auths.pop(state, None)
 
     if thisauth is None:
         return 'Invalid state!', 400
@@ -238,8 +192,8 @@ async def spotify_callback():
     spotifyid = spotify_user.id
     session['spotifyid'] = spotifyid
 
-    query = User.select().where(User.id == spotifyid)
-    if query.exists():
+    user = await User.filter(spotifyid=spotifyid)
+    if user.exists():
         logging.info("spotify_callback - found user record for %s", spotifyid)
         user = User.get_or_none(id=spotify)
         logging.info("pulling ratings to populate user")
@@ -247,10 +201,11 @@ async def spotify_callback():
     else:
         logging.info("spotify_callback - creating user record for %s", spotifyid)
         p = pickle.dumps(token)
-        user = User.create(id=spotifyid,
+        user = await User.create(id=spotifyid,
                            token=p,
                            display_name=spotify_user.display_name,
                            href=spotify_user.href)
+        user.save()
         logging.debug("user=%s", user)
         logging.info("pulling ratings to populate user")
         asyncio.create_task(pullratings(spotifyid),name=f"pullratings_{spotifyid}")
@@ -267,12 +222,12 @@ async def dashboard():
 
     # queued = [await trackinfo(trackid) for trackid in queue]
     try:
-        dbqueue = UpcomingQueue.select()
+        dbqueue = await UpcomingQueue.all().values_list('trackid', flat=True)
     except Exception as e: # pylint: disable=W0718
         logging.error("dashboard - database queue retrieval exception: %s", e)
 
-    tracknames = [Track.get_by_id(x).trackname for x in [x.trackid for x in dbqueue]]
-    activeusers = getactiveusers()
+    tracknames = await Track.filter(trackid__in=dbqueue).values_list('trackname', flat=True)
+    activeusers = await getactiveusers()
     history = await getrecents()
     tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
@@ -321,32 +276,12 @@ async def pullratings(spotifyid=None):
         return redirect("/")
 
 
-# @app.route('/watch', methods=['GET'])
-# async def watch(spotifyid):
-#     """start a watcher for a user"""
-#     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-#     if "spotify_watcher" not in run_tasks:
-
-#     else:
-#         tasknames = [x.get_name() for x in asyncio.all_tasks()]
-#         logging.debug("tasknames=%s", tasknames)
-#         if f"watcher_{spotifyid}" in tasknames:
-#             logging.debug("watcher_%s is running", spotifyid)
-#         else:
-            # logging.info("trying to launch a watcher for %s", spotifyid)
-            # user_task = asyncio.create_task(spotify_watcher(spotifyid),
-            #                 name=f"watcher_{spotifyid}")
-            # tasks.add(user_task) # pylint disable=used-before-assignment
-            # user_task.add_done_callback(tasks.remove(user_task))
-
 async def getuser(userid):
     """fetch user details"""
     try:
-        user = User.get(User.id == userid)
+        user = await User.get(spotifyid=userid)
     except Exception as e:
         logging.error("getuser - exception %s", e)
-        db.connect()
-        user = User.get(User.id == userid)
 
     token = pickle.loads(user.token)
     if token.is_expiring:
@@ -355,7 +290,7 @@ async def getuser(userid):
         except Exception as e:
             logging.error("exception: %s", e)
         user.token = pickle.dumps(token)
-        user.save()
+        await user.save()
 
     return user, token
 
@@ -363,7 +298,7 @@ async def getuser(userid):
 async def getrecents():
     """pull recently played tracks from history table"""
     try:
-        ph_query = PlayHistory.select().order_by(PlayHistory.played_at.desc()).limit(10)
+        ph_query = await PlayHistory.all().order_by('played_at').limit(10)
     except Exception as e:
         logging.error("exception ph_query %s", e)
 
@@ -387,15 +322,28 @@ async def trackinfo(trackid, return_track=False, return_time=False):
         str: track artist and title
         str, track object: track artist and title, track object
     """
-    track = await spotify.track(trackid)
-    artist = " & ".join([x.name for x in track.artists])
-    name = f"{artist} - {track.name}"
+    track, created = await Track.get_or_create(trackid=trackid,
+                                      defaults={
+                                          "duration_ms": 0,
+                                          "trackname": "",
+                                          "trackuri": ""
+                                          })
+    
+    if created:
+        spotify_details = await spotify.track(trackid)
+        trackartist = " & ".join([x.name for x in spotify_details.artists])
+        track.trackname = f"{trackartist} - {spotify_details.name}"
+        track.duration_ms = spotify_details.duration_ms
+        track.trackuri = spotify_details.uri
+        track.save()
+
+    name = track.trackname
 
     if return_time:
         milliseconds = track.duration_ms
         seconds = int(milliseconds / 1000) % 60
         minutes = int(milliseconds / (1000*60)) % 60
-        name = f"{name} {minutes}:{seconds:02}"
+        name = f"{track.trackname} {minutes}:{seconds:02}"
 
     if return_track is True:
         return name, track
@@ -414,9 +362,8 @@ async def rate_list(items, uid, rating=1):
         trackids = [x.track.id for x in items]
     logging.info("rating %s tracks", len(trackids))
 
-    with db.atomic():
-        for tid in trackids:
-            await rate(uid, tid, rating)
+    for tid in trackids:
+        await rate(uid, tid, rating)
 
     return len(trackids)
 
@@ -425,41 +372,35 @@ async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
     logging.info("checking the database for a track: %s", tid)
     try:
-        track = Track.get_by_id(tid)
-    except Exception as _: # pylint: disable=broad-exception-caught
-        trackname = await trackinfo(tid)
-        logging.info("adding a track to database: %s - %s", tid, trackname)
-        try:
-            track = Track(
-                trackid=tid,
-                trackname=trackname)
-            track.save(force_insert=True)
-        except IntegrityError as ie:
-            logging.error("rate - error: %s", ie)
+        displayname, track = await trackinfo(tid, return_track=True)
+    except Exception as e: # pylint: disable=broad-exception-caught
+        logging.info("rate - exception adding a track to database: [%s]\n%s",
+                     tid, e)
 
-    logging.info("writing a rating: %s %s %s", uid, track.trackname, value)
-
+    logging.info("writing a rating: %s %s %s", uid, displayname, value)
+    
     if set_last_played:
-        _ = (Rating
-                .replace(user_id=uid,
-                         trackid=track.trackid,
-                         trackname=track.trackname,
-                         rating=value)
-                .on_conflict(
-                    conflict_target=[Rating.user_id, Rating.trackid],
-                    preserve=[Rating.user_id, Rating.trackid],
-                    update={Rating.last_played: datetime.datetime.now()}) # pylint disable=E1101
-                .execute())
-
+        rating, created = Rating.get_or_create(userid=uid,
+                                               trackid=tid, 
+                                               defaults={
+                                                   "rating": value,
+                                                   "trackname": track.trackname
+                                                   }
+                                               )
     else:
-        _ = (Rating
-            .replace(user_id=uid, trackid=track.trackid,
-                     rating=value, trackname=track.trackname, last_played="1970-01-01")
-            .on_conflict(
-                conflict_target=[Rating.user_id, Rating.trackid],
-                preserve=[Rating.user_id, Rating.trackid],
-                update={Rating.last_played: "1970-01-01"})
-            .execute())
+        rating, created = Rating.get_or_create(userid=uid,
+                                               trackid=tid, 
+                                               defaults={
+                                                   "rating": value,
+                                                   "trackname": track.trackname,
+                                                   "last_played": "1970-01-01"
+                                                   }
+                                               )
+    # if the rating already existed, update the value and lastplayed time
+    if not created:
+        rating.value = value
+        rating.last_played = datetime.datetime.now()
+        rating.save()
 
 
 async def record(uid, tid):
@@ -467,43 +408,40 @@ async def record(uid, tid):
     trackname= await trackinfo(tid)
     logging.info("play history recorded:  %s - %s", uid, trackname)
     try:
-        insertedkey = PlayHistory.get_or_create(
-            trackid=tid, played_at=datetime.datetime.now()) # pylint disable=E1101
-        logging.debug("inserted play history record %s", insertedkey)
-    except IntegrityError as e:
+        insertedkey = await PlayHistory.get_or_create(
+            trackid=tid, played_at=datetime.datetime.now())
+    except Exception as e:
         logging.error("couldn't get/create history: %s - %s", uid, e)
+    
+    logging.debug("inserted play history record %s", insertedkey)
 
 
 async def getnext():
     """get the next trackid and trackname from the queue"""
     logging.debug("pulling queue from db")
-    selector = UpcomingQueue.select().order_by(UpcomingQueue.id)
-    dbqueue = [x.trackid.trackid for x in iter(selector)]
+    dbqueue =  await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
     logging.debug("queue pulled, %s items", len(dbqueue))
     if len(dbqueue) < 1:
         logging.debug("queue is empty, returning None")
         return None
 
     nextup_tid = dbqueue[0]
-    ntrack = Track.get_by_id(nextup_tid)
+    ntrack = await Track.get(trackid=nextup_tid)
     nextup_name = ntrack.trackname
     return nextup_tid, nextup_name
 
 
-def recently_played_tracks():
+async def recently_played_tracks():
     """fetch"""
-    interval = 5
-    # _ = getactiveusers()
-    timeout = SQL(f"current_timestamp - interval '{interval} hours'")
-    selector = Rating.select().distinct(Rating.trackid).where(Rating.last_played > timeout)
-    # selector = Rating.select().where(Rating.last_played > timeout)
-    tids = [x.trackid for x in selector]
+    interval = datetime.datetime.now() - datetime.timedelta(days=5)
+    tids = await Rating.filter(last_played__lte=interval).values_list('trackid', flat=True)
     return tids
 
 
-def getactiveusers():
+async def getactiveusers():
     """fetch details for the active users"""
-    return User.select()
+    users = await User.all()
+    return users
 
 
 async def spotify_watcher(userid):
@@ -606,8 +544,7 @@ async def spotify_watcher(userid):
                         logging.info("%s removing track from radio queue: %s",
                                     procname, nextup_name)
                         try:
-                            d = UpcomingQueue.delete().where(UpcomingQueue.trackid==nextup_tid)
-                            d.execute()
+                            await UpcomingQueue.filter(trackid=nextup_tid).delete()
                         except Exception as e: # pylint: disable=W0718
                             logging.error("exception - %s", e)
 
@@ -670,37 +607,36 @@ async def queue_manager():
     while True:
         logging.debug("%s checking queue state", procname)
 
-        if db.is_closed():
-            db.connect()
-
-        query = UpcomingQueue.select().order_by(UpcomingQueue.id)
+        query = await UpcomingQueue.all()
         try:
             uqueue = [x.trackid for x in iter(query)]
         except Exception as e:
             logging.error("%s failed pulling queue from database, exception type: %e\n%s",
                           procname, type(e), e)
-            db.connect()
-            continue
 
         while len(uqueue) > 2:
             newest = uqueue.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
                          procname, newest)
-            d = UpcomingQueue.delete().where(UpcomingQueue.trackid==newest)
-            d.execute()
+            await UpcomingQueue.filter(trackid=newest).delete()
 
         while len(uqueue) < 2:
             logging.info("%s queue is too small, adding a track", procname)
 
-            recent_tids = recently_played_tracks()
+            recent_tids = await recently_played_tracks()
             logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
 
-            selector = Rating.select(
-                        Rating.trackid).group_by(
-                        Rating.trackid).having(
-                        fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)
-            positive_tracks = [x.trackid for x in selector]
-            logging.info("%s pulled %s positive_tracks", procname, positive_tracks)
+            positive_tracks = ( await Rating.annotate(sum=Sum("rating"))
+                                            .group_by('trackid')
+                                            .filter(sum__gte=0)
+                                            .values_list("trackid", flat=True))
+            
+            # selector = await Rating.select(
+            #             Rating.trackid).group_by(
+            #             Rating.trackid).having(
+            #             fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)
+            # positive_tracks = [x.trackid for x in selector]
+            logging.info("%s pulled %s positive_tracks", procname, len(positive_tracks))
 
             potentials = [x for x in positive_tracks if x not in recent_tids + uqueue]
             if len(potentials) == 0:
@@ -717,13 +653,14 @@ async def queue_manager():
             upcoming_tid = choice(potentials)
             # result = await trackinfo(upcoming_tid, return_track=True)
 
-            track = Track.get_by_id(upcoming_tid)
-            ratings = Rating.select().where(Rating.trackid==upcoming_tid)
+            track = await Track.get(trackid=upcoming_tid)
+            ratings = await Rating.filter(trackid=upcoming_tid)
             for r in iter(ratings):
                 logging.info("RATING HISTORY - %s, %s, %s, %s",
-                             r.trackname, r.user_id, r.rating, r.last_played)
+                             r.trackname, r.userid, r.rating, r.last_played)
             logging.info("adding to radio queue: %s %s", upcoming_tid, track.trackname)
-            _ = UpcomingQueue.create(trackid=upcoming_tid)
+            u = await UpcomingQueue.create(trackid=upcoming_tid)
+            u.save()
             uqueue.append(upcoming_tid)
 
             # ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
@@ -750,40 +687,37 @@ async def queue_manager():
 
 async def main():
     """kick it"""
-    taskset = set()
+    
     logging.info("main - connecting to db")
-    db.connect()
-    logging.info("main - creating tables if necessary")
-    db.create_tables([User, Rating, PlayHistory, Track, UpcomingQueue])
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
     logging.info("main - running tasks: %s", run_tasks)
 
-    if "spotify_watcher" in run_tasks:
-        active_users = getactiveusers()
-        for user in active_users:
-            logging.info("main - creating a spotify watcher task for: %s", user.id)
-            user_task = asyncio.create_task(spotify_watcher(user.id),
-                            name=f"watcher_{user.id}")
+    logging.info("main - starting web_ui on port: %s", os.environ['PORT'])
+    web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
+    taskset.add(web_ui)
 
-            # add this user task to the global tasks set
-            taskset.add(user_task)
+    # if "spotify_watcher" in run_tasks:
+    #     logging.info("main - pulling active users for spotify watchers")
+    #     active_users = await getactiveusers()
+    #     for user in active_users:
+    #         logging.info("main - creating a spotify watcher task for: %s", user.id)
+    #         user_task = asyncio.create_task(spotify_watcher(user.id),
+    #                         name=f"watcher_{user.id}")
 
-            # To prevent keeping references to finished tasks forever,
-            # make each task remove its own reference from the set after
-            # completion:
-            user_task.add_done_callback(taskset.remove(user_task))
+    #         # add this user task to the global tasks set
+    #         taskset.add(user_task)
 
-    if "queue_manager" in run_tasks:
-        logging.info("main - creating a queue manager task")
-        qm = asyncio.create_task(queue_manager(),name="queue_manager")
-        taskset.add(qm)
-        qm.add_done_callback(taskset.remove(qm))
+    #         # To prevent keeping references to finished tasks forever,
+    #         # make each task remove its own reference from the set after
+    #         # completion:
+    #         user_task.add_done_callback(taskset.remove(user_task))
 
-    if "web_ui" in run_tasks:
-        logging.info("main - starting web_ui on port: %s", os.environ['PORT'])
-        web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
-        taskset.add(web_ui)
+    # if "queue_manager" in run_tasks:
+    #     logging.info("main - creating a queue manager task")
+    #     qm = asyncio.create_task(queue_manager(),name="queue_manager")
+    #     taskset.add(qm)
+    #     qm.add_done_callback(taskset.remove(qm))
 
     try:
         await asyncio.gather(*taskset)
