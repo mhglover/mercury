@@ -257,10 +257,11 @@ async def dashboard():
     tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
                                  auths=auths,
-                                 username=user.spotifyid,
+                                 username="dashboard",
                                  users=activeusers,
                                  tasks=tasknames,
-                                 queue=tracknames,
+                                 current=tracknames[0],
+                                 nextup=trackname[1],
                                  recents=history)
 
 
@@ -434,12 +435,13 @@ async def record(uid, tid):
     trackname= await trackinfo(tid)
     logging.info("play history recorded:  %s - %s", uid, trackname)
     try:
-        insertedkey = await PlayHistory.get_or_create(
+        insertedkey, created = await PlayHistory.create(
             trackid=tid, played_at=datetime.datetime.now())
     except Exception as e:
-        logging.error("couldn't get/create history: %s - %s", uid, e)
+        logging.error("record - exception creating playhistory: %s\n%s",
+                      uid, e)
     
-    logging.debug("inserted play history record %s", insertedkey)
+    logging.debug("record - inserted play history record %s", insertedkey)
 
 
 async def getnext():
@@ -594,23 +596,14 @@ async def spotify_watcher(userid):
                         logging.debug("%s next track currently playing, don't requeue",
                                     procname)
                     else:
-                        # dbtrack = Track.get_by_id(nextup_tid)
-                        # get the track details with the track uri
-
-                        logging.info("%s - fetching track details from spotify for %s",
-                                        procname, nextup_name)
-                        try:
-                            track = await spotify.track(nextup_tid)
-                        except Exception as e: # pylint: disable=W0718
-                            logging.error("exception: %s", e)
+                        track = Track.get(spotifyid=nextup_tid)
 
                         # queue up the next track for this user
                         logging.info("%s sending to spotify client queue %s", procname, nextup_name)
                         try:
                             _ = await spotify.playback_queue_add(track.uri)
-                        except Exception as e: # pylint: disable=W0718
-                            logging.error("%s %s exception - " +
-                                            "failed sending a track to the spotify queue: %s\n%s",
+                        except Exception as e: 
+                            logging.error("%s exception spotify.playback_queue_add track.uri=%s\n%s",
                                             procname, type(e), nextup_name, e)
 
                         sleep = (remaining_ms /1000) + 1
