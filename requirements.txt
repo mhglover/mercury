@@ -1,6 +1,5 @@
 tekore==5.4.0
 quart==0.19.6
-peewee==3.17.5
 python-dotenv==1.0.1
-psycopg2==2.9.3
-psycopg2-binary==2.9.9
+tortoise-orm==0.17.4
+asyncpg==0.29.0
