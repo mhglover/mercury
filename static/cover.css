@@ -31,7 +31,7 @@ body {
  */
 
 .nav-masthead .nav-link {
-  color: rgba(255, 255, 255, .5);
+  color: rgba(51, 7, 230, 0.5);
   border-bottom: .25rem solid transparent;
 }
 
@@ -45,6 +45,6 @@ body {
 }
 
 .nav-masthead .active {
-  color: #fff;
-  border-bottom-color: #fff;
+  color: #3d2cff;
+  /* border-bottom-color: #3d2cff; */
 }
