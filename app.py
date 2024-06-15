@@ -103,52 +103,75 @@ async def before_serving():
 @app.route('/', methods=['GET'])
 async def index():
     """show the now playing page"""
-    spotifyid = request.cookies.get('spotifyid')
-    if 'spotifyid' in session:
-        spotifyid = session['spotifyid']
-    else:
-        return redirect("/auth")
-
-    user, token = await getuser(spotifyid)
-    logging.debug("user=%s", user)
-    with spotify.token_as(token): # pylint disable=used-before-assignment
-        currently = await spotify.playback_currently_playing()
-
+    spotifyid = session.get('spotifyid')
+    username = "login"
+    np_name = ''
+    np_id = ''
+    rsum = ''
+    
+    # get play history
     playhistory = await getrecents()
 
-    if currently is None:
-        np_id="no id"
-        rsum = 0
-        np_name=""
-    else:
-        np_id = currently.item.id
-        np_name = await trackinfo(np_id)
-        query = await Rating.filter(trackid=np_id).values_list('rating', flat=True)
-        ratings = [x for x in iter(query)]
-        rsum = sum([x.rating for x in ratings])
+    if spotifyid is not None and spotifyid != '':
 
-    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
+        # get user details
+        user, token = await getuser(spotifyid)
+        username = user.spotifyid
+        path = '/'
+        logging.debug("user=%s", user)
+        with spotify.token_as(token): # pylint disable=used-before-assignment
+            currently = await spotify.playback_currently_playing()
 
-    tasknames = [x.get_name() for x in asyncio.all_tasks()]
-    logging.debug("tasknames=%s", tasknames)
-
-    if "spotify_watcher" in run_tasks:
-        if f"watcher_{spotifyid}" in tasknames:
-            logging.debug("watcher_%s is running", spotifyid)
+        if currently is None:
+            np_id="no id"
+            rsum = 0
+            np_name="Not Playing"
         else:
-            logging.info("trying to launch a watcher for %s", spotifyid)
-            user_task = asyncio.create_task(spotify_watcher(spotifyid),
-                            name=f"watcher_{spotifyid}")
-            taskset.add(user_task) # pylint disable=used-before-assignment
-            user_task.add_done_callback(taskset.remove(user_task))
+            np_id = currently.item.id
+            np_name = await trackinfo(np_id)
+            query = await Rating.filter(trackid=np_id).values_list('rating', flat=True)
+            ratings = [x for x in iter(query)]
+            rsum = sum([x.rating for x in ratings])
+
+        run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
+
+        tasknames = [x.get_name() for x in asyncio.all_tasks()]
+        logging.debug("tasknames=%s", tasknames)
+
+        if "spotify_watcher" in run_tasks:
+            if f"watcher_{spotifyid}" in tasknames:
+                logging.debug("watcher_%s is running", spotifyid)
+            else:
+                logging.info("trying to launch a watcher for %s", spotifyid)
+                user_task = asyncio.create_task(spotify_watcher(spotifyid),
+                                name=f"watcher_{spotifyid}")
+                taskset.add(user_task) # pylint disable=used-before-assignment
+                user_task.add_done_callback(taskset.remove(user_task))
 
     return await render_template('index.html',
+                                 username=username,
                                  np_name=np_name,
                                  np_id=np_id,
                                  rating=rsum,
                                  history=playhistory)
 
 
+@app.route('/logout', methods=['GET'])
+async def logout(userid=None):
+    """set a user as inactive and forget cookies"""
+    spotifyid = request.cookies.get('spotifyid')
+    if 'spotifyid' in session:
+        spotifyid = session['spotifyid']
+    else:
+        return redirect("/")
+    
+    session['spotifyid'] = ""
+    user = await User.get(spotifyid=spotifyid)
+    user.active_now = False
+    await user.save()
+    return redirect("/")
+    
+    
 @app.route('/auth', methods=['GET'])
 async def spotify_authorization():
     """redirect user to spotify for authorization"""
@@ -168,7 +191,8 @@ async def spotify_authorization():
 
     auths[state] = auth
     logging.info("auth_url=%s", auth.url)
-    return await render_template('auth.html', spoturl=auth.url)
+    return redirect(auth.url)
+    # return await render_template('auth.html', spoturl=auth.url)
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -191,28 +215,29 @@ async def spotify_callback():
 
     spotifyid = spotify_user.id
     session['spotifyid'] = spotifyid
+    p = pickle.dumps(token)
 
-    user = await User.filter(spotifyid=spotifyid)
-    if user.exists():
-        logging.info("spotify_callback - found user record for %s", spotifyid)
-        user = User.get_or_none(id=spotify)
-        logging.info("pulling ratings to populate user")
-        asyncio.create_task(pullratings(spotifyid),name=f"pullratings_{spotifyid}")
+    logging.info("spotify_callback - get_or_create user record for %s", spotifyid)
+    user, created = await User.get_or_create(spotifyid=spotifyid,
+                                             defaults={
+                                                 "token": p,
+                                                 "last_active": datetime.datetime.now(),
+                                                 "active_now": True
+                                             })
+    if created is False:
+        logging.info('spotify_callback - found user %s', spotifyid)
+        user.last_active = datetime.datetime.now
+        user.active_now = True
+        await user.save()
     else:
-        logging.info("spotify_callback - creating user record for %s", spotifyid)
-        p = pickle.dumps(token)
-        user = await User.create(id=spotifyid,
-                           token=p,
-                           display_name=spotify_user.display_name,
-                           href=spotify_user.href)
-        user.save()
-        logging.debug("user=%s", user)
-        logging.info("pulling ratings to populate user")
+        logging.info("spotify_callback - creating new user %s", spotifyid)
+        await user.save()             
+        
+        logging.info("spotify_callback - pulling ratings to populate user")
         asyncio.create_task(pullratings(spotifyid),name=f"pullratings_{spotifyid}")
-
-    logging.info("spotify_callback - redirecting back to / %s", spotifyid)
+    
+    logging.info("spotify_callback - redirecting %s back to /", spotifyid)
     return redirect("/")
-    # return redirect(f"https://discord.com/channels/{SERVER}/{CHANNEL}", 307)
 
 
 @app.route('/dash', methods=['GET'])
@@ -232,6 +257,7 @@ async def dashboard():
     tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
                                  auths=auths,
+                                 username=user.spotifyid,
                                  users=activeusers,
                                  tasks=tasknames,
                                  queue=tracknames,
@@ -281,14 +307,14 @@ async def getuser(userid):
     try:
         user = await User.get(spotifyid=userid)
     except Exception as e:
-        logging.error("getuser - exception %s", e)
+        logging.error("getuser - exception fetching user\n%s", e)
 
     token = pickle.loads(user.token)
     if token.is_expiring:
         try:
             token = cred.refresh(token)
         except Exception as e:
-            logging.error("exception: %s", e)
+            logging.error("getuser - exception refreshing token\n%s", e)
         user.token = pickle.dumps(token)
         await user.save()
 
@@ -440,7 +466,7 @@ async def recently_played_tracks():
 
 async def getactiveusers():
     """fetch details for the active users"""
-    users = await User.all()
+    users = await User.filter(active_now=True)
     return users
 
 
@@ -451,9 +477,13 @@ async def spotify_watcher(userid):
     logging.info("starting a spotify watcher: %s", procname)
 
     try:
-        _, token = await getuser(userid)
+        user, token = await getuser(userid)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
+
+    user.active_now = True
+    user.last_active = datetime.datetime.now()
+    await user.save()
 
     playing_tid = ""
     ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
@@ -484,7 +514,7 @@ async def spotify_watcher(userid):
 
     # Loop while alive
     logging.debug("%s starting loop", procname)
-    while ttl > datetime.datetime.now(): # pylint: disable=E1101
+    while ttl > datetime.datetime.now():
         status = "unset"
         logging.debug("%s loop is awake", procname)
 
@@ -492,8 +522,8 @@ async def spotify_watcher(userid):
             logging.debug("%s checking currently playing", procname)
             try:
                 currently = await spotify.playback_currently_playing()
-            except Exception as e: # pylint: disable=W0718
-                logging.error("exception %s",e)
+            except Exception as e:
+                logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
 
             logging.debug("%s checking player queue state", procname)
             playbackqueue = await spotify.playback_queue()
@@ -595,7 +625,10 @@ async def spotify_watcher(userid):
             logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
+    user.active_now = False
+    user.save()
     logging.info("%s timed out, watcher exiting", procname)
+    return
 
 
 async def queue_manager():
