@@ -12,7 +12,7 @@ from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 from tortoise.functions import Sum
 from models import User, Track, Rating, PlayHistory, UpcomingQueue
-from watchers import user_reaper
+from watchers import user_reaper, watchman
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -79,20 +79,10 @@ async def before_serving():
         taskset.add(reaper_task)
         reaper_task.add_done_callback(taskset.remove(reaper_task))
         
-        logging.info("before_serving pulling active users for spotify watchers")
+        logging.info("%s pulling active users for spotify watchers", procname)
         active_users = await getactiveusers()
         for user in active_users:
-            logging.info("before_serving creating a spotify watcher task for: %s", user.spotifyid)
-            user_task = asyncio.create_task(spotify_watcher(user.spotifyid),
-                            name=f"watcher_{user.spotifyid}")
-
-            # add this user task to the global tasks set
-            taskset.add(user_task)
-
-            # To prevent keeping references to finished tasks forever,
-            # make each task remove its own reference from the set after
-            # completion:
-            user_task.add_done_callback(taskset.remove(user_task))
+            await watchman(taskset, spotify_watcher, userid=user.spotifyid)
 
     if "queue_manager" in run_tasks:
         logging.info("before_serving creating a queue manager task")
