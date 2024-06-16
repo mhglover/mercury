@@ -539,11 +539,11 @@ async def record(uid, tid):
 async def getnext():
     """get the next trackid and trackname from the queue"""
     logging.debug("pulling queue from db")
-    dbqueue =  await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
+    dbqueue = await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
     logging.debug("queue pulled, %s items", len(dbqueue))
     if len(dbqueue) < 1:
         logging.debug("queue is empty, returning None")
-        return None
+        return None, None
 
     nextup_tid = dbqueue[0]
     ntrack = await Track.get(trackid=nextup_tid)
@@ -578,6 +578,10 @@ async def spotify_watcher(userid):
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
 
+    user.status = "active"
+    user.last_active = datetime.datetime.now(datetime.timezone.utc)
+    await user.save()
+    
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
     localhistory = []
 
@@ -595,9 +599,6 @@ async def spotify_watcher(userid):
             logging.debug("%s paused", procname)
             sleep = 30
         else:
-            # user.status = True
-            user.last_active = datetime.datetime.now(datetime.timezone.utc)
-            await user.save()
             
             trackid = currently.item.id
             trackname = await trackinfo(trackid)
@@ -667,12 +668,17 @@ async def spotify_watcher(userid):
                 
                 nextup_tid, nextup_name = await getnext()
                 
+                if nextup_tid is None:
+                    sleep = 30
+                    status = ("%s nothing in the upcoming queue", procname)
+                    continue
+                
                 if trackid not in localhistory:
                     localhistory.append(trackid)
                 
                 # detect track changes
                 if trackid != last_trackid:
-                    logging.info("%s detected track change, last track position %s",
+                    logging.info("%s detected track change at %2.0d",
                                  procname, last_position)
                     
                     # remove skipped tracks from queue
@@ -759,9 +765,7 @@ async def spotify_watcher(userid):
 
                         sleep = (remaining_ms /1000) + 1
 
-                status = f"{trackname} pos:{position}% {minutes}:{seconds:0>2} remaining"
-                # logging.info("%s playing %s %s:%0.02d remaining",
-                    #   procname, trackname, minutes, seconds)
+                status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
 
         if status == "not playing":
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
@@ -801,6 +805,10 @@ async def queue_manager():
         while len(uqueue) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = [x.spotifyid for x in await getactiveusers()]
+            if len(activeusers) == 0:
+                logging.info("%s no active listeners, sleeping for 60 seconds", procname)
+                await asyncio.sleep(60)
+                continue
 
             recent_tids = await recently_played_tracks()
             logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
@@ -808,7 +816,7 @@ async def queue_manager():
             positive_tracks = ( await Rating.annotate(sum=Sum("rating"))
                                             .group_by('trackid')
                                             .filter(sum__gte=0)
-                                            .filter(spotifyid__in=activeusers)
+                                            .filter(userid__in=activeusers)
                                             .exclude(trackid__in=recent_tids)
                                             .values_list("trackid", flat=True))
             logging.info("%s pulled %s non_recent positive_tracks", procname, len(positive_tracks))
