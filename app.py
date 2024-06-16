@@ -213,6 +213,7 @@ async def spotify_authorization():
 @app.route('/spotify/callback', methods=['GET','POST'])
 async def spotify_callback():
     """create a user record and set up initial ratings"""
+    procname = "spotify_callback"
 
     # users = getactiveusers()
     code = request.args.get('code', "")
@@ -223,10 +224,16 @@ async def spotify_callback():
     if thisauth is None:
         return 'Invalid state!', 400
 
-    token = thisauth.request_token(code, state)
+    try:
+        token = thisauth.request_token(code, state)
+    except Exception as e:
+        logging.error("%s exception request_token\n%s", procname, e)
 
     with spotify.token_as(token):
-        spotify_user = await spotify.current_user()
+        try:
+            spotify_user = await spotify.current_user()
+        except Exception as e:
+            logging.error("%s exception current_user\n%s", procname, e)
 
     spotifyid = spotify_user.id
     session['spotifyid'] = spotifyid
