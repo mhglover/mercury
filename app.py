@@ -111,6 +111,9 @@ async def index():
     
     # get play history
     playhistory = await getrecents()
+    
+    # get active users
+    activeusers = [x.spotifyid for x in await getactiveusers()]
 
     if spotifyid is not None and spotifyid != '':
 
@@ -155,6 +158,7 @@ async def index():
                                  np_name=np_name,
                                  np_id=np_id,
                                  rating=rsum,
+                                 activeusers=activeusers,
                                  history=playhistory)
 
 
@@ -468,8 +472,11 @@ async def recently_played_tracks():
 
 
 async def getactiveusers():
-    """fetch details for the active users"""
-    users = await User.filter(active_now=True)
+    """fetch details for the active users
+    
+    returns: list of Users
+    """
+    users = await User.exclude(active_now=False)
     return users
 
 
@@ -550,6 +557,7 @@ async def spotify_watcher(userid):
                 logging.debug("%s is paused", procname)
                 sleep = 30
             else:
+                sleep = 0
                 logging.debug("%s updating ttl: %s", procname, ttl)
                 ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
 
