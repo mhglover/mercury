@@ -242,10 +242,11 @@ async def spotify_callback():
     p = pickle.dumps(token)
 
     logging.info("spotify_callback get_or_create user record for %s", spotifyid)
+    n = datetime.datetime.now(datetime.timezone.utc)
     user, created = await User.get_or_create(spotifyid=spotifyid,
                                              defaults={
                                                  "token": p,
-                                                 "last_active": datetime.datetime.now(),
+                                                 "last_active": n,
                                                  "active_now": True
                                              })
     if created is False:
@@ -463,7 +464,7 @@ async def rate(uid, tid, value=1, set_last_played=True):
     # if the rating already existed, update the value and lastplayed time
     if not created:
         rating.value = value
-        rating.last_played = datetime.datetime.now()
+        rating.last_played = datetime.datetime.now(datetime.timezone.utc)
     
     await rating.save()
 
@@ -500,7 +501,7 @@ async def getnext():
 
 async def recently_played_tracks():
     """fetch tracks that have been rated in the last 5 days"""
-    interval = datetime.datetime.now() - datetime.timedelta(days=5)
+    interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=5)
     tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
     return tids
 
@@ -525,12 +526,8 @@ async def spotify_watcher(userid):
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
 
-    user.active_now = True
-    user.last_active = datetime.datetime.now()
-    await user.save()
-
     playing_tid = ""
-    ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
+    ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
     localhistory = []
 
     # Check the current status
@@ -539,16 +536,21 @@ async def spotify_watcher(userid):
             currently = await spotify.playback_currently_playing()
         except Exception as e: # pylint: disable=broad-exception-caught
             logging.error("%s spotify_currently_playing exception %s", procname, e)
+        
         if currently is None:
             logging.debug("%s not currently playing", procname)
             sleep = 30
+        elif currently.is_playing is False:
+            logging.debug("%s paused", procname)
+            sleep = 30
         else:
+            # user.active_now = True
+            user.last_active = datetime.datetime.now(datetime.timezone.utc)
+            await user.save()
+            
             # previous_tid = None
             playing_tid = currently.item.id
-            try:
-                trackname = await trackinfo(playing_tid)
-            except Exception as e: # pylint: disable=broad-exception-caught
-                logging.error("exception %s", e)
+            trackname = await trackinfo(playing_tid)
 
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             seconds = int(remaining_ms / 1000) % 60
@@ -558,7 +560,7 @@ async def spotify_watcher(userid):
 
     # Loop while alive
     logging.debug("%s starting loop", procname)
-    while ttl > datetime.datetime.now():
+    while ttl > datetime.datetime.now(datetime.timezone.utc):
         status = "unset"
         logging.debug("%s loop is awake", procname)
 
@@ -569,7 +571,6 @@ async def spotify_watcher(userid):
                 logging.error("getuser exception refreshing token\n%s", e)
             user.token = pickle.dumps(token)
             await user.save()
-            
 
         with spotify.token_as(token):
             logging.debug("%s checking currently playing", procname)
@@ -593,7 +594,9 @@ async def spotify_watcher(userid):
             else:
                 sleep = 0
                 logging.debug("%s updating ttl: %s", procname, ttl)
-                ttl = datetime.datetime.now() + datetime.timedelta(minutes=20)
+                ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
+                user.last_active = datetime.datetime.now(datetime.timezone.utc)
+                await user.save()
 
                 trackid = currently.item.id
                 if trackid not in localhistory:
