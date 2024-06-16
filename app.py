@@ -117,7 +117,6 @@ async def index():
         # get user details
         user, token = await getuser(spotifyid)
         username = user.spotifyid
-        path = '/'
         logging.debug("user=%s", user)
         with spotify.token_as(token): # pylint disable=used-before-assignment
             currently = await spotify.playback_currently_playing()
@@ -328,7 +327,7 @@ async def getuser(userid):
 async def getrecents():
     """pull recently played tracks from history table"""
     try:
-        ph_query = await PlayHistory.all().order_by('played_at').limit(10)
+        ph_query = await PlayHistory.all().order_by('-id').limit(10)
     except Exception as e:
         logging.error("exception ph_query %s", e)
 
@@ -464,7 +463,7 @@ async def getnext():
 
 
 async def recently_played_tracks():
-    """fetch"""
+    """fetch tracks that have been rated in the last 5 days"""
     interval = datetime.datetime.now() - datetime.timedelta(days=5)
     tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
     return tids
