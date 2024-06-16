@@ -9,6 +9,7 @@ from tortoise.models import Model
 class User(Model):
     """track users"""
     spotifyid = fields.TextField()
+    displayname = fields.TextField()
     token = fields.BinaryField()
     last_active = fields.DatetimeField(auto_now=True)
     status = fields.TextField()

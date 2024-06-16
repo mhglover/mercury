@@ -107,8 +107,8 @@ def before_request():
 async def index():
     """show the now playing page"""
     procname="web_index"
-    spotifyid = session.get('spotifyid')
-    username = "login"
+    spotifyid = session.get('spotifyid', None)
+    displayname = ""
     np_name = ''
     np_id = ''
     rsum = ''
@@ -124,7 +124,9 @@ async def index():
 
         # get user details
         user, token = await getuser(spotifyid)
-        username = user.spotifyid
+        displayname = user.displayname
+        if displayname is None:
+            displayname = ""
         
         # are we following somebody?
         if user.status.startswith("following"):
@@ -167,13 +169,15 @@ async def index():
                 user_task.add_done_callback(taskset.remove(user_task))
 
     return await render_template('index.html',
-                                 username=username,
+                                 spotifyid=spotifyid,
+                                 displayname=displayname,
                                  np_name=np_name,
                                  np_id=np_id,
                                  rating=rsum,
                                  targetid=targetid,
                                  activeusers=activeusers,
-                                 history=playhistory)
+                                 history=playhistory
+                                )
 
 
 @app.route('/logout', methods=['GET'])
@@ -340,17 +344,50 @@ async def pullratings(spotifyid=None):
         return redirect("/")
 
 
+@app.route('/user', methods=['POST'])
+async def user_update():
+    """allow user profile updates"""
+    procname = "user_update"
+    
+    logging.info("%s updating user record", procname)
+    
+    if 'spotifyid' not in session:
+        logging.info("%s no spotify id in session", procname)
+        return redirect("/", 303)
+    
+    if request.method == "POST":
+        logging.info("%s fetching user %s", 
+                     procname, session['spotifyid'])
+        user, _ = await getuser(session['spotifyid'])
+        
+        form = await request.form
+        displayname = form['displayname']
+        logging.info("%s updating displayname: %s",
+                     procname, displayname)
+        if displayname is not None:
+            logging.info("%s updating displayname: %s",
+                         procname, displayname)
+            user.displayname = displayname
+            await user.save()
+            
+    return redirect("/")
+
+
 @app.route('/follow/<targetid>')
 async def follow(targetid=None):
     """listen with a friend"""
+    procname = "follow"
     if 'spotifyid' in session:
-        myspotifyid = session['spotifyid']
-    else:
-        return redirect("/auth")
-
-    user, _ = await getuser(myspotifyid)
-    user.status = "following:" + targetid
-    await user.save()
+        if session['spotifyid'] == targetid:
+            logging.warning("%s user %s tried to follow itself",
+                            procname, targetid)
+        else:
+            user, _ = await getuser(session['spotifyid'])
+            user.status = "following:" + targetid
+            
+            logging.info("%s set user %s status: %s", 
+                         procname, session['spotifyid'], user.status)
+            await user.save()
     return redirect("/")
 
 
@@ -541,7 +578,6 @@ async def spotify_watcher(userid):
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
 
-    playing_tid = ""
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
     localhistory = []
 
@@ -614,9 +650,9 @@ async def spotify_watcher(userid):
                 await user.save()
                 
                 last_trackid = trackid
-                last_remaining_ms = remaining_ms
+                # last_remaining_ms = remaining_ms
                 last_position = position
-                last_trackname, last_track = await trackinfo(last_trackid, return_track=True)
+                # last_trackname, last_track = await trackinfo(last_trackid, return_track=True)
 
                 trackid = currently.item.id
                 trackname = await trackinfo(trackid)
@@ -629,7 +665,8 @@ async def spotify_watcher(userid):
                 
                 # detect track changes
                 if trackid != last_trackid:
-                    logging.info("%s detected track change, last track position %s", procname, last_position)
+                    logging.info("%s detected track change, last track position %s",
+                                 procname, last_position)
                     
                     # remove skipped tracks from queue
                     if last_trackid == nextup_tid:
@@ -644,7 +681,8 @@ async def spotify_watcher(userid):
                     # rate skipped tracks based on last position
                     if last_position < 0.33:
                         value = -2
-                        logging.info("%s early skip rating, %s %s %s", userid, trackid, -value, procname)
+                        logging.info("%s early skip rating, %s %s %s",
+                                     userid, trackid, -value, procname)
                         await rate(userid, trackid, value)
                     elif last_position < 0.7:
                         value = -1

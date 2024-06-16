@@ -2,7 +2,7 @@
 import logging
 import asyncio
 import datetime
-from tortoise.expressions import Q
+# from tortoise.expressions import Q
 from models import User
 
 # pylint: disable=trailing-whitespace
