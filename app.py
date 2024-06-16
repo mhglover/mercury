@@ -12,7 +12,7 @@ from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 from tortoise.functions import Sum
 from models import User, Track, Rating, PlayHistory, UpcomingQueue
-
+from reaper import user_reaper
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -64,20 +64,21 @@ register_tortoise(
 )
 
 
-@app.before_request
-def before_request():
-    """save cookies even if you close your browser"""
-    session.permanent = True
-
 @app.before_serving
 async def before_serving():
     """pre"""
-    logging.debug("before_serving")
+    procname="before_serving"
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
     logging.info("before_serving running tasks: %s", run_tasks)
 
     if "spotify_watcher" in run_tasks:
+        
+        logging.info("%s launching a user_reaper task", procname)
+        reaper_task = asyncio.create_task(user_reaper(), name="user_reaper")
+        taskset.add(reaper_task)
+        reaper_task.add_done_callback(taskset.remove(reaper_task))
+        
         logging.info("before_serving pulling active users for spotify watchers")
         active_users = await getactiveusers()
         for user in active_users:
@@ -98,6 +99,12 @@ async def before_serving():
         qm = asyncio.create_task(queue_manager(),name="queue_manager")
         taskset.add(qm)
         qm.add_done_callback(taskset.remove(qm))
+
+
+@app.before_request
+def before_request():
+    """save cookies even if you close your browser"""
+    session.permanent = True
 
 
 @app.route('/', methods=['GET'])
@@ -759,34 +766,12 @@ async def main():
     
     logging.info("main connecting to db")
 
-    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    logging.info("main running tasks: %s", run_tasks)
-
     logging.info("main starting web_ui on port: %s", os.environ['PORT'])
     web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
     taskset.add(web_ui)
-
-    # if "spotify_watcher" in run_tasks:
-    #     logging.info("main pulling active users for spotify watchers")
-    #     active_users = await getactiveusers()
-    #     for user in active_users:
-    #         logging.info("main creating a spotify watcher task for: %s", user.id)
-    #         user_task = asyncio.create_task(spotify_watcher(user.id),
-    #                         name=f"watcher_{user.id}")
-
-    #         # add this user task to the global tasks set
-    #         taskset.add(user_task)
-
-    #         # To prevent keeping references to finished tasks forever,
-    #         # make each task remove its own reference from the set after
-    #         # completion:
-    #         user_task.add_done_callback(taskset.remove(user_task))
-
-    # if "queue_manager" in run_tasks:
-    #     logging.info("main creating a queue manager task")
-    #     qm = asyncio.create_task(queue_manager(),name="queue_manager")
-    #     taskset.add(qm)
-    #     qm.add_done_callback(taskset.remove(qm))
+    
+    # spotify_watchers, queue_manager, and user_reaper
+    # are added in the before_serving function
 
     try:
         await asyncio.gather(*taskset)
