@@ -22,10 +22,13 @@ load_dotenv()  # take environment variables from .env
 
 app = Quart(__name__)
 app.secret_key = os.getenv("APP_SECRET", default="1234567890")
+
 conf = tk.config_from_environment()
 cred = tk.Credentials(*conf)
+
 token_spotify = tk.request_client_token(*conf[:2])
 spotify = tk.Spotify(token_spotify, asynchronous=True)
+
 taskset = set()
 auths = {}
 
@@ -207,8 +210,8 @@ async def spotify_authorization():
     auths[state] = auth
     logging.info("state: %s", state)
     logging.info("auths: %s", auths)
-    logging.info("auth_url=%s", auth.url)
-    return redirect(auth.url)
+    logging.debug("auth_url: %s", auth.url)
+    return redirect(auth.url, 307)
     # return await render_template('auth.html', spoturl=auth.url)
 
 
@@ -227,15 +230,17 @@ async def spotify_callback():
     if thisauth is None:
         logging.error("%s couldn't find this state in auths: %s", procname, state)
         logging.error("auths: %s", auths)
-        return redirect("/")
+        return redirect("/", 307)
 
     try:
         token = thisauth.request_token(code, state)
     except Exception as e:
         logging.error("%s exception request_token\n%s", procname, e)
 
+
     with spotify.token_as(token):
         try:
+            # this gives Deirdra a 403
             spotify_user = await spotify.current_user()
         except Exception as e:
             logging.error("%s exception current_user\n%s", procname, e)
