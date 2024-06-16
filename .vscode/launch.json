@@ -12,11 +12,11 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "tkbot.py",
+      "name": "app.py",
       "type": "python",
       "autoReload": {},
       "request": "launch",
-      "program": "tkbot.py",
+      "program": "app.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env"
     }
