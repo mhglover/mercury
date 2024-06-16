@@ -613,7 +613,7 @@ async def spotify_watcher(userid):
                         nextup_name, ntrack = await trackinfo(nextup_tid, return_track=True)
 
                         # queue up the next track for this user
-                        logging.info("%s sending to spotify client queue [%s] %s",
+                        logging.info("%s sending to spotify queue [%s] %s",
                                      procname, ntrack.trackuri, nextup_name)
                         try:
                             _ = await spotify.playback_queue_add(ntrack.trackuri)
@@ -671,6 +671,7 @@ async def queue_manager():
             positive_tracks = ( await Rating.annotate(sum=Sum("rating"))
                                             .group_by('trackid')
                                             .filter(sum__gte=0)
+                                            .exclude(trackid__in=recent_tids)
                                             .values_list("trackid", flat=True))
             
             # selector = await Rating.select(
@@ -680,7 +681,8 @@ async def queue_manager():
             # positive_tracks = [x.trackid for x in selector]
             logging.info("%s pulled %s positive_tracks", procname, len(positive_tracks))
 
-            potentials = [x for x in positive_tracks if x not in recent_tids + uqueue]
+            # potentials = [x for x in positive_tracks if x not in recent_tids + uqueue]
+            potentials = positive_tracks
             if len(potentials) == 0:
                 logging.info("%s no potential tracks to queue, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)
@@ -705,8 +707,8 @@ async def queue_manager():
                              r.userid, 
                              r.rating, 
                              now - r.last_played)
-            logging.info("%s adding to radio queue: %s %s", 
-                         procname, upcoming_tid, trackname)
+            logging.info("%s adding to radio queue: %s", 
+                         procname, trackname)
             u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
             uqueue.append(upcoming_tid)
