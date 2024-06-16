@@ -25,7 +25,7 @@ async def user_reaper():
             logging.info("%s marking user as inactive after %s minutes idle: %s",
                         procname, idle, user.spotifyid)
             user.status = False
-            await user.save(update_fields=['active_now'])
+            await user.save(update_fields=['status'])
         await asyncio.sleep(sleep)
 
 
