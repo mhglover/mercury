@@ -724,7 +724,7 @@ async def spotify_watcher(userid):
         await asyncio.sleep(sleep)
 
     user.status = "inactive"
-    user.save()
+    await user.save()
     logging.info("%s timed out, watcher exiting", procname)
     return
 
