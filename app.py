@@ -333,7 +333,10 @@ async def follow(targetid=None):
 
 
 async def getuser(userid):
-    """fetch user details"""
+    """fetch user details
+    
+    returns: user object, spotify token
+    """
     try:
         user = await User.get(spotifyid=userid)
     except Exception as e:
@@ -678,6 +681,7 @@ async def queue_manager():
     sleep = 10 # ten seconds between loops
     logging.info('%s starting', procname)
 
+    flip = "even"
     while True:
         logging.debug("%s checking queue state", procname)
 
@@ -716,6 +720,21 @@ async def queue_manager():
             logging.info("%s %s potential tracks to queue", procname, len(potentials))
 
             upcoming_tid = choice(potentials)
+            
+            actives = await getactiveusers()
+            first = actives[0]
+            token = pickle.loads(first.token)
+             
+            with spotify.token_as(token):
+                spotrec = await spotify.recommendations(track_ids=[upcoming_tid], limit=1)
+
+            if flip == "even":
+                logging.info("%s queuing a spotify recommendation", procname)
+                upcoming_tid = spotrec.tracks[0].id
+                flip = "odd"
+            else:
+                flip = "even"
+
             trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -731,24 +750,6 @@ async def queue_manager():
             u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
             uqueue.append(upcoming_tid)
-
-            # ttl[upcoming_tid] = time.time() + (upcoming_track.duration_ms/1000)
-            # h = [x for x in PlayHistory.select().where(PlayHistory.trackid == upcoming_tid)]
-            # r = [x for x in Rating.select().where(Rating.trackid == upcoming_tid)]
-            # sr = sum([x.rating for x in r])
-            # if len(h) == 0:
-            #     lp = "never played"
-            # else:
-            #     lp = h[0].played_at
-
-
-            # logging.info(f"{procname} queued: {upcoming_name} [{sr} - {lp}]
-            # of {len(potentials)} potential songs")
-            # for each in h:
-            #     logging.info(f"{procname} played at: {each.played_at}")
-            # for each in r:
-            #     logging.info(f"{procname} rating: {each.user_id}
-            # [{each.rating}] ({each.last_played})")
 
         logging.debug("%s sleeping for %s", procname, sleep)
         await asyncio.sleep(sleep)
