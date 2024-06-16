@@ -2,7 +2,8 @@
 
 {% block content %}
 
-<h1>{{ np_name }}</h1>
+{% if targetid != '' %}<h2>listening with {{targetid}}</h2>{%endif%}
+<h1> {{ np_name }} </h1>
 
 <h2>Recently Played</h2>
 <table>
@@ -10,7 +11,22 @@
     <tr><td>{{ date }}</td></tr>
     {% endfor %}
 </table>
-<!-- <a href="#" class="btn btn-lg btn-secondary fw-bold border-white bg-white">Learn more</a> -->
-</p>
+
+
+<h2>Active Listeners</h2>
+<table>
+    {% if np_name == "Not Playing" %}
+        <tr><td>click an active listener if you're listening with them</td></tr>
+        {% for user in activeusers %}
+        <tr><td><a href="/follow/{{ user }}">{{user}}</a></td></tr>
+        {% endfor %}
+    {% else %}
+        {% for user in activeusers %}
+        <tr><td>{{ user }}</td></tr>
+        {% endfor %}
+    {% endif %}
+</table>
+
+
 
 {% endblock %}

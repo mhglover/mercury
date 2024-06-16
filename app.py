@@ -103,11 +103,13 @@ async def before_serving():
 @app.route('/', methods=['GET'])
 async def index():
     """show the now playing page"""
+    procname="web_index"
     spotifyid = session.get('spotifyid')
     username = "login"
     np_name = ''
     np_id = ''
     rsum = ''
+    targetid = ''
     
     # get play history
     playhistory = await getrecents()
@@ -120,11 +122,19 @@ async def index():
         # get user details
         user, token = await getuser(spotifyid)
         username = user.spotifyid
-        logging.debug("user=%s", user)
+        
+        # are we following somebody?
+        if user.active_now != 'False' and user.active_now != 'True':
+            logging.info("%s user.active_now=%s", procname, user.active_now)
+            targetid = user.active_now
+            target = await User.get(spotifyid=targetid)
+            token = pickle.loads(target.token)
+            
+        
         with spotify.token_as(token): # pylint disable=used-before-assignment
             currently = await spotify.playback_currently_playing()
 
-        if currently is None:
+        if currently is None or currently.is_playing is False:
             np_id="no id"
             rsum = 0
             np_name="Not Playing"
@@ -158,6 +168,7 @@ async def index():
                                  np_name=np_name,
                                  np_id=np_id,
                                  rating=rsum,
+                                 targetid=targetid,
                                  activeusers=activeusers,
                                  history=playhistory)
 
@@ -307,6 +318,20 @@ async def pullratings(spotifyid=None):
         logging.info(message)
 
         return redirect("/")
+
+
+@app.route('/follow/<targetid>')
+async def follow(targetid=None):
+    """listen with a friend"""
+    if 'spotifyid' in session:
+        myspotifyid = session['spotifyid']
+    else:
+        return redirect("/auth")
+
+    user, _ = await getuser(myspotifyid)
+    user.active_now = targetid
+    await user.save()
+    return redirect("/")
 
 
 async def getuser(userid):
