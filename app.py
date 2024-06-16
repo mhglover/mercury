@@ -205,6 +205,8 @@ async def spotify_authorization():
     state = auth.state
 
     auths[state] = auth
+    logging.info("state: %s", state)
+    logging.info("auths: %s", auths)
     logging.info("auth_url=%s", auth.url)
     return redirect(auth.url)
     # return await render_template('auth.html', spoturl=auth.url)
@@ -218,11 +220,14 @@ async def spotify_callback():
     # users = getactiveusers()
     code = request.args.get('code', "")
     state = request.args.get('state', "")
-    logging.debug("state: %s", state)
+    logging.info("state: %s", state)
+    logging.info("auths: %s", auths)
     thisauth = auths.pop(state, None)
 
     if thisauth is None:
-        return 'Invalid state!', 400
+        logging.error("%s couldn't find this state in auths: %s", procname, state)
+        logging.error("auths: %s", auths)
+        return redirect("/")
 
     try:
         token = thisauth.request_token(code, state)
@@ -234,6 +239,7 @@ async def spotify_callback():
             spotify_user = await spotify.current_user()
         except Exception as e:
             logging.error("%s exception current_user\n%s", procname, e)
+            return redirect("/")
 
     spotifyid = spotify_user.id
     session['spotifyid'] = spotifyid
