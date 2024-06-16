@@ -16,7 +16,7 @@ async def user_reaper():
         logging.debug("%s checking for inactive users every %s seconds", procname, sleep)
         interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=idle)
         # actives = await User.filter(last_active__gte=interval).exclude(status="inactive")
-        expired  = await User.filter(last_active__lte=interval).exclude(active_now="inactive")
+        expired  = await User.filter(last_active__lte=interval).exclude(status="inactive")
         # for user in actives:
         #     interval = datetime.datetime.now(datetime.timezone.utc) - user.last_active
         #     logging.info("%s active user %s last active %s ago",
