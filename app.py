@@ -12,7 +12,7 @@ from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 from tortoise.functions import Sum
 from models import User, Track, Rating, PlayHistory, UpcomingQueue
-from reaper import user_reaper
+from watchers import user_reaper
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -131,9 +131,9 @@ async def index():
         username = user.spotifyid
         
         # are we following somebody?
-        if user.active_now != 'False' and user.active_now != 'True':
-            logging.info("%s user.active_now=%s", procname, user.active_now)
-            targetid = user.active_now
+        if user.status.startswith("following"):
+            logging.info("%s user.status=%s", procname, user.status)
+            targetid = user.status.replace("following:", "")
             target = await User.get(spotifyid=targetid)
             token = pickle.loads(target.token)
             
@@ -191,7 +191,7 @@ async def logout():
     
     session['spotifyid'] = ""
     user = await User.get(spotifyid=spotifyid)
-    user.active_now = False
+    user.status = "inactive"
     await user.save()
     return redirect("/")
     
@@ -247,12 +247,12 @@ async def spotify_callback():
                                              defaults={
                                                  "token": p,
                                                  "last_active": n,
-                                                 "active_now": True
+                                                 "status": "active"
                                              })
     if created is False:
         logging.info('spotify_callback found user %s', spotifyid)
         user.last_active = datetime.datetime.now
-        user.active_now = True
+        user.status = "active"
         await user.save()
     else:
         logging.info("spotify_callback creating new user %s", spotifyid)
@@ -337,7 +337,7 @@ async def follow(targetid=None):
         return redirect("/auth")
 
     user, _ = await getuser(myspotifyid)
-    user.active_now = targetid
+    user.status = "following:" + targetid
     await user.save()
     return redirect("/")
 
@@ -511,7 +511,7 @@ async def getactiveusers():
     
     returns: list of Users
     """
-    users = await User.exclude(active_now=False)
+    users = await User.exclude(status="inactive")
     return users
 
 
@@ -544,7 +544,7 @@ async def spotify_watcher(userid):
             logging.debug("%s paused", procname)
             sleep = 30
         else:
-            # user.active_now = True
+            # user.status = True
             user.last_active = datetime.datetime.now(datetime.timezone.utc)
             await user.save()
             
@@ -676,7 +676,7 @@ async def spotify_watcher(userid):
             logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
-    user.active_now = False
+    user.status = "inactive"
     user.save()
     logging.info("%s timed out, watcher exiting", procname)
     return

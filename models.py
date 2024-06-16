@@ -11,7 +11,7 @@ class User(Model):
     spotifyid = fields.TextField()
     token = fields.BinaryField()
     last_active = fields.DatetimeField(auto_now=True)
-    active_now = fields.TextField()
+    status = fields.TextField()
 
     def __str__(self):
         return str(self.spotifyid)
