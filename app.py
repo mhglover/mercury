@@ -82,6 +82,9 @@ async def before_serving():
         taskset.add(reaper_task)
         reaper_task.add_done_callback(taskset.remove(reaper_task))
         
+        # give the reaper a couple seconds to clean out inactive users
+        await asyncio.sleep(2)
+        
         logging.info("%s pulling active users for spotify watchers", procname)
         active_users = await getactiveusers()
         for user in active_users:
