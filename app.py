@@ -327,7 +327,7 @@ async def pullratings(spotifyid=None):
         r = [item.track.id async for item in
              spotify.all_items(await spotify.playback_recently_played())]
         # recents = await spotify.playback_recently_played()
-        rated = await rate_list(r, spotifyid, 1)
+        rated = await rate_list(r, spotifyid, 1, set_last_played=False)
 
         # # rate tops
         # tops = await spotify.current_user_top_tracks()
@@ -336,7 +336,7 @@ async def pullratings(spotifyid=None):
 
         saved_tracks = [item.track.id async for item in
                         spotify.all_items(await spotify.saved_tracks())]
-        rated = rated + await rate_list(saved_tracks, spotifyid, 4)
+        rated = rated + await rate_list(saved_tracks, spotifyid, 4, set_last_played=False)
 
         message = f"rated {rated} items"
         logging.info(message)
@@ -469,7 +469,7 @@ async def trackinfo(trackid, return_track=False, return_time=False):
         return name
 
 
-async def rate_list(items, uid, rating=1):
+async def rate_list(items, uid, rating=1, set_last_played=True):
     """rate a bunch of stuff at once"""
     if isinstance(items, list):
         if isinstance(items[0], str):
@@ -481,7 +481,7 @@ async def rate_list(items, uid, rating=1):
     logging.info("rating %s tracks", len(trackids))
 
     for tid in trackids:
-        await rate(uid, tid, rating)
+        await rate(uid, tid, rating, set_last_played=set_last_played)
 
     return len(trackids)
 
