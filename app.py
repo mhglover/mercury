@@ -159,7 +159,7 @@ async def index():
 
 
 @app.route('/logout', methods=['GET'])
-async def logout(userid=None):
+async def logout():
     """set a user as inactive and forget cookies"""
     spotifyid = request.cookies.get('spotifyid')
     if 'spotifyid' in session:
@@ -399,7 +399,6 @@ async def rate_list(items, uid, rating=1):
 
 async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
-    logging.info("checking the database for a track: %s", tid)
     try:
         displayname, track = await trackinfo(tid, return_track=True)
     except Exception as e: # pylint: disable=broad-exception-caught
@@ -407,7 +406,6 @@ async def rate(uid, tid, value=1, set_last_played=True):
                      tid, e)
 
     logging.info("writing a rating: %s %s %s", uid, displayname, value)
-    
     if set_last_played:
         rating, created = await Rating.get_or_create(userid=uid,
                                                trackid=tid, 
@@ -612,8 +610,8 @@ async def spotify_watcher(userid):
                         nextup_name, ntrack = await trackinfo(nextup_tid, return_track=True)
 
                         # queue up the next track for this user
-                        logging.info("%s sending to spotify queue [%s] %s",
-                                     procname, ntrack.trackuri, nextup_name)
+                        logging.info("%s sending to spotify queue %s",
+                                     procname, nextup_name)
                         try:
                             _ = await spotify.playback_queue_add(ntrack.trackuri)
                         except Exception as e: 
@@ -696,7 +694,7 @@ async def queue_manager():
             upcoming_tid = choice(potentials)
             # result = await trackinfo(upcoming_tid, return_track=True)
 
-            trackname, track = await trackinfo(upcoming_tid, return_track=True)
+            trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
             now = datetime.datetime.now(datetime.timezone.utc)
             for r in iter(ratings):
