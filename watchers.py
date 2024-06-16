@@ -24,7 +24,7 @@ async def user_reaper():
         for user in expired:
             logging.info("%s marking user as inactive after %s minutes idle: %s",
                         procname, idle, user.spotifyid)
-            user.status = False
+            user.status = "inactive"
             await user.save(update_fields=['status'])
         await asyncio.sleep(sleep)
 
