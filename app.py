@@ -197,6 +197,7 @@ async def spotify_authorization():
             "app-remote-control",
             "user-library-read",
             "user-top-read",
+            "user-follow-read",
             "playlist-read-private",
             ]
     auth = tk.UserAuth(cred, scope)
@@ -541,11 +542,11 @@ async def spotify_watcher(userid):
             user.last_active = datetime.datetime.now(datetime.timezone.utc)
             await user.save()
             
-            # previous_tid = None
-            playing_tid = currently.item.id
-            trackname = await trackinfo(playing_tid)
-
+            trackid = currently.item.id
+            trackname = await trackinfo(trackid)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
+            position = currently.progress_ms/currently.item.duration_ms
+            
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
             logging.info("%s initial status - playing %s, %s:%0.02d remaining",
@@ -590,16 +591,48 @@ async def spotify_watcher(userid):
                 ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
                 user.last_active = datetime.datetime.now(datetime.timezone.utc)
                 await user.save()
+                
+                last_trackid = trackid
+                last_remaining_ms = remaining_ms
+                last_position = position
+                last_trackname, last_track = await trackinfo(last_trackid, return_track=True)
 
                 trackid = currently.item.id
+                trackname = await trackinfo(trackid)
+                position = currently.progress_ms/currently.item.duration_ms
+                
+                nextup_tid, nextup_name = await getnext()
+                
                 if trackid not in localhistory:
                     localhistory.append(trackid)
-                trackname = await trackinfo(trackid)
+                
+                # detect track changes
+                if trackid != last_trackid:
+                    logging.info("%s detected track change, last track position %s", procname, last_position)
+                    
+                    # remove skipped tracks from queue
+                    if last_trackid == nextup_tid:
+                        logging.info("%s removing track from radio queue: %s",
+                                    procname, last_trackid)
+                        try:
+                            await UpcomingQueue.filter(trackid=nextup_tid).delete()
+                        except Exception as e:
+                            logging.error("%s exception removing track from queue\n%s",
+                                          procname, e)
+                    
+                    # rate skipped tracks based on last position
+                    if last_position < 0.33:
+                        value = -2
+                        logging.info("%s early skip rating, %s %s %s", userid, trackid, -value, procname)
+                        await rate(userid, trackid, value)
+                    elif last_position < 0.7:
+                        value = -1
+                        logging.info("%s late skip rating, %s %s %s", userid, trackid, -1, procname)
+                        await rate(userid, trackid, value)
+                
                 remaining_ms = currently.item.duration_ms - currently.progress_ms
                 seconds = int(remaining_ms / 1000) % 60
                 minutes = int(remaining_ms / (1000*60)) % 60
-
-                nextup_tid, nextup_name = await getnext()
 
                 if remaining_ms > 30000:
                     if (remaining_ms - 30000) < 30000:
