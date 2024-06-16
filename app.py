@@ -428,13 +428,14 @@ async def rate_list(items, uid, rating=1):
 
 async def rate(uid, tid, value=1, set_last_played=True):
     """rate a track"""
+    procname="rate"
     try:
         displayname, track = await trackinfo(tid, return_track=True)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.info("rate exception adding a track to database: [%s]\n%s",
                      tid, e)
 
-    logging.info("writing a rating: %s %s %s", uid, displayname, value)
+    logging.info("%s writing a rating: %s %s %s", procname, uid, displayname, value)
     if set_last_played:
         rating, created = await Rating.get_or_create(userid=uid,
                                                trackid=tid, 
@@ -462,8 +463,9 @@ async def rate(uid, tid, value=1, set_last_played=True):
 
 async def record(uid, tid):
     """write a record to the play history table"""
+    procname = "record"
     trackname = await trackinfo(tid)
-    logging.info("record play history recorded:  %s - %s", uid, trackname)
+    logging.info("%s play history %s %s", procname, uid, trackname)
     try:
         insertedkey = await PlayHistory.create(trackid=tid)
         await insertedkey.save()
@@ -624,7 +626,7 @@ async def spotify_watcher(userid):
                             logging.error("%s exception removing track from upcomingqueue\n%s",
                                           procname, e)
 
-                        logging.info("%s recording a play history %s",
+                        logging.debug("%s recording play history %s",
                                     procname, trackname)
                         await record(userid, trackid)
 
@@ -693,7 +695,7 @@ async def queue_manager():
             await UpcomingQueue.filter(trackid=newest).delete()
 
         while len(uqueue) < 2:
-            logging.info("%s queue is too small, adding a track", procname)
+            logging.debug("%s queue is too small, adding a track", procname)
 
             recent_tids = await recently_played_tracks()
             logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
@@ -703,30 +705,17 @@ async def queue_manager():
                                             .filter(sum__gte=0)
                                             .exclude(trackid__in=recent_tids)
                                             .values_list("trackid", flat=True))
-            
-            # selector = await Rating.select(
-            #             Rating.trackid).group_by(
-            #             Rating.trackid).having(
-            #             fn.Sum(Rating.rating) > 0).order_by(fn.Random()).limit(50)
-            # positive_tracks = [x.trackid for x in selector]
-            logging.info("%s pulled %s positive_tracks", procname, len(positive_tracks))
+            logging.info("%s pulled %s non_recent positive_tracks", procname, len(positive_tracks))
 
-            # potentials = [x for x in positive_tracks if x not in recent_tids + uqueue]
             potentials = positive_tracks
             if len(potentials) == 0:
                 logging.info("%s no potential tracks to queue, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)
                 continue
-            else:
-                logging.info("%s %s potential tracks to queue", procname, len(potentials))
-            # for each in recommendations:
-
-                # if each not in potentials:
-                    # potentials.append(each)
+            
+            logging.info("%s %s potential tracks to queue", procname, len(potentials))
 
             upcoming_tid = choice(potentials)
-            # result = await trackinfo(upcoming_tid, return_track=True)
-
             trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
             now = datetime.datetime.now(datetime.timezone.utc)
