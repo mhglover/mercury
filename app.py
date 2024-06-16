@@ -486,7 +486,7 @@ async def rate_list(items, uid, rating=1, set_last_played=True):
     return len(trackids)
 
 
-async def rate(uid, tid, value=1, set_last_played=True):
+async def rate(uid, tid, value=1, set_last_played=True, autorate=False):
     """rate a track"""
     procname="rate"
     try:
@@ -515,8 +515,14 @@ async def rate(uid, tid, value=1, set_last_played=True):
                                                )
     # if the rating already existed, update the value and lastplayed time
     if not created:
-        rating.value = value
-        rating.last_played = datetime.datetime.now(datetime.timezone.utc)
+        if rating.value > value:
+            logging.info("%s won't automatically downrate %s from %s to %s for user %s", 
+                         procname, displayname, rating.value, value, uid)
+        else:
+            logging.debug("%s writing a rating: %s %s %s",
+                          procname, uid, displayname, value)
+            rating.value = value
+            rating.last_played = datetime.datetime.now(datetime.timezone.utc)
     
     await rating.save()
 
@@ -678,7 +684,7 @@ async def spotify_watcher(userid):
                 
                 # detect track changes
                 if trackid != last_trackid:
-                    logging.info("%s detected track change at %2.0d",
+                    logging.debug("%s detected track change at %2.0d",
                                  procname, last_position)
                     
                     # remove skipped tracks from queue
@@ -716,11 +722,10 @@ async def spotify_watcher(userid):
                 elif remaining_ms <= 30000:
                     logging.info("%s LAST 30 SECONDS IN TRACK - %s",
                                 procname, trackname)
-
                     # we got to the end of the track, so record a +1 rating
                     value = 1
                     logging.info("%s setting a rating, %s %s %s", userid, trackid, value, procname)
-                    await rate(userid, trackid, value)
+                    await rate(userid, trackid, value, autorate=True)
 
                     # if we're finishing the Currently Playing queued track
                         # remove it from the queue
