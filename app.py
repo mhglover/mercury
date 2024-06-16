@@ -517,7 +517,7 @@ async def rate(uid, tid, value=1, set_last_played=True, autorate=False):
     if not created:
         if rating.rating > value:
             logging.info("%s won't automatically downrate %s from %s to %s for user %s", 
-                         procname, displayname, rating.value, value, uid)
+                         procname, displayname, rating.rating, value, uid)
         else:
             logging.debug("%s writing a rating: %s %s %s",
                           procname, uid, displayname, value)
