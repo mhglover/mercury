@@ -117,7 +117,7 @@ async def index():
     # get play history
     playhistory = await getrecents()
     
-    # get active users
+    # get a list of active user ids
     activeusers = [x.spotifyid for x in await getactiveusers()]
 
     if spotifyid is not None and spotifyid != '':
@@ -689,12 +689,13 @@ async def spotify_watcher(userid):
                     if last_position < 0.33:
                         value = -2
                         logging.info("%s early skip rating, %s %s %s",
-                                     userid, trackid, -value, procname)
-                        await rate(userid, trackid, value)
+                                     userid, last_trackid, value, procname)
+                        await rate(userid, last_trackid, value)
                     elif last_position < 0.7:
                         value = -1
-                        logging.info("%s late skip rating, %s %s %s", userid, trackid, -1, procname)
-                        await rate(userid, trackid, value)
+                        logging.info("%s late skip rating, %s %s %s",
+                                     userid, last_trackid, value, procname)
+                        await rate(userid, last_trackid, value)
                 
                 remaining_ms = currently.item.duration_ms - currently.progress_ms
                 seconds = int(remaining_ms / 1000) % 60
@@ -758,7 +759,7 @@ async def spotify_watcher(userid):
 
                         sleep = (remaining_ms /1000) + 1
 
-                status = f"{trackname} {minutes}:{seconds:0>2} remaining"
+                status = f"{trackname} pos:{position}% {minutes}:{seconds:0>2} remaining"
                 # logging.info("%s playing %s %s:%0.02d remaining",
                     #   procname, trackname, minutes, seconds)
 
@@ -799,6 +800,7 @@ async def queue_manager():
 
         while len(uqueue) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
+            activeusers = [x.spotifyid for x in await getactiveusers()]
 
             recent_tids = await recently_played_tracks()
             logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
@@ -806,6 +808,7 @@ async def queue_manager():
             positive_tracks = ( await Rating.annotate(sum=Sum("rating"))
                                             .group_by('trackid')
                                             .filter(sum__gte=0)
+                                            .filter(spotifyid__in=activeusers)
                                             .exclude(trackid__in=recent_tids)
                                             .values_list("trackid", flat=True))
             logging.info("%s pulled %s non_recent positive_tracks", procname, len(positive_tracks))
