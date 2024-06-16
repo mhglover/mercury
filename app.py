@@ -636,10 +636,17 @@ async def spotify_watcher(userid):
 
             if currently is None:
                 status = "not playing"
+                trackid = None
+                logging.debug("%s not currently playing", procname)
+                sleep = 30
+            elif currently.currently_playing_type == "unknown":
+                status = "not playing"
+                trackid = None
                 logging.debug("%s not currently playing", procname)
                 sleep = 30
             elif currently.is_playing is False:
                 status = "paused"
+                trackid = currently.item.id
                 logging.debug("%s is paused", procname)
                 sleep = 30
             else:
@@ -814,18 +821,19 @@ async def queue_manager():
             upcoming_tid = choice(potentials)
             
             actives = await getactiveusers()
-            first = actives[0]
-            token = pickle.loads(first.token)
+            if len(actives) > 0:
+                first = actives[0]
+                token = pickle.loads(first.token)
              
-            with spotify.token_as(token):
-                spotrec = await spotify.recommendations(track_ids=[upcoming_tid], limit=1)
+                with spotify.token_as(token):
+                    spotrec = await spotify.recommendations(track_ids=[upcoming_tid], limit=1)
 
-            if flip == "even":
-                logging.info("%s queuing a spotify recommendation", procname)
-                upcoming_tid = spotrec.tracks[0].id
-                flip = "odd"
-            else:
-                flip = "even"
+                if flip == "even":
+                    logging.info("%s queuing a spotify recommendation", procname)
+                    upcoming_tid = spotrec.tracks[0].id
+                    flip = "odd"
+                else:
+                    flip = "even"
 
             trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
