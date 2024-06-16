@@ -515,13 +515,13 @@ async def rate(uid, tid, value=1, set_last_played=True, autorate=False):
                                                )
     # if the rating already existed, update the value and lastplayed time
     if not created:
-        if rating.value > value:
+        if rating.rating > value:
             logging.info("%s won't automatically downrate %s from %s to %s for user %s", 
                          procname, displayname, rating.value, value, uid)
         else:
             logging.debug("%s writing a rating: %s %s %s",
                           procname, uid, displayname, value)
-            rating.value = value
+            rating.rating = value
             rating.last_played = datetime.datetime.now(datetime.timezone.utc)
     
     await rating.save()
