@@ -790,7 +790,9 @@ async def queue_manager():
     sleep = 10 # ten seconds between loops
     logging.info('%s starting', procname)
 
-    flip = "even"
+    blockmakeup = ["spotrec", "popular", "popular"]
+    block = blockmakeup
+    
     while True:
         logging.debug("%s checking queue state", procname)
 
@@ -834,8 +836,6 @@ async def queue_manager():
             
             logging.info("%s %s potential tracks to queue", procname, len(potentials))
 
-            upcoming_tid = choice(potentials)
-            
             actives = await getactiveusers()
             if len(actives) > 0:
                 first = actives[0]
@@ -844,12 +844,22 @@ async def queue_manager():
                 with spotify.token_as(token):
                     spotrec = await spotify.recommendations(track_ids=[upcoming_tid], limit=1)
 
-                if flip == "even":
+                if len(block) == 0:
+                    block = blockmakeup
+
+                playtype = block.pop(0)
+                
+                if playtype == "spotrec":
                     logging.info("%s queuing a spotify recommendation", procname)
                     upcoming_tid = spotrec.tracks[0].id
-                    flip = "odd"
+
+                elif playtype == "popular":
+                    logging.info("%s queuing a popular recommendation", procname)
+                    upcoming_tid = choice(potentials)
+                
                 else:
-                    flip = "even"
+                    logging.error("%s nothing to recommend, we shouldn't be here", procname)
+                    
 
             trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
