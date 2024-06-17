@@ -111,7 +111,6 @@ async def index():
     if spotifyid == "":
         spotifyid = "login"
     displayname = ""
-    displaynames = []
     np_name = ''
     np_id = ''
     rsum = ''
@@ -121,7 +120,7 @@ async def index():
     playhistory = await getrecents()
     
     # get a list of active user ids
-    activeusers = [x.displayname for x in await getactiveusers()]
+    displaynames = [x.displayname for x in await getactiveusers()]
     
 
     if spotifyid is not None and spotifyid != '' and spotifyid != 'login':
