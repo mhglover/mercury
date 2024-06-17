@@ -692,7 +692,7 @@ async def spotify_watcher(userid):
                     
                     # remove skipped tracks from queue
                     if last_trackid == nextup_tid:
-                        logging.info("%s removing track from radio queue: %s",
+                        logging.warning("%s removing skipped track from radio queue: %s",
                                     procname, last_trackid)
                         try:
                             await UpcomingQueue.filter(trackid=nextup_tid).delete()
@@ -723,18 +723,22 @@ async def spotify_watcher(userid):
                         sleep = 30
 
                 elif remaining_ms <= 30000:
-                    logging.info("%s LAST 30 SECONDS IN TRACK - %s",
-                                procname, trackname)
+                    logging.info("%s LAST 30 SECONDS IN TRACK %s - next up %s",
+                                procname, trackname, nextup_name)
                     # we got to the end of the track, so record a +1 rating
                     value = 1
                     logging.info("%s setting a rating, %s %s %s", userid, trackid, value, procname)
                     await rate(userid, trackid, value, autorate=True)
+                    
+                    logging.debug("%s recording play history %s",
+                                    procname, trackname)
+                    await record(userid, trackid)
 
+                    nextup_tid, nextup_name = await getnext()
                     # if we're finishing the Currently Playing queued track
                         # remove it from the queue
                         # record it in the play history
                     if trackid == nextup_tid:
-
                         logging.info("%s removing track from radio queue: %s",
                                     procname, nextup_name)
                         try:
@@ -743,12 +747,10 @@ async def spotify_watcher(userid):
                             logging.error("%s exception removing track from upcomingqueue\n%s",
                                           procname, e)
 
-                        logging.debug("%s recording play history %s",
-                                    procname, trackname)
-                        await record(userid, trackid)
+                        
 
                     # get the next queued track
-                    nextup_tid, nextup_name = await getnext()
+                    
                     if nextup_tid in playbackqueueids:
                         # this next track is already in the queue (or context, annoyingly)
                         # just sleep until this track is done
