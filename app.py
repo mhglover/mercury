@@ -107,8 +107,11 @@ def before_request():
 async def index():
     """show the now playing page"""
     procname="web_index"
-    spotifyid = session.get('spotifyid', None)
+    spotifyid = session.get('spotifyid', "login")
+    if spotifyid == "":
+        spotifyid = "login"
     displayname = ""
+    displaynames = []
     np_name = ''
     np_id = ''
     rsum = ''
@@ -118,9 +121,10 @@ async def index():
     playhistory = await getrecents()
     
     # get a list of active user ids
-    activeusers = [x.spotifyid for x in await getactiveusers()]
+    activeusers = [x.displayname for x in await getactiveusers()]
+    
 
-    if spotifyid is not None and spotifyid != '':
+    if spotifyid is not None and spotifyid != '' and spotifyid != 'login':
 
         # get user details
         user, token = await getuser(spotifyid)
@@ -175,7 +179,7 @@ async def index():
                                  np_id=np_id,
                                  rating=rsum,
                                  targetid=targetid,
-                                 activeusers=activeusers,
+                                 activeusers=displaynames,
                                  history=playhistory
                                 )
 
@@ -247,7 +251,6 @@ async def spotify_callback():
 
     with spotify.token_as(token):
         try:
-            # this gives Deirdra a 403
             spotify_user = await spotify.current_user()
         except Exception as e:
             logging.error("%s exception current_user\n%s", procname, e)
@@ -263,6 +266,7 @@ async def spotify_callback():
                                              defaults={
                                                  "token": p,
                                                  "last_active": n,
+                                                 "displayname": spotifyid,
                                                  "status": "active"
                                              })
     if created is False:
