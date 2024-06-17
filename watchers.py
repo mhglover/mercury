@@ -2,6 +2,7 @@
 import logging
 import asyncio
 import datetime
+import functools
 # from tortoise.expressions import Q
 from models import User
 
@@ -40,14 +41,19 @@ async def watchman(taskset, watcher, userid=None):
                         procname, user.spotifyid)
         user_task = asyncio.create_task(watcher(user.spotifyid),
                         name=f"watcher_{user.spotifyid}")
-
+        
         # add this user task to the global tasks set
-        taskset.add(user_task)
-
+        added = taskset.add(user_task)
+        if added is not None:
+            logging.error("%s failed adding task to taskset?")
+            return
         # To prevent keeping references to finished tasks forever,
         # make each task remove its own reference from the set after
         # completion:
-        user_task.add_done_callback(taskset.remove(user_task))
+
+        user_task.add_done_callback(functools.partial(taskset.remove, user_task))
+        logging.info("%s task created, callback added", procname)
+
     else:
         while True:
             procname="night_watchman"
