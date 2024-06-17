@@ -580,6 +580,7 @@ async def spotify_watcher(userid):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
 
     procname = f"watcher_{userid}"
+    
     logging.info("%s watcher starting", procname)
 
     try:
@@ -587,6 +588,23 @@ async def spotify_watcher(userid):
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
 
+    # check for a lock in the database from another watcher
+    recent = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+    if user.watcherid == "killswitch":
+        logging.warning("%s detected killswitch, won't start, unsetting killswitch", procname)
+        user.watcherid == ""
+        await user.save()
+        return
+    elif (user.watcherid != "" 
+          and user.status != "inactive"
+          and user.last_active > recent):
+        logging.error("%s found another recent active watcher, won't start", procname)
+        return
+    else:
+        timestamp = datetime.datetime.now().strftime('%s')
+        user.watcherid = f"watcher_{user.spotifyid}_{timestamp}"
+        user.save()
+    
     user.status = "active"
     user.last_active = datetime.datetime.now(datetime.timezone.utc)
     await user.save()
@@ -622,8 +640,16 @@ async def spotify_watcher(userid):
     # Loop while alive
     logging.debug("%s starting loop", procname)
     while ttl > datetime.datetime.now(datetime.timezone.utc):
-        status = "unset"
+        
         logging.debug("%s loop is awake", procname)
+        user = await User.get(spotifyid=userid)
+        status = user.status
+        
+        if user.watcherid == "killswitch":
+            logging.warning("%s detected killswitch, unsetting killswitch and exiting", procname)
+            user.watcherid = ""
+            await user.save()
+            return
 
         if token.is_expiring:
             try:
@@ -783,6 +809,8 @@ async def spotify_watcher(userid):
             logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         await asyncio.sleep(sleep)
 
+
+    user.watcherid = f""
     user.status = "inactive"
     await user.save()
     logging.info("%s timed out, watcher exiting", procname)

@@ -13,6 +13,7 @@ class User(Model):
     token = fields.BinaryField()
     last_active = fields.DatetimeField(auto_now=True)
     status = fields.TextField()
+    watcherid = fields.TextField()
 
     def __str__(self):
         return str(self.spotifyid)
