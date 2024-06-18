@@ -704,7 +704,7 @@ async def spotify_watcher(userid):
 
                 # pull details from the current item
                 trackid = currently.item.id
-                trackname, track = await trackinfo(trackid)
+                trackname, track = await trackinfo(trackid, return_track=True)
                 position = currently.progress_ms/currently.item.duration_ms
                 
                 # pull details for the next track in the queue
