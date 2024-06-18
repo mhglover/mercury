@@ -2,7 +2,6 @@
 import logging
 import asyncio
 import datetime
-import functools
 # from tortoise.expressions import Q
 from models import User
 

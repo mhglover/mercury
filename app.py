@@ -2,11 +2,9 @@
 """mercury radio"""
 import datetime
 import logging
-import functools
 import os
 import asyncio
 import pickle
-from random import choice
 import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
@@ -14,6 +12,8 @@ from tortoise.contrib.quart import register_tortoise
 from tortoise.functions import Sum
 from models import User, Track, Rating, PlayHistory, UpcomingQueue
 from watchers import user_reaper, watchman
+from blocktypes import popular_tracks, spotrec_tracks, recently_played_tracks
+from users import getactiveusers, getuser
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -72,10 +72,15 @@ register_tortoise(
 async def before_serving():
     """pre"""
     procname="before_serving"
-    global taskset
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
     logging.info("before_serving running tasks: %s", run_tasks)
+    
+    if "queue_manager" in run_tasks:
+        logging.info("before_serving creating a queue manager task")
+        qm = asyncio.create_task(queue_manager(),name="queue_manager")
+        taskset.add(qm)
+        qm.add_done_callback(taskset.remove(qm))
 
     if "spotify_watcher" in run_tasks:
         
@@ -97,11 +102,7 @@ async def before_serving():
         for user in active_users:
             await watchman(taskset, spotify_watcher, userid=user.spotifyid)
 
-    if "queue_manager" in run_tasks:
-        logging.info("before_serving creating a queue manager task")
-        qm = asyncio.create_task(queue_manager(),name="queue_manager")
-        taskset.add(qm)
-        qm.add_done_callback(taskset.remove(qm))
+    
 
 
 @app.before_request
@@ -133,7 +134,7 @@ async def index():
     if spotifyid is not None and spotifyid != '' and spotifyid != 'login':
 
         # get user details
-        user, token = await getuser(spotifyid)
+        user, token = await getuser(cred, spotifyid)
         displayname = user.displayname
         if displayname is None:
             displayname = ""
@@ -324,7 +325,7 @@ async def pullratings(spotifyid=None):
     else:
         return redirect("/auth")
 
-    user, token = await getuser(spotifyid)
+    user, token = await getuser(cred, spotifyid)
     logging.debug("user=%s", user)
 
     with spotify.token_as(token):
@@ -368,7 +369,7 @@ async def user_update():
     if request.method == "POST":
         logging.info("%s fetching user %s", 
                      procname, session['spotifyid'])
-        user, _ = await getuser(session['spotifyid'])
+        user, _ = await getuser(cred, session['spotifyid'])
         
         form = await request.form
         displayname = form['displayname']
@@ -392,35 +393,13 @@ async def follow(targetid=None):
             logging.warning("%s user %s tried to follow itself",
                             procname, targetid)
         else:
-            user, _ = await getuser(session['spotifyid'])
+            user, _ = await getuser(cred, session['spotifyid'])
             user.status = "following:" + targetid
             
             logging.info("%s set user %s status: %s", 
                          procname, session['spotifyid'], user.status)
             await user.save()
     return redirect("/")
-
-
-async def getuser(userid):
-    """fetch user details
-    
-    returns: user object, spotify token
-    """
-    try:
-        user = await User.get(spotifyid=userid)
-    except Exception as e:
-        logging.error("getuser exception fetching user\n%s", e)
-
-    token = pickle.loads(user.token)
-    if token.is_expiring:
-        try:
-            token = cred.refresh(token)
-        except Exception as e:
-            logging.error("getuser exception refreshing token\n%s", e)
-        user.token = pickle.dumps(token)
-        await user.save()
-
-    return user, token
 
 
 async def getrecents():
@@ -507,32 +486,27 @@ async def rate(uid, tid, value=1, set_last_played=True, autorate=False):
 
     logging.info("%s writing a rating: %s %s %s", procname, uid, displayname, value)
     if set_last_played:
-        rating, created = await Rating.get_or_create(userid=uid,
-                                               trackid=tid, 
-                                               defaults={
-                                                   "rating": value,
-                                                   "trackname": track.trackname
-                                                   }
-                                               )
+        lastplayed = datetime.datetime.now()
     else:
-        rating, created = await Rating.get_or_create(userid=uid,
-                                               trackid=tid, 
-                                               defaults={
+        lastplayed = "1970-01-01"
+    rating, created = await Rating.get_or_create(userid=uid,
+                                                trackid=tid,
+                                                defaults={
                                                    "rating": value,
                                                    "trackname": track.trackname,
-                                                   "last_played": "1970-01-01"
+                                                   "last_played": lastplayed
                                                    }
                                                )
+
     # if the rating already existed, update the value and lastplayed time
     if not created:
-        if rating.rating > value:
-            logging.info("%s won't automatically downrate %s from %s to %s for user %s", 
+        if rating.rating > value and autorate is True:
+            logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
                          procname, displayname, rating.rating, value, uid)
         else:
             logging.debug("%s writing a rating: %s %s %s",
                           procname, uid, displayname, value)
             rating.rating = value
-            rating.last_played = datetime.datetime.now(datetime.timezone.utc)
     
     await rating.save()
 
@@ -558,29 +532,13 @@ async def getnext():
     dbqueue = await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
     logging.debug("queue pulled, %s items", len(dbqueue))
     if len(dbqueue) < 1:
-        logging.debug("queue is empty, returning None")
+        logging.warning("queue is empty, returning None")
         return None, None
 
     nextup_tid = dbqueue[0]
     ntrack = await Track.get(trackid=nextup_tid)
     nextup_name = ntrack.trackname
     return nextup_tid, nextup_name
-
-
-async def recently_played_tracks():
-    """fetch tracks that have been rated in the last 5 days"""
-    interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=5)
-    tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
-    return tids
-
-
-async def getactiveusers():
-    """fetch details for the active users
-    
-    returns: list of Users
-    """
-    users = await User.exclude(status="inactive")
-    return users
 
 
 async def spotify_watcher(userid):
@@ -591,7 +549,7 @@ async def spotify_watcher(userid):
     logging.info("%s watcher starting", procname)
 
     try:
-        user, token = await getuser(userid)
+        user, token = await getuser(cred, userid)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.error("%s getuser exception %s",procname, e)
 
@@ -602,7 +560,7 @@ async def spotify_watcher(userid):
     
     if user.watcherid == "killswitch":
         logging.warning("%s detected killswitch, won't start, unsetting killswitch", procname)
-        user.watcherid == ""
+        user.watcherid = ""
         await user.save()
         return "killswitch"
     elif (user.watcherid != ""
@@ -631,15 +589,15 @@ async def spotify_watcher(userid):
         if currently is None:
             logging.debug("%s not currently playing", procname)
             sleep = 30
-            track = None
+            # track = None
         elif currently.is_playing is False:
             logging.debug("%s paused", procname)
             sleep = 30
-            track = None
+            # track = None
         else:
             
             trackid = currently.item.id
-            trackname, track = await trackinfo(trackid, return_track=True)
+            trackname, _ = await trackinfo(trackid, return_track=True)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             position = currently.progress_ms/currently.item.duration_ms
             
@@ -712,17 +670,18 @@ async def spotify_watcher(userid):
                 # note details from the last loop for comparison
                 last_trackid = trackid
                 last_position = position
-                last_track = track
-                last_trackname = trackname
+                # last_track = track
+                # last_trackname = trackname
 
                 # pull details from the current item
                 trackid = currently.item.id
-                trackname, track = await trackinfo(trackid, return_track=True)
+                trackname, _ = await trackinfo(trackid, return_track=True)
                 position = currently.progress_ms/currently.item.duration_ms
                 
                 # pull details for the next track in the queue
                 nextup_tid, nextup_name = await getnext()
-                _, nextup_track = await trackinfo(nextup_tid, return_track=True)
+                if nextup_tid is not None:
+                    _, nextup_track = await trackinfo(nextup_tid, return_track=True)
                 
                 if trackid not in localhistory:
                     localhistory.append(trackid)
@@ -792,7 +751,7 @@ async def spotify_watcher(userid):
                         
                         # get the next queued track
                         nextup_tid, nextup_name = await getnext()
-                        nextup_name, nextup_track = await trackinfo(nextup_tid)
+                        nextup_name, nextup_track = await trackinfo(nextup_tid, return_track=True)
 
                     if nextup_tid in playbackqueueids:
                         # this next track is already in the queue (or context, annoyingly)
@@ -842,8 +801,8 @@ async def queue_manager():
     sleep = 10 # ten seconds between loops
     logging.info('%s starting', procname)
 
-    blockmakeup = ["spotrec", "popular", "popular"]
-    block = blockmakeup
+    blockmakeup = ["pop","pop", "spotrec"]
+    block = []
     
     while True:
         logging.debug("%s checking queue state", procname)
@@ -889,29 +848,31 @@ async def queue_manager():
             logging.info("%s %s potential tracks to queue", procname, len(potentials))
 
             actives = await getactiveusers()
-            if len(actives) > 0:
-                first = actives[0]
-                token = pickle.loads(first.token)
-             
-                with spotify.token_as(token):
-                    spotrec = await spotify.recommendations(track_ids=[potentials[0]], limit=1)
+            
 
-                if len(block) == 0:
-                    block = blockmakeup
+            if len(block) == 0:
+                block = blockmakeup
 
-                playtype = block.pop(0)
+            playtype = block.pop(0)
+            
+            if playtype == "spotrec":
+                if len(actives) > 0:
+                    first = actives[0]
+                    token = pickle.loads(first.token)
                 
-                if playtype == "spotrec":
                     logging.info("%s queuing a spotify recommendation", procname)
-                    upcoming_tid = spotrec.tracks[0].id
-
-                elif playtype == "popular":
-                    logging.info("%s queuing a popular recommendation", procname)
-                    upcoming_tid = choice(potentials)
-                
+                    seeds = await popular_tracks(5)
+                    upcoming_tid = await spotrec_tracks(spotify, token, seeds)
                 else:
-                    logging.error("%s nothing to recommend, we shouldn't be here", procname)
-                    
+                    logging.info("%s no active users, can't get a spotify recommendation", procname)
+
+            elif playtype == "pop":
+                logging.info("%s queuing a popular recommendation", procname)
+                upcoming_tid = await popular_tracks()
+            
+            else:
+                logging.error("%s nothing to recommend, we shouldn't be here", procname)
+                
 
             trackname, _ = await trackinfo(upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
@@ -935,7 +896,6 @@ async def queue_manager():
 
 async def main():
     """kick it"""
-    global taskset
     
     logging.info("main connecting to db")
 
