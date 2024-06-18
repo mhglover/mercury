@@ -96,11 +96,11 @@ async def queue_manager(spotify):
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
                 
 
-            trackname, track = await trackinfo(spotify, upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
+            trackname, _ = await trackinfo(spotify, upcoming_tid, return_track=True)
             now = datetime.datetime.now(datetime.timezone.utc)
-            endzone = track.duration_ms - 30000
-            expires_at = ( now - datetime.timedelta(milliseconds=endzone))
+            # endzone = track.duration_ms - 30000
+            # expires_at = ( now - datetime.timedelta(milliseconds=endzone))
             for r in iter(ratings):
                 logging.debug("%s RATING HISTORY - %s, %s, %s, %s",
                              procname, 
@@ -111,7 +111,7 @@ async def queue_manager(spotify):
             logging.info("%s adding to radio queue: %s", 
                          procname, trackname)
             
-            u = await UpcomingQueue.create(trackid=upcoming_tid, expires_at=expires_at)
+            u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
             uqueue.append(upcoming_tid)
 
@@ -176,18 +176,11 @@ async def getrecents(spotify):
 
 
 async def getnext():
-    """get the next trackid and trackname from the queue"""
+    """get the next track's details from the queue and database"""
     logging.debug("pulling queue from db")
-    dbqueue = await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
-    logging.debug("queue pulled, %s items", len(dbqueue))
-    if len(dbqueue) < 1:
-        logging.warning("queue is empty, returning None")
-        return None, None
-
-    nextup_tid = dbqueue[0]
-    ntrack = await Track.get(trackid=nextup_tid)
-    nextup_name = ntrack.trackname
-    return nextup_tid, nextup_name
+    n = await UpcomingQueue.filter().order_by("id").limit(1)
+    n = n[0]
+    return n.trackid, n.expires_at
 
 
 async def expire_queue():
