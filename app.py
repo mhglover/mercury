@@ -624,13 +624,15 @@ async def spotify_watcher(userid):
         if currently is None:
             logging.debug("%s not currently playing", procname)
             sleep = 30
+            track = None
         elif currently.is_playing is False:
             logging.debug("%s paused", procname)
             sleep = 30
+            track = None
         else:
             
             trackid = currently.item.id
-            trackname = await trackinfo(trackid)
+            trackname, track = await trackinfo(trackid, return_track=True)
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             position = currently.progress_ms/currently.item.duration_ms
             
