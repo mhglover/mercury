@@ -4,7 +4,7 @@ import datetime
 import asyncio
 import pickle
 from tortoise.functions import Sum
-from models import UpcomingQueue, Rating, Track
+from models import UpcomingQueue, Rating, Track, PlayHistory
 from users import getactiveusers
 from blocktypes import recently_played_tracks, popular_tracks, spotrec_tracks
 
@@ -151,3 +151,33 @@ async def trackinfo(spotify, trackid, return_track=False, return_time=False):
         return name, track
     else:
         return name
+
+
+async def getrecents(spotify):
+    """pull recently played tracks from history table"""
+    try:
+        ph_query = await PlayHistory.all().order_by('-id').limit(10)
+    except Exception as e:
+        logging.error("exception ph_query %s", e)
+
+    try:
+        playhistory = [await trackinfo(spotify, x.trackid) for x in ph_query]
+    except Exception as e:
+        logging.error("exception playhistory %s", e)
+
+    return playhistory
+
+
+async def getnext():
+    """get the next trackid and trackname from the queue"""
+    logging.debug("pulling queue from db")
+    dbqueue = await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
+    logging.debug("queue pulled, %s items", len(dbqueue))
+    if len(dbqueue) < 1:
+        logging.warning("queue is empty, returning None")
+        return None, None
+
+    nextup_tid = dbqueue[0]
+    ntrack = await Track.get(trackid=nextup_tid)
+    nextup_name = ntrack.trackname
+    return nextup_tid, nextup_name

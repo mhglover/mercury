@@ -9,10 +9,11 @@ import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, Track, Rating, PlayHistory, UpcomingQueue
+from models import User, Track, UpcomingQueue
 from watchers import user_reaper, watchman
 from users import getactiveusers, getuser
-from queue_manager import queue_manager, trackinfo
+from queue_manager import queue_manager, trackinfo, getrecents, getnext
+from raters import rate, rate_list, record
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -101,8 +102,6 @@ async def before_serving():
         for user in active_users:
             await watchman(taskset, spotify_watcher, userid=user.spotifyid)
 
-    
-
 
 @app.before_request
 def before_request():
@@ -124,7 +123,7 @@ async def index():
     targetid = ''
     
     # get play history
-    playhistory = await getrecents()
+    playhistory = await getrecents(spotify)
     
     # get a list of active user ids
     displaynames = [x.displayname for x in await getactiveusers()]
@@ -304,7 +303,7 @@ async def dashboard():
 
     tracknames = await Track.filter(trackid__in=dbqueue).values_list('trackname', flat=True)
     activeusers = await getactiveusers()
-    history = await getrecents()
+    history = await getrecents(spotify)
     tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     return await render_template('dashboard.html',
                                  auths=auths,
@@ -400,108 +399,6 @@ async def follow(targetid=None):
             await user.save()
     return redirect("/")
 
-
-async def getrecents():
-    """pull recently played tracks from history table"""
-    try:
-        ph_query = await PlayHistory.all().order_by('-id').limit(10)
-    except Exception as e:
-        logging.error("exception ph_query %s", e)
-
-    try:
-        playhistory = [await trackinfo(spotify, x.trackid) for x in ph_query]
-    except Exception as e:
-        logging.error("exception playhistory %s", e)
-
-    return playhistory
-
-
-
-
-
-async def rate_list(items, uid, rating=1, set_last_played=True):
-    """rate a bunch of stuff at once"""
-    if isinstance(items, list):
-        if isinstance(items[0], str):
-            trackids = items
-        else:
-            trackids = [x.id for x in items]
-    else:
-        trackids = [x.track.id for x in items]
-    logging.info("rating %s tracks", len(trackids))
-
-    for tid in trackids:
-        await rate(uid, tid, rating, set_last_played=set_last_played)
-
-    return len(trackids)
-
-
-async def rate(uid, tid, value=1, set_last_played=True, autorate=False):
-    """rate a track"""
-    procname="rate"
-    try:
-        displayname, track = await trackinfo(spotify, tid, return_track=True)
-    except Exception as e: # pylint: disable=broad-exception-caught
-        logging.info("rate exception adding a track to database: [%s]\n%s",
-                     tid, e)
-
-    logging.info("%s writing a rating: %s %s %s", procname, uid, displayname, value)
-    if set_last_played:
-        lastplayed = datetime.datetime.now()
-    else:
-        lastplayed = "1970-01-01"
-    rating, created = await Rating.get_or_create(userid=uid,
-                                                trackid=tid,
-                                                defaults={
-                                                   "rating": value,
-                                                   "trackname": track.trackname,
-                                                   "last_played": lastplayed
-                                                   }
-                                               )
-
-    # if the rating already existed, update the value and lastplayed time
-    if not created:
-        if rating.rating > value and autorate is True:
-            logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
-                         procname, displayname, rating.rating, value, uid)
-        else:
-            logging.debug("%s writing a rating: %s %s %s",
-                          procname, uid, displayname, value)
-            rating.rating = value
-    
-    await rating.save()
-
-
-async def record(uid, tid):
-    """write a record to the play history table"""
-    procname = "record"
-    trackname = await trackinfo(spotify, tid)
-    logging.info("%s play history %s %s", procname, uid, trackname)
-    try:
-        insertedkey = await PlayHistory.create(trackid=tid)
-        await insertedkey.save()
-    except Exception as e:
-        logging.error("record exception creating playhistory: %s\n%s",
-                      uid, e)
-    
-    logging.debug("record inserted play history record %s", insertedkey)
-
-
-async def getnext():
-    """get the next trackid and trackname from the queue"""
-    logging.debug("pulling queue from db")
-    dbqueue = await UpcomingQueue.all().order_by("id").values_list('trackid', flat=True)
-    logging.debug("queue pulled, %s items", len(dbqueue))
-    if len(dbqueue) < 1:
-        logging.warning("queue is empty, returning None")
-        return None, None
-
-    nextup_tid = dbqueue[0]
-    ntrack = await Track.get(trackid=nextup_tid)
-    nextup_name = ntrack.trackname
-    return nextup_tid, nextup_name
-
-
 async def spotify_watcher(userid):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
 
@@ -524,7 +421,7 @@ async def spotify_watcher(userid):
         user.watcherid = ""
         await user.save()
         return "killswitch"
-    elif (user.watcherid != ""
+    elif (user.watcherid != watcherid
           and user.status != "inactive"
           and user.last_active > recent):
         logging.error("%s found another recent active watcher, won't start", procname)
@@ -697,7 +594,7 @@ async def spotify_watcher(userid):
                     # record in the playhistory table
                     logging.debug("%s recording play history %s",
                                     procname, trackname)
-                    await record(userid, trackid)
+                    await record(spotify, userid, trackid)
 
                     # if we're finishing the Currently Playing queued track
                     # we must be first to the endzone, remove track from dbqueue
@@ -758,13 +655,12 @@ async def spotify_watcher(userid):
     return procname
 
 
-
-
 async def main():
     """kick it"""
-    
-    logging.info("main connecting to db")
-
+    secret=os.environ['SPOTIFY_CLIENT_SECRET']
+    logging.debug("SPOTIFY_CLIENT_ID=%s", os.environ['SPOTIFY_CLIENT_ID'])
+    logging.debug("SPOTIFY_CLIENT_SECRET=%s...%s", secret[-2:], secret[:2])
+    logging.debug("SPOTIFY_REDIRECT_URI=%s", os.environ['SPOTIFY_REDIRECT_URI'])
     logging.info("main starting web_ui on port: %s", os.environ['PORT'])
     web_ui = app.run_task('0.0.0.0', os.environ['PORT'])
     taskset.add(web_ui)
@@ -782,9 +678,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    secret=os.environ['SPOTIFY_CLIENT_SECRET']
-    logging.info("SPOTIFY_CLIENT_ID=%s", os.environ['SPOTIFY_CLIENT_ID'])
-    logging.info("SPOTIFY_CLIENT_SECRET=%s...%s", secret[-2:], secret[:2])
-    logging.info("SPOTIFY_REDIRECT_URI=%s", os.environ['SPOTIFY_REDIRECT_URI'])
-
     asyncio.run(main())
