@@ -69,7 +69,7 @@ async def queue_manager(spotify):
 
             logging.info("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = blockmakeup
+                block = blockmakeup.copy()
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)
@@ -94,11 +94,13 @@ async def queue_manager(spotify):
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
                 
 
-            trackname, _ = await trackinfo(spotify, upcoming_tid, return_track=True)
+            trackname, track = await trackinfo(spotify, upcoming_tid, return_track=True)
             ratings = await Rating.filter(trackid=upcoming_tid)
             now = datetime.datetime.now(datetime.timezone.utc)
+            endzone = track.duration_ms - 30000
+            expires_at = ( now - datetime.timedelta(milliseconds=endzone))
             for r in iter(ratings):
-                logging.info("%s RATING HISTORY - %s, %s, %s, %s",
+                logging.debug("%s RATING HISTORY - %s, %s, %s, %s",
                              procname, 
                              r.trackname, 
                              r.userid, 
@@ -106,7 +108,8 @@ async def queue_manager(spotify):
                              now - r.last_played)
             logging.info("%s adding to radio queue: %s", 
                          procname, trackname)
-            u = await UpcomingQueue.create(trackid=upcoming_tid)
+            
+            u = await UpcomingQueue.create(trackid=upcoming_tid, expires_at=expires_at)
             await u.save()
             uqueue.append(upcoming_tid)
 

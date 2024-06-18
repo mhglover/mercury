@@ -55,6 +55,7 @@ class UpcomingQueue(Model):
     """track the upcoming songs"""
     trackid = fields.TextField()
     queued_at = fields.DatetimeField(auto_now=True)
+    expires_at = fields.DatetimeField()
 
     def __str__(self):
         return str(self.trackid)
