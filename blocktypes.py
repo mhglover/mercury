@@ -69,6 +69,6 @@ async def spotrec_tracks(spotify, token, trackids, count=1):
         tids = []
     
     if len(tids) == 1:
-        tids = tids[0]
+        tids = tids[0].id
     
     return tids
