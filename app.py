@@ -79,18 +79,23 @@ async def before_serving():
 
     if "spotify_watcher" in run_tasks:
         
+        if os.getenv("OVERTAKE") is True or 1:
+            logging.warning("%s overtaking any existing watcher tasks", 
+                        procname)    
+            await User.select_for_update().exclude(watcherid='').update(watcherid='')
+
         logging.info("%s launching a user_reaper task", procname)
         reaper_task = asyncio.create_task(user_reaper(), name="user_reaper")
         taskset.add(reaper_task)
-            
-        reaper_task.add_done_callback(functools.partial(taskset.remove, reaper_task))
+        reaper_task.add_done_callback(taskset.remove(reaper_task))
         
-        # give the reaper a couple seconds to clean out inactive users        await asyncio.sleep(2)
+        # give the reaper a couple seconds to clean out inactive users
+        await asyncio.sleep(2)
         
         logging.info("%s pulling active users for spotify watchers", procname)
         active_users = await getactiveusers()
         for user in active_users:
-            await watchman(taskset, spotify_watcher, userid=user.spotifyid, overtake=True)
+            await watchman(taskset, spotify_watcher, userid=user.spotifyid)
 
     if "queue_manager" in run_tasks:
         logging.info("before_serving creating a queue manager task")
@@ -592,24 +597,26 @@ async def spotify_watcher(userid):
 
     # check for a lock in the database from another watcher
     recent = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+    timestamp = datetime.datetime.now().strftime('%s')
+    watcherid = f"watcher_{user.spotifyid}_{timestamp}"
+    
     if user.watcherid == "killswitch":
         logging.warning("%s detected killswitch, won't start, unsetting killswitch", procname)
         user.watcherid == ""
         await user.save()
         return "killswitch"
-    elif (user.watcherid != "" 
+    elif (user.watcherid != ""
           and user.status != "inactive"
           and user.last_active > recent):
         logging.error("%s found another recent active watcher, won't start", procname)
         return "another active watcher"
-    else:
-        timestamp = datetime.datetime.now().strftime('%s')
-        user.watcherid = f"watcher_{user.spotifyid}_{timestamp}"
+    else:    
+        user.watcherid = watcherid
         await user.save()
     
-    user.status = "active"
-    user.last_active = datetime.datetime.now(datetime.timezone.utc)
-    await user.save()
+    # user.status = "active"
+    # user.last_active = datetime.datetime.now(datetime.timezone.utc)
+    # await user.save()
     
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
     localhistory = []
@@ -654,6 +661,11 @@ async def spotify_watcher(userid):
             user.watcherid = ""
             await user.save()
             return "killswitch"
+        elif (user.watcherid != watcherid 
+          and user.status != "inactive"
+          and user.last_active > recent):
+            logging.error("%s found another recent active watcher, exiting", procname)
+            return "another active watcher"
  
         if token.is_expiring:
             try:
@@ -694,6 +706,7 @@ async def spotify_watcher(userid):
                 logging.debug("%s updating ttl: %s", procname, ttl)
                 ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
                 user.last_active = datetime.datetime.now(datetime.timezone.utc)
+                user.status = "active"
                 await user.save()
                 
                 # note details from the last loop for comparison
