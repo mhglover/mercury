@@ -3,10 +3,9 @@ import logging
 import datetime
 import asyncio
 import pickle
-from tortoise.functions import Sum
-from models import UpcomingQueue, Rating, Track, PlayHistory
+from models import UpcomingQueue, Track, PlayHistory
 from users import getactiveusers
-from blocktypes import recently_played_tracks, popular_tracks, spotrec_tracks
+from blocktypes import popular_tracks, spotrec_tracks
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -15,10 +14,8 @@ from blocktypes import recently_played_tracks, popular_tracks, spotrec_tracks
 async def queue_manager(spotify):
     """manage the queue"""
     procname = "queue_manager"
-    sleep = 10 # ten seconds between loops
     logging.info('%s starting', procname)
 
-    blockmakeup = ["pop","pop", "spotrec"]
     block = []
     
     while True:
@@ -46,47 +43,22 @@ async def queue_manager(spotify):
                 logging.info("%s no active listeners, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)
                 continue
-
-            recent_tids = await recently_played_tracks()
-            logging.info("%s pulled %s recently played tracks", procname, len(recent_tids))
-
-            positive_tracks = ( await Rating.annotate(sum=Sum("rating"))
-                                            .group_by('trackid')
-                                            .filter(sum__gte=0)
-                                            .filter(userid__in=activeusers)
-                                            .exclude(trackid__in=recent_tids)
-                                            .values_list("trackid", flat=True))
-            logging.info("%s pulled %s non_recent positive_tracks", procname, len(positive_tracks))
-
-            potentials = positive_tracks
-            if len(potentials) == 0:
-                logging.info("%s no potential tracks to queue, sleeping for 60 seconds", procname)
-                await asyncio.sleep(60)
-                continue
             
-            logging.info("%s %s potential tracks to queue", procname, len(potentials))
-
-            actives = await getactiveusers()
-            
-
-            logging.info("BLOCK STATE: %s", block)
+            logging.debug("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = blockmakeup.copy()
+                block = ["pop", "pop", "spotrec"]
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)
             
+            # pick the next track to add to the queue
             if playtype == "spotrec":
-                if len(actives) > 0:
-                    first = actives[0]
-                    token = pickle.loads(first.token)
+                first = activeusers[0]
+                token = pickle.loads(first.token)
                 
-                    logging.info("%s queuing a spotify recommendation", procname)
-                    seeds = await popular_tracks(5)
-                    upcoming_tid = await spotrec_tracks(spotify, token, seeds)
-
-                else:
-                    logging.info("%s no active users, can't get a spotify recommendation", procname)
+                logging.info("%s queuing a spotify recommendation", procname)
+                seeds = await popular_tracks(5)
+                upcoming_tid = await spotrec_tracks(spotify, token, seeds)
 
             elif playtype == "pop":
                 logging.info("%s queuing a popular recommendation", procname)
@@ -94,29 +66,31 @@ async def queue_manager(spotify):
             
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
-                
 
-            ratings = await Rating.filter(trackid=upcoming_tid)
             trackname, _ = await trackinfo(spotify, upcoming_tid, return_track=True)
-            now = datetime.datetime.now(datetime.timezone.utc)
-            # endzone = track.duration_ms - 30000
-            # expires_at = ( now - datetime.timedelta(milliseconds=endzone))
-            for r in iter(ratings):
-                logging.debug("%s RATING HISTORY - %s, %s, %s, %s",
-                             procname, 
-                             r.trackname, 
-                             r.userid, 
-                             r.rating, 
-                             now - r.last_played)
-            logging.info("%s adding to radio queue: %s", 
-                         procname, trackname)
+            logging.info("%s adding to radio queue: %s", procname, trackname)
+
+            # this is an attempt to show why this track was selected, but it should
+            # be improved
+            # ratings = await Rating.filter(trackid=upcoming_tid)
+            # now = datetime.datetime.now(datetime.timezone.utc)
+            # # endzone = track.duration_ms - 30000
+            # # expires_at = ( now - datetime.timedelta(milliseconds=endzone))
+            # for r in iter(ratings):
+            #     logging.debug("%s RATING HISTORY - %s, %s, %s, %s",
+            #                  procname, 
+            #                  r.trackname, 
+            #                  r.userid, 
+            #                  r.rating, 
+            #                  now - r.last_played)
+            
             
             u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
             uqueue.append(upcoming_tid)
 
-        logging.debug("%s sleeping for %s", procname, sleep)
-        await asyncio.sleep(sleep)
+        logging.debug("%s sleeping for %s", procname, 10)
+        await asyncio.sleep(10)
 
 
 async def trackinfo(spotify, trackid, return_track=False, return_time=False):
