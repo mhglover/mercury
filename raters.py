@@ -29,7 +29,7 @@ async def rate(spotify, uid, tid, value=1, set_last_played=True, autorate=False)
     """rate a track"""
     procname="rate"
     try:
-        trackname, track = await trackinfo(spotify, tid, return_track=True)
+        trackname, _ = await trackinfo(spotify, tid, return_track=True)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.info("rate exception adding a track to database: [%s]\n%s",
                      tid, e)
@@ -58,7 +58,7 @@ async def rate(spotify, uid, tid, value=1, set_last_played=True, autorate=False)
                          procname, trackname, rating.rating, value, uid)
         else:
             logging.debug("%s writing a rating: %s %s %s",
-                          procname, uid, displayname, value)
+                          procname, uid, trackname, value)
             rating.rating = value
             await rating.save()
 
