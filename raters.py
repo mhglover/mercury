@@ -29,36 +29,38 @@ async def rate(spotify, uid, tid, value=1, set_last_played=True, autorate=False)
     """rate a track"""
     procname="rate"
     try:
-        displayname, track = await trackinfo(spotify, tid, return_track=True)
+        trackname, track = await trackinfo(spotify, tid, return_track=True)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.info("rate exception adding a track to database: [%s]\n%s",
                      tid, e)
 
-    logging.info("%s writing a rating: %s %s %s", procname, uid, displayname, value)
-    if set_last_played:
-        lastplayed = datetime.datetime.now()
-    else:
-        lastplayed = "1970-01-01"
+    logging.info("%s writing a rating: %s %s %s", procname, uid, trackname, value)
+    
+    now = datetime.datetime.now() if set_last_played else "1970-01-01"
+
     rating, created = await Rating.get_or_create(userid=uid,
                                                 trackid=tid,
                                                 defaults={
                                                    "rating": value,
-                                                   "trackname": track.trackname,
-                                                   "last_played": lastplayed
+                                                   "trackname": trackname,
+                                                   "last_played": now
                                                    }
                                                )
 
     # if the rating already existed, update the value and lastplayed time
     if not created:
+        # update the last_played time
+        rating.last_played = now
+        await rating.save()
+        
         if rating.rating > value and autorate is True:
             logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
-                         procname, displayname, rating.rating, value, uid)
+                         procname, trackname, rating.rating, value, uid)
         else:
             logging.debug("%s writing a rating: %s %s %s",
                           procname, uid, displayname, value)
             rating.rating = value
-    
-    await rating.save()
+            await rating.save()
 
 
 async def record(spotify, uid, tid):

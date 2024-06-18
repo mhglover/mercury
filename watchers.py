@@ -7,6 +7,7 @@ from models import User, UpcomingQueue
 from users import getuser
 from queue_manager import trackinfo, getnext
 from raters import rate, record
+from spot_funcs import is_saved
 
 # pylint: disable=trailing-whitespace
 # pylint: disable=broad-exception-caught
@@ -258,7 +259,7 @@ async def spotify_watcher(cred, spotify, userid):
                         value = -2
                         logging.info("%s early skip rating, %s %s %s",
                                     userid, last_trackid, value, procname)
-                        await rate(userid, last_trackid, value)
+                        await rate(spotify, userid, last_trackid, value)
                     elif last_position < 0.7:
                         value = -1
                         logging.info("%s late skip rating, %s %s %s",
@@ -275,8 +276,10 @@ async def spotify_watcher(cred, spotify, userid):
                 logging.info("%s endzone %s - next up %s",
                             procname, trackname, nextup_name)
                 
-                # we got to the end of the track, so autorate +1 
-                value = 1
+                # we got to the end of the track, so autorate
+                # base on whether or not this is a saved track
+                value = 4 if await is_saved(spotify, token, trackid) else 1
+
                 logging.info("%s setting a rating, %s %s %s", userid, trackid, value, procname)
                 await rate(spotify, userid, trackid, value, autorate=True)
                 

@@ -13,7 +13,7 @@ from users import getactiveusers
 # all functions should return either a single track id, a list of track ids,
 # or an empty list
 
-async def recently_played_tracks(days=5):
+async def recently_rated_tracks(days=5):
     """fetch tracks that have been rated in the last 5 days"""
     interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
     tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
@@ -25,7 +25,7 @@ async def popular_tracks(count=1, rating=0):
     
     """
     procname = "popular_tracks"
-    recent_tids = await recently_played_tracks()
+    recent_tids = await recently_rated_tracks()
     activeusers = await getactiveusers()
 
     logging.info("%s pulled %s recently played tracks",
@@ -41,7 +41,7 @@ async def popular_tracks(count=1, rating=0):
                         .limit(count)
                         .values_list("trackid", flat=True))
     
-    logging.info("%s pulled %s results", procname, len(tids))
+    logging.debug("%s pulled %s results", procname, len(tids))
 
     if len(tids) == 0:
         logging.warning("%s no potential tracks to queue", procname)
