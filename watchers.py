@@ -31,12 +31,18 @@ async def user_reaper():
 
 
 
-async def watchman(taskset, watcher, userid=None):
+async def watchman(taskset, watcher, userid=None, overtake=False):
     """check the database regularly and start a watcher for active users"""
     procname="watchman"
     sleep = 10
     if userid is not None:
         user = await User.get(spotifyid=userid)
+        
+        if overtake is True:            
+            logging.warning("%s overtaking any existing watcher tasks: %s", 
+                        procname, user.spotifyid)    
+            user.watcherid = ""
+            await user.save()
         logging.info("%s creating a spotify watcher task for: %s", 
                         procname, user.spotifyid)
         user_task = asyncio.create_task(watcher(user.spotifyid),

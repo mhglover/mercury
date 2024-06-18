@@ -90,7 +90,7 @@ async def before_serving():
         logging.info("%s pulling active users for spotify watchers", procname)
         active_users = await getactiveusers()
         for user in active_users:
-            await watchman(taskset, spotify_watcher, userid=user.spotifyid)
+            await watchman(taskset, spotify_watcher, userid=user.spotifyid, overtake=True)
 
     if "queue_manager" in run_tasks:
         logging.info("before_serving creating a queue manager task")
@@ -709,6 +709,7 @@ async def spotify_watcher(userid):
                 
                 # pull details for the next track in the queue
                 nextup_tid, nextup_name = await getnext()
+                _, nextup_track = await trackinfo(nextup_tid, return_track=True)
                 
                 if trackid not in localhistory:
                     localhistory.append(trackid)
@@ -880,7 +881,7 @@ async def queue_manager():
                 token = pickle.loads(first.token)
              
                 with spotify.token_as(token):
-                    spotrec = await spotify.recommendations(track_ids=[upcoming_tid], limit=1)
+                    spotrec = await spotify.recommendations(track_ids=[potentials[0]], limit=1)
 
                 if len(block) == 0:
                     block = blockmakeup
