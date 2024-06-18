@@ -84,7 +84,7 @@ async def before_serving():
 
     if "spotify_watcher" in run_tasks:
         
-        if os.getenv("OVERTAKE") is True or 1:
+        if os.getenv("NOOVERTAKE") is not True:
             logging.warning("%s overtaking any existing watcher tasks", 
                         procname)    
             await User.select_for_update().exclude(watcherid='').update(watcherid='')
@@ -127,7 +127,6 @@ async def index():
     
     # get a list of active user ids
     displaynames = [x.displayname for x in await getactiveusers()]
-    
 
     if spotifyid is not None and spotifyid != '' and spotifyid != 'login':
 
@@ -398,6 +397,7 @@ async def follow(targetid=None):
                          procname, session['spotifyid'], user.status)
             await user.save()
     return redirect("/")
+
 
 async def main():
     """kick it"""
