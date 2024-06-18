@@ -67,10 +67,12 @@ async def queue_manager(spotify):
             actives = await getactiveusers()
             
 
+            logging.info("BLOCK STATE: %s", block)
             if len(block) == 0:
                 block = blockmakeup
-
-            playtype = block.pop(0)
+                playtype = block.pop(0)
+            else:
+                playtype = block.pop(0)
             
             if playtype == "spotrec":
                 if len(actives) > 0:
