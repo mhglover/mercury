@@ -31,6 +31,8 @@ async def queue_manager(spotify):
             logging.error("%s failed pulling queue from database, exception type: %e\n%s",
                           procname, type(e), e)
 
+        await expire_queue()
+
         while len(uqueue) > 2:
             newest = uqueue.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
@@ -186,3 +188,14 @@ async def getnext():
     ntrack = await Track.get(trackid=nextup_tid)
     nextup_name = ntrack.trackname
     return nextup_tid, nextup_name
+
+
+async def expire_queue():
+    """remove old tracks from the upcoming queue"""
+    now = datetime.datetime.now()
+    logging.debug("expire_queue removing old tracks")
+    expired = await UpcomingQueue.filter(expires_at__lte=now)
+    for each in expired:
+        logging.info("expire_queue removing track: %s %s",
+                     each.trackname, each.expires_at)
+        _ = await UpcomingQueue.filter(id=each.id).delete()
