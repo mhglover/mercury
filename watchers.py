@@ -97,6 +97,7 @@ async def spotify_watcher(cred, spotify, userid):
         await user.save()
         return "killswitch"
     
+    # disable the other-watcher checks, not important for now
     # if (user.watcherid != watcherid
     #       and user.status != "inactive"
     #       and user.last_active > recent):

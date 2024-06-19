@@ -152,9 +152,9 @@ async def index():
     # followers should use their leader's token for
     # checking the currently-playing track, but nothing else
     if user.status.startswith("following"):
-        logging.info("%s user.status=%s", procname, user.status)
+        logging.info("%s this user has user.status %s", procname, user.status)
         targetid = user.status.replace("following:", "")
-        target = await User.get(spotifyid=targetid)
+        target = await User.get(displayname=targetid)
         currently_token = pickle.loads(target.token)
     else:
         currently_token = token
@@ -166,6 +166,8 @@ async def index():
     # set some return values
     if currently is None or currently.is_playing is False:
         trackname="Not Playing"
+        trackid = ""
+        rating = ""
     else:
         trackid = currently.item.id
         trackname = await trackinfo(spotify, trackid)
@@ -193,8 +195,7 @@ async def index():
                                  history=playhistory
                                 )
         
-    else:
-        return await render_template('index.html',
+    return await render_template('index.html',
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
                                  np_name=trackname,
@@ -243,7 +244,12 @@ async def spotify_authorization():
     logging.debug("state: %s", state)
     logging.debug("auths: %s", auths)
     logging.debug("auth_url: %s", auth.url)
-    return await render_template('auth.html', spoturl=auth.url)
+    
+    trackid, _ = await getnext()
+    trackname = await trackinfo(spotify, trackid)
+    return await render_template('auth.html', 
+                                 trackname=trackname,
+                                 spoturl=auth.url)
 
 
 @app.route('/spotify/callback', methods=['GET','POST'])
@@ -394,6 +400,17 @@ async def user_update():
             user.displayname = displayname
             await user.save()
             
+    return redirect("/")
+
+
+@app.route('/user/impersonate/<userid>', methods=['GET'])
+async def user_impersonate(userid):
+    """act as somebody else"""
+    procname = "user_impersonate"
+    
+    logging.warning("%s user impersonation: %s", procname, userid)
+    session['spotifyid'] = userid
+    
     return redirect("/")
 
 

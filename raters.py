@@ -82,17 +82,21 @@ async def record(spotify, uid, tid):
 async def get_current_rating(trackid, activeusers=None):
     """pull the total ratings for a track, optionally for a list of users"""
 
-    selector = ( await Rating.get_or_none()
+    # there is a better way to do this but I haven't found it yet
+    if activeusers is not None:
+        selector = ( Rating.get_or_none()
                          .annotate(sum=Sum("rating"))
                          .filter(trackid=trackid)
                          .group_by('trackid')
                          .values_list("sum", flat=True))
 
-    if selector is None:
-        return None
-        
-    if activeusers is not None:
-        selector = selector.filter(userid__in=activeusers)
+    else:
+        selector = ( Rating.get_or_none()
+                         .annotate(sum=Sum("rating"))
+                         .filter(trackid=trackid)
+                         .filter(userid__in=activeusers)
+                         .group_by('trackid')
+                         .values_list("sum", flat=True))
         
     return await selector
         

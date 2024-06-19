@@ -38,7 +38,8 @@ async def queue_manager(spotify):
 
         while len(uqueue) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
-            activeusers = [x.spotifyid for x in await getactiveusers()]
+            activeusers = await getactiveusers()
+            activeuids = [x.spotifyid for x in activeusers]
             if len(activeusers) == 0:
                 logging.info("%s no active listeners, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)
@@ -69,21 +70,6 @@ async def queue_manager(spotify):
 
             trackname, _ = await trackinfo(spotify, upcoming_tid, return_track=True)
             logging.info("%s adding to radio queue: %s", procname, trackname)
-
-            # this is an attempt to show why this track was selected, but it should
-            # be improved
-            # ratings = await Rating.filter(trackid=upcoming_tid)
-            # now = datetime.datetime.now(datetime.timezone.utc)
-            # # endzone = track.duration_ms - 30000
-            # # expires_at = ( now - datetime.timedelta(milliseconds=endzone))
-            # for r in iter(ratings):
-            #     logging.debug("%s RATING HISTORY - %s, %s, %s, %s",
-            #                  procname, 
-            #                  r.trackname, 
-            #                  r.userid, 
-            #                  r.rating, 
-            #                  now - r.last_played)
-            
             
             u = await UpcomingQueue.create(trackid=upcoming_tid)
             await u.save()
@@ -130,8 +116,8 @@ async def trackinfo(spotify, trackid, return_track=False, return_time=False):
 
     if return_track is True:
         return name, track
-    else:
-        return name
+    
+    return name
 
 
 async def getrecents(spotify):
@@ -156,8 +142,11 @@ async def getnext():
     """
     logging.debug("pulling queue from db")
     n = await UpcomingQueue.filter().order_by("id").limit(1)
-    n = n[0]
-    return n.trackid, n.expires_at
+    
+    if n == []:
+        return None, None
+    
+    return n[0].trackid, n[0].expires_at
 
 
 async def expire_queue():
