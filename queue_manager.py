@@ -39,7 +39,7 @@ async def queue_manager(spotify):
         while len(uqueue) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = await getactiveusers()
-            activeuids = [x.spotifyid for x in activeusers]
+            # activeuids = [x.spotifyid for x in activeusers]
             if len(activeusers) == 0:
                 logging.info("%s no active listeners, sleeping for 60 seconds", procname)
                 await asyncio.sleep(60)

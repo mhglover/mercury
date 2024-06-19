@@ -290,13 +290,13 @@ async def spotify_watcher(cred, spotify, userid):
 
                 logging.info("%s setting a rating, %s %s %s", 
                              user.displayname, trackid, value, procname)
-                await rate(spotify, userid, trackid, value, autorate=True)
+                await rate(spotify, userid, trackid, value=value)
                 
                 # record a +1 for followers
                 for each in followers:
                     logging.info("%s setting a follower rating, %s %s %s",
                              user.displayname, trackid, value, procname)
-                    await rate(spotify, each.spotifyid, trackid, value, autorate=True)
+                    await rate(spotify, each.spotifyid, trackid, value=value)
                 
                 # record in the playhistory table
                 logging.debug("%s recording play history %s",

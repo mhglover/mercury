@@ -9,52 +9,42 @@ from models import Rating, PlayHistory
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
 
-async def rate_list(items, uid, rating=1, set_last_played=True):
-    """rate a bunch of stuff at once"""
-    if isinstance(items, list):
-        if isinstance(items[0], str):
-            trackids = items
-        else:
-            trackids = [x.id for x in items]
-    else:
-        trackids = [x.track.id for x in items]
-    logging.info("rating %s tracks", len(trackids))
 
-    for tid in trackids:
-        await rate(uid, tid, rating, set_last_played=set_last_played)
-
-    return len(trackids)
-
-
-async def rate(spotify, uid, tid, value=1, set_last_played=True, autorate=False):
-    """rate a track"""
+async def rate(spotify, uid, tid, 
+               value=1, 
+               last_played=datetime.datetime.now(datetime.timezone.utc),
+               downrate=False):
+    """rate a track, don't downrate unless forced"""
     procname="rate"
+    
+    # make sure this is in the database and get the name for logging
     try:
-        trackname, _ = await trackinfo(spotify, tid, return_track=True)
+        trackname = await trackinfo(spotify, tid)
     except Exception as e: # pylint: disable=broad-exception-caught
         logging.info("rate exception adding a track to database: [%s]\n%s",
                      tid, e)
 
     logging.info("%s writing a rating: %s %s %s", procname, uid, trackname, value)
-    
-    now = datetime.datetime.now(datetime.timezone.utc) if set_last_played else "1970-01-01"
 
+    # fetch it or create it if it didn't already exist
     rating, created = await Rating.get_or_create(userid=uid,
                                                 trackid=tid,
                                                 defaults={
                                                    "rating": value,
                                                    "trackname": trackname,
-                                                   "last_played": now
+                                                   "last_played": last_played
                                                    }
                                                )
 
-    # if the rating already existed, update the value and lastplayed time
+    # if the rating already existed, update it
     if not created:
-        # update the last_played time
-        rating.last_played = now
+        
+        # always update the last_played time
+        rating.last_played = last_played
         await rating.save()
         
-        if rating.rating > value and autorate is True:
+        # don't automatically downrate
+        if rating.rating > value and downrate is False:
             logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
                          procname, trackname, rating.rating, value, uid)
         else:

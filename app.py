@@ -13,7 +13,7 @@ from models import User, Track, UpcomingQueue
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
 from queue_manager import queue_manager, trackinfo, getrecents, getnext
-from raters import rate_list, get_current_rating
+from raters import get_current_rating, rate
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -345,31 +345,24 @@ async def pullratings(spotifyid=None):
         return redirect("/auth")
 
     user, token = await getuser(cred, spotifyid)
-    logging.debug("user=%s", user)
 
     with spotify.token_as(token):
-        # try:
-        #     ratings = Rating.get(user_id=spotifyid)
-        # except Exception as e:
-        #     logging.error("rating error: %s", e)
 
         # rate recent history (20 items)
-        r = [item.track.id async for item in
-             spotify.all_items(await spotify.playback_recently_played())]
-        # recents = await spotify.playback_recently_played()
-        rated = await rate_list(r, spotifyid, 1, set_last_played=False)
-
-        # # rate tops
-        # tops = await spotify.current_user_top_tracks()
+        value = 1
+        rp = await spotify.all_items(await spotify.playback_recently_played())
+        for each in rp:
+            await rate(spotify, user.spotifyid, each.track.id, 
+                        value=value, last_played=each.last_played)
+        
+        # rate saved tracks
+        value = 4
+        st = await spotify.all_items(await spotify.saved_tracks())
+        for each in st:
+            await rate(spotify, user.spotifyid, each.track.id,
+                       value=value, set_last_played=False)
+        
         # tops = await spotify.all_items(await spotify.current_user_top_tracks())
-        # rated = rated + await rate_list(tops, spotifyid, 4)
-
-        saved_tracks = [item.track.id async for item in
-                        spotify.all_items(await spotify.saved_tracks())]
-        rated = rated + await rate_list(saved_tracks, spotifyid, 4, set_last_played=False)
-
-        message = f"rated {rated} items"
-        logging.info(message)
 
         return redirect("/")
 
