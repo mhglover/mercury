@@ -41,7 +41,7 @@ async def watchman(taskset, cred, spotify, watcher, userid=None):
     if userid is not None:
         user = await User.get(spotifyid=userid)
         
-        logging.info("%s creating a spotify watcher task for: %s", 
+        logging.debug("%s creating a spotify watcher task for: %s", 
                         procname, user.spotifyid)
         user_task = asyncio.create_task(watcher(cred, spotify, user.spotifyid),
                         name=f"watcher_{user.spotifyid}")
@@ -56,7 +56,7 @@ async def watchman(taskset, cred, spotify, watcher, userid=None):
         # completion:
 
         user_task.add_done_callback(taskset.remove(user_task))
-        logging.info("%s task created, callback added", procname)
+        logging.debug("%s task created, callback added", procname)
 
     else:
         while True:
@@ -71,7 +71,7 @@ async def watchman(taskset, cred, spotify, watcher, userid=None):
             
             await asyncio.sleep(sleep)
     
-    logging.info("%s exiting", procname)
+    logging.debug("%s exiting", procname)
 
 
 async def spotify_watcher(cred, spotify, userid):
@@ -249,8 +249,8 @@ async def spotify_watcher(cred, spotify, userid):
 
                 # detect track changes
                 if trackid != last_trackid:
-                    logging.info("%s detected track change at %.0d",
-                                procname, last_position)
+                    logging.debug("%s track change at %.0d%% - now playing %s",
+                                procname, last_position, trackname)
                     
                     # did we skip
                     if last_trackid == nextup_tid:
@@ -272,7 +272,7 @@ async def spotify_watcher(cred, spotify, userid):
                         value = -1
                         logging.info("%s late skip rating, %s %s %s",
                                     userid, last_trackid, value, procname)
-                        await rate(userid, last_trackid, value)
+                        await rate(spotify, userid, last_trackid, value)
             
                 if (remaining_ms - 30000) < 30000: # sleep for a few seconds
                     sleep = (remaining_ms - 30000) / 1000 # about to hit the autorate window
@@ -350,7 +350,7 @@ async def spotify_watcher(cred, spotify, userid):
         if status == "not playing":
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         else:
-            logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
+            logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
         await asyncio.sleep(sleep)
 
