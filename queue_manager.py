@@ -151,7 +151,7 @@ async def getnext():
 
 async def expire_queue():
     """remove old tracks from the upcoming queue"""
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     logging.debug("expire_queue removing old tracks")
     expired = await UpcomingQueue.filter(expires_at__lte=now)
     for each in expired:

@@ -177,9 +177,9 @@ async def index():
 
     tasknames = [x.get_name() for x in asyncio.all_tasks()]
 
-    if "spotify_watcher" in run_tasks:
+    if "spotify_watcher" in run_tasks and not user.status.startswith("following:"):
         if f"watcher_{spotifyid}" in tasknames:
-            logging.debug("watcher_%s is running", spotifyid)
+            logging.debug("watcher_%s is running, won't start another", spotifyid)
         else:
             logging.info("no watcher for user, launching watcher_%s", spotifyid)
             await watchman(taskset, cred, spotify, spotify_watcher, spotifyid)

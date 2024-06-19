@@ -88,7 +88,7 @@ async def spotify_watcher(cred, spotify, userid):
 
     # check for a lock in the database from another watcher
     recent = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
-    timestamp = datetime.datetime.now().strftime('%s')
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%s')
     watcherid = f"watcher_{user.spotifyid}_{timestamp}"
     
     if user.watcherid == "killswitch":
@@ -198,12 +198,19 @@ async def spotify_watcher(cred, spotify, userid):
 
         # oh yeah now we cook
         else:
+            
+            # do we have anybody following us?
+            followers = await User.filter(status=f"following:{user.displayname}")
 
             ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
             logging.debug("%s updating ttl, last_active and status: %s", procname, ttl)
             user.last_active = datetime.datetime.now(datetime.timezone.utc)
             user.status = "active"
             await user.save()
+            
+            for each in followers:
+                each.last_active = datetime.datetime.now(datetime.timezone.utc)
+                await each.save()
             
             # note details from the last loop for comparison
             last_trackid = trackid
@@ -233,7 +240,7 @@ async def spotify_watcher(cred, spotify, userid):
                 if nextup_tid == trackid and nextup_expires_at == "":
                     # so we get to set it for our endzone
                     # which we can calculate pretty closely
-                    expires_at = (datetime.datetime.now() + 
+                    expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
                                     datetime.timedelta(milliseconds=remaining_ms - 30000))
                     
                     _ = ( await UpcomingQueue.select_for_update()
@@ -281,8 +288,14 @@ async def spotify_watcher(cred, spotify, userid):
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
 
-                logging.info("%s setting a rating, %s %s %s", userid, trackid, value, procname)
+                logging.info("%s setting a rating, %s %s %s", user.displayname, trackid, value, procname)
                 await rate(spotify, userid, trackid, value, autorate=True)
+                
+                # record a +1 for followers
+                for each in followers:
+                    logging.info("%s setting a follower rating, %s %s %s",
+                             user.displayname, trackid, value, procname)
+                    await rate(spotify, each.spotifyid, trackid, value, autorate=True)
                 
                 # record in the playhistory table
                 logging.debug("%s recording play history %s",

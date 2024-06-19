@@ -37,7 +37,7 @@ async def rate(spotify, uid, tid, value=1, set_last_played=True, autorate=False)
 
     logging.info("%s writing a rating: %s %s %s", procname, uid, trackname, value)
     
-    now = datetime.datetime.now() if set_last_played else "1970-01-01"
+    now = datetime.datetime.now(datetime.timezone.utc) if set_last_played else "1970-01-01"
 
     rating, created = await Rating.get_or_create(userid=uid,
                                                 trackid=tid,
