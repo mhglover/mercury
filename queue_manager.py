@@ -68,7 +68,7 @@ async def queue_manager(spotify):
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            trackname, _ = await trackinfo(spotify, upcoming_tid, return_track=True)
+            trackname = await trackinfo(spotify, upcoming_tid)
             logging.info("%s adding to radio queue: %s", procname, trackname)
             
             u = await UpcomingQueue.create(trackid=upcoming_tid)
