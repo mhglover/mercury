@@ -288,7 +288,8 @@ async def spotify_watcher(cred, spotify, userid):
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
 
-                logging.info("%s setting a rating, %s %s %s", user.displayname, trackid, value, procname)
+                logging.info("%s setting a rating, %s %s %s", 
+                             user.displayname, trackid, value, procname)
                 await rate(spotify, userid, trackid, value, autorate=True)
                 
                 # record a +1 for followers

@@ -28,7 +28,7 @@ async def popular_tracks(count=1, rating=0):
     recent_tids = await recently_rated_tracks()
     activeusers = await getactiveusers()
 
-    logging.info("%s pulled %s recently played tracks",
+    logging.debug("%s pulled %s recently played tracks",
                  procname, len(recent_tids))
 
     tids = ( await Rating.annotate(sum=Sum("rating"))

@@ -102,7 +102,7 @@ async def before_serving():
         await asyncio.sleep(2)
         
         logging.info("%s pulling active users for spotify watchers", procname)
-        active_users = await getactiveusers()
+        active_users = await User.filter(status="active")
         for user in active_users:
             await watchman(taskset, cred, spotify, spotify_watcher, user.spotifyid)
 
@@ -130,7 +130,7 @@ async def index():
     if spotifyid == "" or spotifyid is None:
         spotifyid = "login"
         
-        nid, nid_expires_at = await getnext()
+        nid, _ = await getnext()
         trackname = await trackinfo(spotify, nid)
 
         # get outta here kid ya bother me
