@@ -2,6 +2,7 @@
 
 import logging
 import datetime
+from tortoise.functions import Sum
 from queue_manager import trackinfo
 from models import Rating, PlayHistory
 
@@ -76,3 +77,22 @@ async def record(spotify, uid, tid):
                       uid, e)
     
     logging.debug("record inserted play history record %s", insertedkey)
+
+
+async def get_current_rating(trackid, activeusers=None):
+    """pull the total ratings for a track, optionally for a list of users"""
+
+    selector = ( await Rating.get_or_none()
+                         .annotate(sum=Sum("rating"))
+                         .filter(trackid=trackid)
+                         .group_by('trackid')
+                         .values_list("sum", flat=True))
+
+    if selector is None:
+        return None
+        
+    if activeusers is not None:
+        selector = selector.filter(userid__in=activeusers)
+        
+    return await selector
+        

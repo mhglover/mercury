@@ -150,7 +150,10 @@ async def getrecents(spotify):
 
 
 async def getnext():
-    """get the next track's details from the queue and database"""
+    """get the next track's details from the queue and database
+    
+    returns: trackid, expires_at
+    """
     logging.debug("pulling queue from db")
     n = await UpcomingQueue.filter().order_by("id").limit(1)
     n = n[0]

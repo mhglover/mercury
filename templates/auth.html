@@ -3,6 +3,22 @@
 {% block content %}
 <h2>Welcome to Mercury Radio!</h2>
 
+<p>
+    This is a rating and recommendation agent. It uses the likes and dislikes of the current 
+    listeners to recommend a song that they will like.  We're all listening to this track together
+    right now:
+</p>
+
+<h3>{{ trackname }}</h3>
+
+<p>
+    If you grant it permission, it will look at your Spotify playlists and history to learn your
+    likes, then it'll check your Spotify player's status. Turn on your Spotify now, listen to
+    whatever you like. Whenever a song is about to end, it will automatically send the next track
+    recommendation to your queue.  If you don't like a song, just hit "Play Next" as usual and 
+    you'll get a song from your own player's queue, then you'll get the next recommendation.
+</p>
+
 <h3></h3><a href="{{ spoturl }}">login w/Spotify</a></h3>
 
 {% endblock %}
