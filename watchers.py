@@ -372,7 +372,7 @@ async def spotify_watcher(cred, spotify, userid):
                 sleep = (remaining_ms /1000) + 2
 
             status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
-            logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
+            logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
         await asyncio.sleep(sleep)
 
