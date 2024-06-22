@@ -13,7 +13,7 @@ from models import User, Track, UpcomingQueue
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
 from queue_manager import queue_manager, trackinfo, getrecents, getnext
-from raters import get_current_rating, rate
+from raters import get_current_rating, rate, rate_history
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -351,11 +351,7 @@ async def pullratings(spotifyid=None):
     with spotify.token_as(token):
 
         # rate recent history (20 items)
-        value = 1
-        rp = await spotify.all_items(await spotify.playback_recently_played())
-        for each in rp:
-            await rate(spotify, user.spotifyid, each.track.id, 
-                        value=value, last_played=each.last_played)
+        await rate_history(spotify, user, token)
         
         # rate saved tracks
         value = 4

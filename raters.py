@@ -69,6 +69,16 @@ async def record(spotify, uid, tid):
     logging.debug("record inserted play history record %s", insertedkey)
 
 
+async def rate_history(spotify, user, token, value=1, count=20):
+    """pull recently played tracks and write ratings for them"""
+    with spotify.token_as(token):
+        rp = await spotify.playback_recently_played(limit=count)
+        # rp = await spotify.all_items()
+    for each in rp.items:
+        await rate(spotify, user.spotifyid, each.track.id,
+                    value=value, last_played=each.played_at)
+    
+
 async def get_current_rating(trackid, activeusers=None):
     """pull the total ratings for a track, optionally for a list of users"""
 
@@ -89,4 +99,10 @@ async def get_current_rating(trackid, activeusers=None):
                          .values_list("sum", flat=True))
         
     return await selector
+
+
+
+
+
+
         

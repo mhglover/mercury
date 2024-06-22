@@ -6,7 +6,7 @@ import pickle
 from models import User, UpcomingQueue
 from users import getuser
 from queue_manager import trackinfo, getnext
-from raters import rate, record
+from raters import rate, record, rate_history
 from spot_funcs import is_saved
 
 # pylint: disable=trailing-whitespace
@@ -74,6 +74,18 @@ async def watchman(taskset, cred, spotify, watcher, userid=None):
     logging.debug("%s exiting", procname)
 
 
+async def get_player_queue(spotify, token, userid):
+    """fetch the items in the player queue for a given user"""
+    procname = "get_player_queue"
+    logging.debug("%s fetching player queue for %s", procname, userid)
+    with spotify.token_as(token):
+        try: 
+            playbackqueue = await spotify.playback_queue()
+        except Exception as e:
+            logging.error("%s exception %s", procname, e)
+    return playbackqueue
+
+
 async def spotify_watcher(cred, spotify, userid):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
 
@@ -108,6 +120,10 @@ async def spotify_watcher(cred, spotify, userid):
     await user.save()
     
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
+
+    # rate recent history (20 items)
+    await rate_history(spotify, user, token)
+        
 
     # Check the initial status
     with spotify.token_as(token):
@@ -173,8 +189,7 @@ async def spotify_watcher(cred, spotify, userid):
                 logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
 
         logging.debug("%s checking player queue state", procname)
-        with spotify.token_as(token):
-            playbackqueue = await spotify.playback_queue()
+        playbackqueue = await get_player_queue(spotify, token, userid)
         playbackqueueids = [x.id for x in playbackqueue.queue]
 
         sleep = 30
@@ -292,7 +307,6 @@ async def spotify_watcher(cred, spotify, userid):
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
-
                 logging.debug("%s setting a rating, %s %s %s", 
                              user.displayname, trackname, value, procname)
                 await rate(spotify, userid, trackid, value=value)
@@ -308,8 +322,8 @@ async def spotify_watcher(cred, spotify, userid):
                                 procname, trackname)
                 await record(spotify, userid, trackid)
 
-                # if we're in the endzone and the same track is next in the queue
-                # we must be first to the endzone, remove track from dbqueue
+                # if we're in the endzone and this same track is still next in the queue
+                # we must be first to the endzone, so let's remove the track from dbqueue
                 if trackid == nextup_tid:
                     logging.info("%s first to endzone, removing track from radio queue: %s",
                                 procname, nextup_name)
@@ -324,11 +338,24 @@ async def spotify_watcher(cred, spotify, userid):
                     nextup_name, nextup_track = await trackinfo(spotify, 
                                                             nextup_tid, 
                                                             return_track=True)
+                    
+                    # if there's nothing yet, fine, jump to the next cycle now
+                    if nextup_tid is None:
+                        logging.warning("%s nothing in queue to queue, starting next loop early",
+                                        procname)
+                        continue
 
-                if nextup_tid is None:
-                    logging.error("%s nothing in the queue?", procname)
+                # don't requeue something already forthcoming
+                # this has potential to pause recommendations if we recommend something that was
+                # already in the context queue, so let's warn about it
+                logging.debug("%s checking player queue state", procname)
+                playbackqueue = await get_player_queue(spotify, token, userid)
+                playbackqueueids = [x.id for x in playbackqueue.queue]
+                
+                if nextup_tid in playbackqueueids:
+                    logging.warning("%s track already queued, won't send again - %s",
+                                    procname, nextup_name)
                 else:
-                    # queue up the next track for this user
                     logging.info("%s sending to spotify queue %s",
                                     procname, nextup_name)
                     
@@ -344,10 +371,6 @@ async def spotify_watcher(cred, spotify, userid):
                 sleep = (remaining_ms /1000) + 2
 
             status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
-
-        if status == "not playing":
-            logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
-        else:
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
         await asyncio.sleep(sleep)
