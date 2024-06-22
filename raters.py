@@ -10,7 +10,7 @@ from models import Rating, PlayHistory
 # pylint: disable=trailing-whitespace
 
 
-async def rate(spotify, uid, tid, 
+async def rate(spotify, uid, tid,
                value=1, 
                last_played=datetime.datetime.now(datetime.timezone.utc),
                downrate=False):

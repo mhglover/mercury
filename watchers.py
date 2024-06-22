@@ -202,12 +202,14 @@ async def spotify_watcher(cred, spotify, userid):
             # do we have anybody following us?
             followers = await User.filter(status=f"following:{user.displayname}")
 
+            # update the status and ttl, keep the watcher alive for 20 minutes
             ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
             logging.debug("%s updating ttl, last_active and status: %s", procname, ttl)
             user.last_active = datetime.datetime.now(datetime.timezone.utc)
             user.status = "active"
             await user.save()
             
+            # update the ttl on followers too
             for each in followers:
                 each.last_active = datetime.datetime.now(datetime.timezone.utc)
                 await each.save()
@@ -236,9 +238,12 @@ async def spotify_watcher(cred, spotify, userid):
             if remaining_ms > 30000:
                 
                 # we're playing the lead track in the Upcoming Queue
-                # and nobody else has set the expiration
+                # and nobody else has set the expiration yet
                 if nextup_tid == trackid and nextup_expires_at == "":
-                    # so we get to set it for our endzone
+                    logging.info("%s first to start track %s, setting expiration",
+                                 procname, trackname)
+                    
+                    # set it for our endzone
                     # which we can calculate pretty closely
                     expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
                                     datetime.timedelta(milliseconds=remaining_ms - 30000))
@@ -279,8 +284,8 @@ async def spotify_watcher(cred, spotify, userid):
                 else: # sleep for thirty seconds
                     sleep = 30
 
+            # welcome to the end zone
             elif remaining_ms <= 30000:
-                # welcome to the end zone
                 logging.info("%s endzone %s - next up %s",
                             procname, trackname, nextup_name)
                 
@@ -288,14 +293,14 @@ async def spotify_watcher(cred, spotify, userid):
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
 
-                logging.info("%s setting a rating, %s %s %s", 
-                             user.displayname, trackid, value, procname)
+                logging.debug("%s setting a rating, %s %s %s", 
+                             user.displayname, trackname, value, procname)
                 await rate(spotify, userid, trackid, value=value)
                 
                 # record a +1 for followers
                 for each in followers:
                     logging.info("%s setting a follower rating, %s %s %s",
-                             user.displayname, trackid, value, procname)
+                             procname, trackname, each.displayname, value)
                     await rate(spotify, each.spotifyid, trackid, value=value)
                 
                 # record in the playhistory table
@@ -303,10 +308,10 @@ async def spotify_watcher(cred, spotify, userid):
                                 procname, trackname)
                 await record(spotify, userid, trackid)
 
-                # if we're finishing the Currently Playing queued track
+                # if we're in the endzone and the same track is next in the queue
                 # we must be first to the endzone, remove track from dbqueue
                 if trackid == nextup_tid:
-                    logging.info("%s removing track from radio queue: %s",
+                    logging.info("%s first to endzone, removing track from radio queue: %s",
                                 procname, nextup_name)
                     try:
                         await UpcomingQueue.filter(trackid=nextup_tid).delete()
@@ -314,21 +319,14 @@ async def spotify_watcher(cred, spotify, userid):
                         logging.error("%s exception removing track from upcomingqueue\n%s",
                                         procname, e)
                     
-                    # get the next queued track
+                    # now get the next queued track
                     nextup_tid, nextup_expires_at = await getnext()
                     nextup_name, nextup_track = await trackinfo(spotify, 
                                                             nextup_tid, 
                                                             return_track=True)
 
-                if nextup_tid in playbackqueueids:
-                    # this next track is already in the queue (or context, annoyingly)
-                    logging.info("%s next track already queued, don't requeue",
-                                procname)
-                    
-                elif nextup_tid == trackid:
-                    logging.info("%s next track currently playing, don't requeue",
-                                procname)
-                
+                if nextup_tid is None:
+                    logging.error("%s nothing in the queue?", procname)
                 else:
                     # queue up the next track for this user
                     logging.info("%s sending to spotify queue %s",
