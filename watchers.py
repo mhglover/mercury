@@ -154,6 +154,7 @@ async def spotify_watcher(cred, spotify, userid):
 
     # Loop while alive
     logging.debug("%s starting loop", procname)
+
     while ttl > datetime.datetime.now(datetime.timezone.utc):
         
         logging.debug("%s loop is awake", procname)
@@ -252,9 +253,9 @@ async def spotify_watcher(cred, spotify, userid):
             # we aren't in the endzone yet
             if remaining_ms > 30000:
                 
-                # we're playing the lead track in the Upcoming Queue
+                # if we're playing the lead track in the Upcoming Queue
                 # and nobody else has set the expiration yet
-                if nextup_tid == trackid and nextup_expires_at == "":
+                if nextup_tid == trackid and nextup_expires_at is None:
                     logging.info("%s first to start track %s, setting expiration",
                                  procname, trackname)
                     
@@ -364,14 +365,14 @@ async def spotify_watcher(cred, spotify, userid):
                             _ = await spotify.playback_queue_add(nextup_track.trackuri)
                         except Exception as e: 
                             logging.error(
-                                "%s exception spotify.playback_queue_add track.uri=%s\n%s",
+                                "%s exception spotify.playback_queue_add %s\n%s",
                                 procname, nextup_name, e)
 
                 # sleep until this track is done
                 sleep = (remaining_ms /1000) + 2
 
             status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
-            logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
+            logging.info("%s sleeping %0.2ds - %s", procname, sleep, status)
         
         await asyncio.sleep(sleep)
 
