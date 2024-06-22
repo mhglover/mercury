@@ -122,8 +122,7 @@ async def spotify_watcher(cred, spotify, userid):
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
 
     # rate recent history (20 items)
-    await rate_history(spotify, user, token)
-        
+    # await rate_history(spotify, user, token)
 
     # Check the initial status
     with spotify.token_as(token):
@@ -267,6 +266,13 @@ async def spotify_watcher(cred, spotify, userid):
                     _ = ( await UpcomingQueue.select_for_update()
                                                 .filter(trackid=nextup_tid)
                                                 .update(expires_at=expires_at))
+                    
+                    # record it in the playhistory table
+                    # a recommendation was started by a player and we saw it
+                    logging.debug("%s recording play history %s",
+                                procname, trackname)
+                    await record(spotify, userid, trackid)
+
 
                 # detect track changes
                 if trackid != last_trackid:
@@ -318,11 +324,6 @@ async def spotify_watcher(cred, spotify, userid):
                              procname, trackname, each.displayname, value)
                     await rate(spotify, each.spotifyid, trackid, value=value)
                 
-                # record in the playhistory table
-                logging.debug("%s recording play history %s",
-                                procname, trackname)
-                await record(spotify, userid, trackid)
-
                 # if we're in the endzone and this same track is still next in the queue
                 # we must be first to the endzone, so let's remove the track from dbqueue
                 if trackid == nextup_tid:

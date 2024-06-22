@@ -318,6 +318,17 @@ async def spotify_callback():
 @app.route('/dash', methods=['GET'])
 async def dashboard():
     """show what's happening"""
+    
+    if 'spotifyid' not in session:
+        return redirect("/")
+    
+    # whoami
+    spotifyid = session['spotifyid']
+    user, _ = await getuser(cred, spotifyid)
+    
+    if user.role != "admin":
+        return redirect("/")
+
     # ratings = [x for x in Rating.select()]
 
     # queued = [await trackinfo(trackid) for trackid in queue]
@@ -400,6 +411,16 @@ async def user_update():
 async def user_impersonate(userid):
     """act as somebody else"""
     procname = "user_impersonate"
+    
+    if 'spotifyid' not in session:
+        return redirect("/")
+    
+    # whoami
+    spotifyid = session['spotifyid']
+    user, _ = await getuser(cred, spotifyid)
+    
+    if user.role != "admin":
+        return redirect("/")
     
     logging.warning("%s user impersonation: %s", procname, userid)
     session['spotifyid'] = userid

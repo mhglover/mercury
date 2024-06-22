@@ -14,6 +14,7 @@ class User(Model):
     last_active = fields.DatetimeField(auto_now=True)
     status = fields.TextField()
     watcherid = fields.TextField()
+    role = fields.TextField(default="user")
 
     def __str__(self):
         return str(self.spotifyid)
