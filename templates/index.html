@@ -1,19 +1,27 @@
 {% extends 'base.html' %}
-
 {% block content %}
 
-{% if targetid %}<h2>listening with {{targetid}}</h2>{%endif%}
-<h1> {{ np_name }} </h1>
+{% if targetid %}
+<h3>listening with {{targetid}}</h3>
+{% endif %}
 
-<h2>Recently Played</h2>
+<h3>the current recommendation is</h3>
+<h1>{{ cur_rec }}</h1>
+
+{% if np_name != cur_rec %}
+<h3>you are listening to</h3>
+<h1>{{ np_name }}</h1>
+{% endif %}
+
+<h3>some recent recommendations were</h3>
 <table>
-    {% for date in history %}
-    <tr><td>{{ date }}</td></tr>
+    {% for each in history %}
+    <tr><td>{{ each }}</td></tr>
     {% endfor %}
 </table>
 
 
-<h2>Active Listeners</h2>
+<h3>actively vibing</h3>
 <table>
     {% if np_name == "Not Playing" %}
         <tr><td>click an active listener if you're listening with them</td></tr>
@@ -26,7 +34,5 @@
         {% endfor %}
     {% endif %}
 </table>
-
-
 
 {% endblock %}

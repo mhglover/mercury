@@ -99,10 +99,3 @@ async def get_current_rating(trackid, activeusers=None):
                          .values_list("sum", flat=True))
         
     return await selector
-
-
-
-
-
-
-        

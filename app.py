@@ -125,6 +125,9 @@ async def index():
     activeusers = await getactiveusers()
     displaynames = [x.displayname for x in activeusers]
     
+    nextup_trackid, _ = await getnext()
+    nextup_trackname = await trackinfo(spotify, nextup_trackid)
+    
     # check whether this is a known user or they need to login
     spotifyid = session.get('spotifyid', "login")
     if ( spotifyid == "login" or 
@@ -132,13 +135,10 @@ async def index():
          spotifyid is None ):
         spotifyid = "login"
         
-        nid, _ = await getnext()
-        trackname = await trackinfo(spotify, nid)
-
         # get outta here kid ya bother me
         return await render_template('index.html',
                                  spotifyid=spotifyid,
-                                 np_name=trackname,
+                                 cur_rec=nextup_trackname,
                                  activeusers=displaynames,
                                  history=playhistory
                                 )
@@ -191,6 +191,7 @@ async def index():
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
                                  np_name=trackname,
+                                 cur_rec=nextup_trackname,
                                  np_id=trackid,
                                  rating=rating,
                                  activeusers=displaynames,
@@ -200,6 +201,7 @@ async def index():
     return await render_template('index.html',
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
+                                 cur_rec=nextup_trackname,
                                  np_name=trackname,
                                  np_id=trackid,
                                  rating=rating,
