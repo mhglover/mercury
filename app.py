@@ -127,7 +127,9 @@ async def index():
     
     # check whether this is a known user or they need to login
     spotifyid = session.get('spotifyid', "login")
-    if spotifyid == "" or spotifyid is None:
+    if ( spotifyid == "login" or 
+         spotifyid == "" or 
+         spotifyid is None ):
         spotifyid = "login"
         
         nid, _ = await getnext()
@@ -360,7 +362,7 @@ async def pullratings(spotifyid=None):
         st = await spotify.all_items(await spotify.saved_tracks())
         for each in st:
             await rate(spotify, user.spotifyid, each.track.id,
-                       value=value, set_last_played=False)
+                       value=value, last_played="1970-01-01")
         
         # tops = await spotify.all_items(await spotify.current_user_top_tracks())
 
