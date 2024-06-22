@@ -156,5 +156,5 @@ async def expire_queue():
     expired = await UpcomingQueue.filter(expires_at__lte=now)
     for each in expired:
         logging.info("expire_queue removing track: %s %s",
-                     each.trackname, each.expires_at)
+                     each.trackid, each.expires_at)
         _ = await UpcomingQueue.filter(id=each.id).delete()
