@@ -419,7 +419,7 @@ async def user_impersonate(userid):
     spotifyid = session['spotifyid']
     user, _ = await getuser(cred, spotifyid)
     
-    if user.role != "admin":
+    if "admin" not in user.role:
         return redirect("/")
     
     logging.warning("%s user impersonation: %s", procname, userid)

@@ -55,8 +55,8 @@ async def watchman(taskset, cred, spotify, watcher, userid=None):
         # make each task remove its own reference from the set after
         # completion:
 
-        user_task.add_done_callback(taskset.remove(user_task))
-        logging.debug("%s task created, callback added", procname)
+        # user_task.add_done_callback(taskset.remove(user_task))
+        # logging.debug("%s task created, callback added", procname)
 
     else:
         while True:
@@ -122,7 +122,8 @@ async def spotify_watcher(cred, spotify, userid):
     ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
 
     # rate recent history (20 items)
-    # await rate_history(spotify, user, token)
+    if user.watcherid == "disabled":
+        await rate_history(spotify, user, token)
 
     # Check the initial status
     with spotify.token_as(token):

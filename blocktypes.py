@@ -13,8 +13,8 @@ from users import getactiveusers
 # all functions should return either a single track id, a list of track ids,
 # or an empty list
 
-async def recently_rated_tracks(days=5):
-    """fetch tracks that have been rated in the last 5 days"""
+async def recently_rated_tracks(days=7):
+    """fetch tracks that have been rated in the last few days"""
     interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
     tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
     return tids

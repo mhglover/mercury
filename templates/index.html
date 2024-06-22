@@ -16,7 +16,7 @@
 <h3>some recent recommendations were</h3>
 <table>
     {% for each in history %}
-    <tr><td>{{ each }}</td></tr>
+    <tr><td>{{ each if each != np_name }}</td></tr>
     {% endfor %}
 </table>
 
