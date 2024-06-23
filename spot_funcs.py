@@ -43,20 +43,14 @@ async def trackinfo(spotify, spotifyid):
     return track
 
 
-async def getrecents(spotify):
+async def getrecents(limit=10):
     """pull recently played tracks from history table
     
     returns: list of track ids"""
     try:
-        ph_query = await PlayHistory.all().order_by('-id').limit(10)
+        ph = await PlayHistory.all().order_by('-id').limit(limit).prefetch_related("track")
     except Exception as e:
-        logging.error("exception ph_query %s", e)
+        logging.error("exception querying playhistory table %s", e)
 
-    try:
-        tracks = [await trackinfo(spotify, x.spotifyid) for x in ph_query]
-        playhistory = [x.trackname for x in tracks]
-    except Exception as e:
-        logging.error("exception playhistory %s", e)
-
-    return playhistory
+    return ph
 

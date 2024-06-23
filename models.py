@@ -32,6 +32,7 @@ class Track(Model):
     duration_ms = fields.IntField()
     
     ratings: fields.ReverseRelation["Rating"]
+    histories: fields.ReverseRelation["PlayHistory"]
 
     def __str__(self):
         return str(self.trackname)
@@ -40,14 +41,15 @@ class Track(Model):
 class Rating(Model):
     """track likes"""
     id = fields.IntField(primary_key=True)
-    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="ratings" )
-    track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
-        "models.Track", related_name="ratings")
     trackname = fields.TextField()
     rating = fields.IntField()
     last_played = fields.DatetimeField()
     comment = fields.TextField(null=True)
+    
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="ratings" )
+    track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
+        "models.Track", related_name="ratings")
 
     def __str__(self):
         return str(self.trackname)
@@ -56,9 +58,10 @@ class Rating(Model):
 class PlayHistory(Model):
     """track the history of songs played"""
     id = fields.IntField(primary_key=True)
-    track = fields.ForeignKeyField('models.Track', related_name='histories')
     played_at = fields.DatetimeField(auto_now=True)
     trackname = fields.TextField()
+    track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
+        "models.Track", related_name="histories")
 
     def __str__(self):
         return str(self.trackname)

@@ -244,8 +244,9 @@ async def spotify_watcher(cred, spotify, userid):
             # pull details for the next track in the queue
             # nextup_tid, nextup_expires_at = await getnext()
             nextup = await getnext()
-            nextup_tid = nextup.track.spotifyid
-            nextup_trackname = nextup.track.trackname
+            if nextup is not None:
+                nextup_tid = nextup.track.spotifyid
+                nextup_trackname = nextup.track.trackname
             
             # do some math
             remaining_ms = currently.item.duration_ms - currently.progress_ms

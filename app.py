@@ -120,7 +120,7 @@ async def index():
     procname="web_index"
     
     # get play history
-    playhistory = await getrecents(spotify)
+    playhistory = await getrecents()
     
     # get a list of active user ids
     activeusers = await getactiveusers()
@@ -140,7 +140,7 @@ async def index():
                                  spotifyid=spotifyid,
                                  cur_rec=nextup.track.trackname,
                                  activeusers=displaynames,
-                                 history=playhistory
+                                 history=[x.trackname for x in playhistory]
                                 )
     
     # okay, we got a live one - get user details
@@ -151,8 +151,6 @@ async def index():
         user.displayname = "displayname unset"
         user.save()
     
-    # pull some ratings for the history
-    # ratedhistory = await getratings(playhistory, spotifyid)
     
     # followers should use their leader's token for
     # checking the currently-playing track, but nothing else
@@ -197,7 +195,7 @@ async def index():
                                  np_id=trackid,
                                  rating=rating,
                                  activeusers=displaynames,
-                                 history=playhistory
+                                 history=[x.trackname for x in playhistory]
                                 )
         
     return await render_template('index.html',
@@ -208,7 +206,7 @@ async def index():
                                  np_id=track.spotifyid,
                                  rating=rating,
                                  activeusers=displaynames,
-                                 history=playhistory
+                                 history=[x.trackname for x in playhistory]
                                 )
 
 
