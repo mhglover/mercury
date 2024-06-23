@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """mercury radio database models"""
 
+from dataclasses import dataclass
+from typing import List
 from tortoise import fields
 from tortoise.models import Model
 
@@ -79,3 +81,27 @@ class Recommendation(Model):
 
     def __str__(self):
         return str(self.trackname)
+
+
+
+@dataclass
+class WebData():
+    """data model for passing state to web template"""
+    history: List[PlayHistory]
+    activeusers: List[User]
+    nextup: Recommendation
+    user: User = None
+    track: Track = None
+    rating: str = None
+
+
+    def to_dict(self):
+        """Convert to dict with custom serialization for datetime"""
+        return {
+            "user": {"displayname": self.user.displayname,
+                     "spotifyid": self.user.spotifyid},
+            "history": list(set([x.trackname for x in self.history])),
+            "playing_trackname": self.track.trackname,
+            "activeusers": [x.displayname for x in self.activeusers],
+            "nextup_trackname": self.nextup.trackname,
+        }

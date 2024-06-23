@@ -9,7 +9,7 @@ import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, Recommendation, Track
+from models import User, Recommendation, Track, WebData
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
 from queue_manager import queue_manager, getnext
@@ -105,7 +105,9 @@ async def before_serving():
         logging.info("%s pulling active users for spotify watchers", procname)
         active_users = await User.filter(status="active")
         for user in active_users:
-            await watchman(taskset, cred, spotify, spotify_watcher, user.spotifyid)
+            await watchman(taskset, cred, spotify, spotify_watcher, user)
+        
+        logging.info("%s ready", procname)
 
 
 @app.before_request
@@ -119,95 +121,57 @@ async def index():
     """show the now playing page"""
     procname="web_index"
     
-    # get play history
-    playhistory = await getrecents()
-    
-    # get a list of active user ids
-    activeusers = await getactiveusers()
-    displaynames = [x.displayname for x in activeusers]
-    
-    nextup = await getnext()
-    
     # check whether this is a known user or they need to login
-    spotifyid = session.get('spotifyid', "login")
-    if ( spotifyid == "login" or 
-         spotifyid == "" or 
-         spotifyid is None ):
-        spotifyid = "login"
-        
+    user_spotifyid = session.get('spotifyid', None)
+    
+    # what's happening y'all
+    web_data = WebData(
+        history=await getrecents(),
+        activeusers = await getactiveusers(),
+        nextup = await getnext()
+        )
+    
+    if user_spotifyid is None:
         # get outta here kid ya bother me
-        return await render_template('index.html',
-                                 spotifyid=spotifyid,
-                                 cur_rec=nextup.track.trackname,
-                                 activeusers=displaynames,
-                                 history=[x.trackname for x in playhistory]
-                                )
+        return await render_template('index.html', w=web_data.to_dict())
     
     # okay, we got a live one - get user details
-    user, token = await getuser(cred, spotifyid)
+    web_data.user, token = await getuser(cred, user_spotifyid)
     
-    # fix any broken displaynames
-    if user.displayname is None:
-        user.displayname = "displayname unset"
-        user.save()
-    
-    
-    # followers should use their leader's token for
-    # checking the currently-playing track, but nothing else
-    if user.status.startswith("following"):
-        logging.info("%s this user has user.status %s", procname, user.status)
-        targetid = user.status.replace("following:", "")
-        target = await User.get(displayname=targetid)
-        currently_token = pickle.loads(target.token)
-    else:
-        currently_token = token
+    # disable followers, bring it back later
+    # # followers should use their leader's token for
+    # # checking the currently-playing track, but nothing else
+    # if web_data.user.status.startswith("following"):
+    #     logging.info("%s this user has user.status %s", procname, web_data.user.status)
+    #     web_data.targetid = web_data.user.status.replace("following:", "")
+    #     target = await User.get(displayname=web_data.targetid)
+    #     currently_token = pickle.loads(target.token)
+    # else:
+    #     currently_token = token
     
     # what's the player's current status?
-    with spotify.token_as(currently_token):
+    with spotify.token_as(token):
         currently = await spotify.playback_currently_playing()
 
     # set some return values
-    if currently is None or currently.is_playing is False:
-        rating = ""
-        track = ""
-    else:
-        trackid = currently.item.id
-        track = await trackinfo(spotify, trackid)
-        rating = await get_current_rating(track, activeusers=activeusers)
+    if currently is not None:
+        web_data.track = await trackinfo(spotify, currently.item.id)
+        # web_data.rating = await get_current_rating(web_data.track, activeusers=web_data.activeusers)
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
 
     tasknames = [x.get_name() for x in asyncio.all_tasks()]
 
-    if "spotify_watcher" in run_tasks and not user.status.startswith("following:"):
-        if f"watcher_{spotifyid}" in tasknames:
-            logging.debug("watcher_%s is running, won't start another", spotifyid)
+    if ("spotify_watcher" in run_tasks
+        and not web_data.user.status.startswith("following:")):
+        if f"watcher_{web_data.user.spotifyid}" in tasknames:
+            logging.debug("watcher_%s is running, won't start another", web_data.user.displayname)
         else:
-            logging.info("no watcher for user, launching watcher_%s", spotifyid)
-            await watchman(taskset, cred, spotify, spotify_watcher, spotifyid)
+            logging.info("no watcher for user, launching watcher_%s", web_data.user.displayname)
+            await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
 
-    if user.status.startswith("following"):
-        return await render_template('index.html',
-                                 spotifyid=spotifyid,
-                                 displayname=user.displayname,
-                                 np_name=track.trackname,
-                                 cur_rec=nextup.trackname,
-                                 np_id=trackid,
-                                 rating=rating,
-                                 activeusers=displaynames,
-                                 history=[x.trackname for x in playhistory]
-                                )
-        
-    return await render_template('index.html',
-                                 spotifyid=spotifyid,
-                                 displayname=user.displayname,
-                                 cur_rec=nextup.trackname,
-                                 np_name=track.trackname,
-                                 np_id=track.spotifyid,
-                                 rating=rating,
-                                 activeusers=displaynames,
-                                 history=[x.trackname for x in playhistory]
-                                )
+    return await render_template('index.html', w=web_data.to_dict())
+
 
 
 @app.route('/logout', methods=['GET'])

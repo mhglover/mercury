@@ -1,39 +1,35 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if targetid %}
-<h3>listening with {{targetid}}</h3>
+{% if w.playing_trackname != w.nextup_trackname %}
+<h3>you are listening to</h3>
+<h1>{{ w.playing_trackname }}</h1>
 {% endif %}
 
 <h3>the current recommendation is</h3>
-<h1>{{ cur_rec }}</h1>
-
-{% if np_name != cur_rec %}
-<h3>you are listening to</h3>
-<h1>{{ np_name }}</h1>
-{% endif %}
-
-<h3>some recent recommendations were</h3>
-<table>
-    {% for name, rating in history %}
-        {% if name != np_name %}
-    <tr><td>{{ name }} - {{ rating }}</td></tr>
-        {% endif %}
-    {% endfor %}
-</table>
+<h1>{{ w.nextup_trackname }}</h1>
 
 <h3>actively vibing</h3>
 <table>
-    {% if np_name == "Not Playing" %}
+    {% if w.playing_trackname == "Not Playing" %}
         <tr><td>click an active listener if you're listening with them</td></tr>
-        {% for user in activeusers %}
-        <tr><td><a href="/follow/{{ user }}">{{user}}</a></td></tr>
+        {% for user in w.activeusers %}
+        <tr><td><a href="/follow/{{ user }}">now playing</a></td></tr>
         {% endfor %}
     {% else %}
-        {% for user in activeusers %}
+        {% for user in w.activeusers %}
         <tr><td>{{ user }}</td></tr>
         {% endfor %}
     {% endif %}
 </table>
+
+<h3>some recent recommendations were</h3>
+<table>
+    {% for name in w.history %}
+    <tr><td>{{ name }}</td></tr>
+    {% endfor %}
+</table>
+
+
 
 {% endblock %}

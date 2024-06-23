@@ -110,7 +110,7 @@ async def getnext():
     returns: recommendation object with track prefetched
     """
     logging.debug("pulling queue from db")
-    return await Recommendation.first().prefetch_related("track")
+    return await Recommendation.first().order_by("id").prefetch_related("track")
 
 
 async def expire_queue():
