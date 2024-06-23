@@ -1,4 +1,5 @@
 """reaper task"""
+import os
 import logging
 import asyncio
 import datetime
@@ -6,7 +7,7 @@ import pickle
 from models import User, Recommendation
 from users import getuser
 from queue_manager import getnext
-from raters import rate, record, rate_history
+from raters import rate, record
 from spot_funcs import is_saved, trackinfo
 
 # pylint: disable=trailing-whitespace
@@ -36,13 +37,23 @@ async def user_reaper():
 
 async def watchman(taskset, cred, spotify, watcher, user):
     """start a watcher for active users"""
-    procname="watchman"
-        
-    logging.debug("%s creating a spotify watcher task for: %s", 
-                    procname, user.spotifyid)
-    user_task = asyncio.create_task(watcher(cred, spotify, user.spotifyid),
-                        name=f"watcher_{user.spotifyid}")
-        
+    procname=f"watchman_{user.displayname}"
+    watchname=f"watcher_{user.displayname}"
+    
+    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
+    if "spotify_watcher" not in run_tasks:
+        logging.warning("%s this instance doesn't run spot watchers", procname)
+        return
+    
+    if watchname in [x.get_name() for x in asyncio.all_tasks()]:
+        logging.warning("%s is already running, won't start another", watchname)
+        return
+
+    logging.debug("%s creating a spotify watcher for: %s", 
+                    procname, watchname)
+    user_task = asyncio.create_task(watcher(cred, spotify, user),
+                    name=watchname)
+    
     # add this user task to the global tasks set
     added = taskset.add(user_task)
     if added is not None:
@@ -76,50 +87,32 @@ async def get_player_queue(spotify, token, userid):
     return playbackqueue
 
 
-async def spotify_watcher(cred, spotify, userid):
+async def spotify_watcher(cred, spotify, user):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
-
-    procname = f"watcher_{userid}"
     
+    logging.debug("fetching user for watcher: %s", user)
+    user, token = await getuser(cred, user)
+    
+    procname = f"watcher_{user.displayname}"
     logging.info("%s watcher starting", procname)
 
-    try:
-        user, token = await getuser(cred, userid)
-    except Exception as e: # pylint: disable=broad-exception-caught
-        logging.error("%s getuser exception %s",procname, e)
-
-    # check for a lock in the database from another watcher
-    recent = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%s')
-    watcherid = f"watcher_{user.spotifyid}_{timestamp}"
+    # do some timestamp math and formatting
+    now = datetime.datetime.now(datetime.timezone.utc)
+    soon = datetime.timedelta(minutes=20)
+    timestamp = now.strftime('%s')
+    ttl = now + soon
+    then = datetime.timedelta(minutes=1)
+    recent = now - then
     
-    if user.watcherid == "killswitch":
-        logging.warning("%s detected killswitch, won't start, unsetting killswitch", procname)
-        user.watcherid = ""
-        await user.save()
-        return "killswitch"
-    
-    # disable the other-watcher checks, not important for now
-    # if (user.watcherid != watcherid
-    #       and user.status != "inactive"
-    #       and user.last_active > recent):
-    #     logging.error("%s initial startup found a recent active watcher, won't start", procname)
-    #     return "another active watcher"
-    
-    user.watcherid = watcherid
+    # set this as the current watcher in the database
+    user.watcherid = f"watcher_{user.spotifyid}_{timestamp}"
     await user.save()
-    
-    ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
-
-    # rate recent history (20 items)
-    if user.watcherid == "disabled":
-        await rate_history(spotify, user, token)
 
     # Check the initial status
     with spotify.token_as(token):
         try:
             currently = await spotify.playback_currently_playing()
-        except Exception as e: # pylint: disable=broad-exception-caught
+        except Exception as e:
             logging.error("%s spotify_currently_playing exception %s", procname, e)
         
         if currently is None:
@@ -149,20 +142,20 @@ async def spotify_watcher(cred, spotify, userid):
     while ttl > datetime.datetime.now(datetime.timezone.utc):
         
         logging.debug("%s loop is awake", procname)
-        user = await User.get(spotifyid=userid)
+        user = await User.get(spotifyid=user.spotifyid)
         status = user.status
         
-        if user.watcherid == "killswitch":
-            logging.warning("%s detected killswitch, unsetting killswitch and exiting", procname)
-            user.watcherid = ""
-            await user.save()
-            return "killswitch"
+        # if user.watcherid == "killswitch":
+        #     logging.warning("%s detected killswitch, unsetting killswitch and exiting", procname)
+        #     user.watcherid = ""
+        #     await user.save()
+        #     return "killswitch"
         
-        if (user.watcherid != watcherid 
-          and user.status != "inactive"
-          and user.last_active > recent):
-            logging.error("%s found another recent active watcher, exiting", procname)
-            return "another active watcher"
+        # if (user.watcherid != user.watcherid 
+        #   and user.status != "inactive"
+        #   and user.last_active > recent):
+        #     logging.error("%s found another recent active watcher, exiting", procname)
+        #     return "another active watcher"
  
         # refresh the spotify token if necessary
         if token.is_expiring:
@@ -181,7 +174,7 @@ async def spotify_watcher(cred, spotify, userid):
                 logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
 
         logging.debug("%s checking player queue state", procname)
-        playbackqueue = await get_player_queue(spotify, token, userid)
+        playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
         playbackqueueids = [x.id for x in playbackqueue.queue]
 
         sleep = 30
@@ -210,9 +203,11 @@ async def spotify_watcher(cred, spotify, userid):
             followers = await User.filter(status=f"following:{user.displayname}")
 
             # update the status and ttl, keep the watcher alive for 20 minutes
-            ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            soon = datetime.timedelta(minutes=20)
+            ttl = now + soon
             logging.debug("%s updating ttl, last_active and status: %s", procname, ttl)
-            user.last_active = datetime.datetime.now(datetime.timezone.utc)
+            user.last_active = now
             user.status = "active"
             await user.save()
             
@@ -265,7 +260,7 @@ async def spotify_watcher(cred, spotify, userid):
                     # a recommendation was started by a player and we saw it
                     logging.debug("%s recording play history %s",
                                 procname, nextup.track.trackname)
-                    await record(spotify, userid, nextup.track.spotifyid)
+                    await record(spotify, user.spotifyid, nextup.track.spotifyid)
 
 
                 # detect track changes
@@ -278,7 +273,7 @@ async def spotify_watcher(cred, spotify, userid):
                         logging.warning("%s removing skipped track from radio queue: %s",
                                     procname, last_track.trackname)
                         try:
-                            await Recommendation.filter(trackid=nextup_tid).delete()
+                            await Recommendation.filter(track_id=nextup_tid).delete()
                         except Exception as e:
                             logging.error("%s exception removing track from queue\n%s",
                                         procname, e)
@@ -287,13 +282,13 @@ async def spotify_watcher(cred, spotify, userid):
                     if last_position < 0.33:
                         value = -2
                         logging.info("%s early skip rating, %s %s %s",
-                                    userid, last_track.trackname, value, procname)
+                                    user.spotifyid, last_track.trackname, value, procname)
                         await rate(user, last_track, value)
                     elif last_position < 0.7:
                         value = -1
                         logging.info("%s late skip rating, %s %s %s",
-                                    userid, last_track.spotifyid, value, procname)
-                        await rate(spotify, userid, last_track.trackname, value)
+                                    user.spotifyid, last_track.spotifyid, value, procname)
+                        await rate(spotify, user.spotifyid, last_track.trackname, value)
             
                 if (remaining_ms - 30000) < 30000: # sleep for a few seconds
                     sleep = (remaining_ms - 30000) / 1000 # about to hit the autorate window
@@ -346,7 +341,7 @@ async def spotify_watcher(cred, spotify, userid):
                 # this has potential to pause recommendations if we recommend something that was
                 # already in the context queue, so let's warn about it
                 logging.debug("%s checking player queue state", procname)
-                playbackqueue = await get_player_queue(spotify, token, userid)
+                playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
                 playbackqueueids = [x.id for x in playbackqueue.queue]
                 
                 if nextup.track.spotifyid in playbackqueueids:

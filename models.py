@@ -92,7 +92,7 @@ class WebData():
     nextup: Recommendation
     user: User = None
     track: Track = None
-    rating: str = None
+    redirect_url: str = None
 
 
     def to_dict(self):

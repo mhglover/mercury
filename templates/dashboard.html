@@ -1,13 +1,7 @@
-{% extends 'base.html' %}
-
-{% block content %}
-
-  <h1>Dashboard</h1>
-  
   <p class="lead">Users</p>
   <table>
-      {% for a in users %}
-      <tr><td>{{ a }}</td></tr>
+      {% for user in activeusers %}
+      <tr><td>{{ user }}</td></tr>
       {% endfor %}
   </table>
 
@@ -38,5 +32,43 @@
       <tr><td>{{ a}}</td></tr>
       {% endfor %}
   </table>
+
+{% endblock %}
+
+
+---------------------------------------------------------------------
+{% extends 'base.html' %}
+{% block content %}
+
+{% if w.playing_trackname != w.nextup_trackname %}
+<h3>you are listening to</h3>
+<h1>{{ w.playing_trackname }}</h1>
+{% endif %}
+
+<h3>the current recommendation is</h3>
+<h1>{{ w.nextup_trackname }}</h1>
+
+<h3>actively vibing</h3>
+<table>
+    {% if w.playing_trackname == "Not Playing" %}
+        <tr><td>click an active listener if you're listening with them</td></tr>
+        {% for user in w.activeusers %}
+        <tr><td><a href="/follow/{{ user }}">now playing</a></td></tr>
+        {% endfor %}
+    {% else %}
+        {% for user in w.activeusers %}
+        <tr><td>{{ user }}</td></tr>
+        {% endfor %}
+    {% endif %}
+</table>
+
+<h3>some recent recommendations were</h3>
+<table>
+    {% for name in w.history %}
+    <tr><td>{{ name }}</td></tr>
+    {% endfor %}
+</table>
+
+
 
 {% endblock %}
