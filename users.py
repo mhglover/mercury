@@ -1,7 +1,7 @@
 """functions for user manipulations"""
 import logging
 import pickle
-from models import User
+from models import User, Rating, WebUser, Track
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -47,5 +47,41 @@ async def getactiveusers():
     
     returns: list of Users
     """
-    users = await User.exclude(status="inactive")
-    return users
+    return await User.exclude(status="inactive")
+
+
+async def getactivewebusers(trackid):
+    """fetch
+    
+    returns: list of Webusers   
+    """
+    webusers = []
+    activeusers = await getactiveusers()
+    track = await Track.filter(id=trackid).get().prefetch_related("ratings")
+    user_ratings = {x.user_id:x.rating for x in track.ratings}
+    for user in activeusers:
+        if user.id in user_ratings:
+            webusers.append(WebUser(displayname=user.displayname,
+                    user_id=user.id,
+                    color=colorize(user_ratings[user.id]),
+                    rating=user_ratings[user.id],
+                    track_id=trackid,
+                    trackname=track.trackname))
+    
+    return webusers
+
+
+def colorize(value: int):
+    """return a text string based on value"""
+    if value is None:
+        return 'unrated'
+    if value <= -2: 
+        return 'hate'
+    elif value == -1:
+        return 'dislike'
+    elif value == 0:
+        return 'shrug'
+    elif value == 1:
+        return 'like'
+    elif value > 1:
+        return 'love'

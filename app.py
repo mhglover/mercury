@@ -11,7 +11,7 @@ from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 from models import User, WebData
 from watchers import user_reaper, watchman, spotify_watcher
-from users import getactiveusers, getuser
+from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext, getratings
 from raters import rate_history, rate_saved
 from spot_funcs import trackinfo, getrecents
@@ -123,12 +123,13 @@ async def index():
     # check whether this is a known user or they need to login
     user_spotifyid = session.get('spotifyid', None)
     
+    nextup = await getnext()
     # what's happening y'all
     web_data = WebData(
         history=await getrecents(limit=20),
-        activeusers=await getactiveusers(),
-        nextup=await getnext(),
-        ratings=None
+        nextup=nextup,
+        users=await getactivewebusers(nextup.track_id),
+        ratings=[]
         )
     
     if user_spotifyid is None:
@@ -277,8 +278,9 @@ async def dashboard():
     # what's happening y'all
     data = WebData(
         history=await getrecents(),
-        activeusers = await getactiveusers(),
-        nextup = await getnext()
+        users = await getactiveusers(),
+        nextup = await getnext(),
+        ratings=[]
         )
 
     # ratings = [x for x in Rating.select()]

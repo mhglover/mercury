@@ -91,12 +91,22 @@ class WebTrack():
     color: str
     rating: int
 
+@dataclass
+class WebUser():
+    """data model for passing track data to a web template"""
+    displayname: str = None
+    user_id: int = None
+    color: str = None
+    rating: int = None
+    track_id: int = None
+    trackname: str = None
+
 
 @dataclass
 class WebData():
     """data model for passing state to web template"""
     history: List[PlayHistory]
-    activeusers: List[User]
+    users: List[WebUser]
     ratings: List[WebTrack]
     nextup: Recommendation
     user: User = None
@@ -114,6 +124,6 @@ class WebData():
                             for track in self.ratings},
             "history": list(set(x.trackname for x in self.history)),
             "playing_trackname": self.track.trackname,
-            "activeusers": [x.displayname for x in self.activeusers],
+            "users": self.users,
             "nextup_trackname": self.nextup.trackname,
         }
