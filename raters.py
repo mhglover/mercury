@@ -10,28 +10,22 @@ from models import Rating, PlayHistory
 # pylint: disable=trailing-whitespace
 
 
-async def rate(spotify, uid, tid,
+async def rate(user, track,
                value=1, 
                last_played=datetime.datetime.now(datetime.timezone.utc),
                downrate=False):
     """rate a track, don't downrate unless forced"""
     procname="rate"
     
-    # make sure this is in the database and get the name for logging
-    try:
-        trackname = await trackinfo(spotify, tid)
-    except Exception as e: # pylint: disable=broad-exception-caught
-        logging.info("rate exception adding a track to database: [%s]\n%s",
-                     tid, e)
-
-    logging.info("%s writing a rating: %s %s %s", procname, uid, trackname, value)
+    logging.info("%s writing a rating: %s %s %s", 
+                 procname, user.displayname, track.trackname, value)
 
     # fetch it or create it if it didn't already exist
-    rating, created = await Rating.get_or_create(userid=uid,
-                                                trackid=tid,
+    rating, created = await Rating.get_or_create(user_id=user.id,
+                                                track_id=track.id,
                                                 defaults={
                                                    "rating": value,
-                                                   "trackname": trackname,
+                                                   "trackname": track.trackname,
                                                    "last_played": last_played
                                                    }
                                                )
@@ -46,10 +40,10 @@ async def rate(spotify, uid, tid,
         # don't automatically downrate
         if rating.rating > value and downrate is False:
             logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
-                         procname, trackname, rating.rating, value, uid)
+                         procname, track.trackname, rating.rating, value, user.displayname)
         else:
             logging.debug("%s writing a rating: %s %s %s",
-                          procname, uid, trackname, value)
+                          procname, user.displayname, track.trackname, value)
             rating.rating = value
             await rating.save()
 
@@ -57,10 +51,11 @@ async def rate(spotify, uid, tid,
 async def record(spotify, uid, tid):
     """write a record to the play history table"""
     procname = "record"
-    trackname = await trackinfo(spotify, tid)
+    track = await trackinfo(spotify, tid)
+    trackname = track.trackname
     logging.info("%s play history %s %s", procname, uid, trackname)
     try:
-        insertedkey = await PlayHistory.create(trackid=tid)
+        insertedkey = await PlayHistory.create(track_id=track.id, trackname=trackname)
         await insertedkey.save()
     except Exception as e:
         logging.error("record exception creating playhistory: %s\n%s",
@@ -69,33 +64,45 @@ async def record(spotify, uid, tid):
     logging.debug("record inserted play history record %s", insertedkey)
 
 
-async def rate_history(spotify, user, token, value=1, count=20):
+async def rate_history(spotify, user, token, value=1, limit=20):
     """pull recently played tracks and write ratings for them"""
     with spotify.token_as(token):
-        rp = await spotify.playback_recently_played(limit=count)
+        rp = await spotify.playback_recently_played(limit=limit)
         # rp = await spotify.all_items()
     for each in rp.items:
-        await rate(spotify, user.spotifyid, each.track.id,
-                    value=value, last_played=each.played_at)
+        track = await trackinfo(spotify, each.track.id)
+        await rate(user, track, value=value, last_played=each.played_at)
+
+
+async def rate_saved(spotify, user, token, value=4,
+                     last_played=datetime.datetime(1970, 1, 1)):
+    """pull user's saved tracks and write ratings for them"""
+    with spotify.token_as(token):
+        pages = await spotify.saved_tracks()
+        all_items = [each async for each in spotify.all_items(pages)]
+        for each in all_items:
+            track = await trackinfo(spotify, each.track.id)
+            await rate(user, track, value=value, last_played=last_played)
     
 
-async def get_current_rating(trackid, activeusers=None):
+
+async def get_current_rating(track, activeusers=None):
     """pull the total ratings for a track, optionally for a list of users"""
 
     # there is a better way to do this but I haven't found it yet
     if activeusers is not None:
         selector = ( Rating.get_or_none()
                          .annotate(sum=Sum("rating"))
-                         .filter(trackid=trackid)
-                         .group_by('trackid')
+                         .filter(id=track.id)
+                         .group_by('track_id')
                          .values_list("sum", flat=True))
 
     else:
         selector = ( Rating.get_or_none()
                          .annotate(sum=Sum("rating"))
-                         .filter(trackid=trackid)
+                         .filter(id=track.id)
                          .filter(userid__in=activeusers)
-                         .group_by('trackid')
+                         .group_by('track_id')
                          .values_list("sum", flat=True))
         
     return await selector

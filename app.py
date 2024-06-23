@@ -9,11 +9,11 @@ import tekore as tk
 from dotenv import load_dotenv
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, Track, UpcomingQueue
+from models import User, Recommendation, Track
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
 from queue_manager import queue_manager, trackinfo, getrecents, getnext
-from raters import get_current_rating, rate, rate_history
+from raters import get_current_rating, rate_history, rate_saved
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -125,8 +125,11 @@ async def index():
     activeusers = await getactiveusers()
     displaynames = [x.displayname for x in activeusers]
     
-    nextup_trackid, _ = await getnext()
-    nextup_trackname = await trackinfo(spotify, nextup_trackid)
+    # nextup_trackid, _ = await getnext()
+    recommendation = await getnext()
+    nextup_track = recommendation.track
+    nextup_trackname = nextup_track.trackname
+    nextup_spotifyid = nextup_track.spotifyid
     
     # check whether this is a known user or they need to login
     spotifyid = session.get('spotifyid', "login")
@@ -151,6 +154,9 @@ async def index():
         user.displayname = "displayname unset"
         user.save()
     
+    # pull some ratings for the history
+    # ratedhistory = await getratings(playhistory, spotifyid)
+    
     # followers should use their leader's token for
     # checking the currently-playing track, but nothing else
     if user.status.startswith("following"):
@@ -167,13 +173,12 @@ async def index():
 
     # set some return values
     if currently is None or currently.is_playing is False:
-        trackname="Not Playing"
-        trackid = ""
         rating = ""
+        track = ""
     else:
         trackid = currently.item.id
-        trackname = await trackinfo(spotify, trackid)
-        rating = await get_current_rating(trackid, activeusers=activeusers)
+        track = await trackinfo(spotify, trackid)
+        rating = await get_current_rating(track, activeusers=activeusers)
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
 
@@ -190,7 +195,7 @@ async def index():
         return await render_template('index.html',
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
-                                 np_name=trackname,
+                                 np_name=track.trackname,
                                  cur_rec=nextup_trackname,
                                  np_id=trackid,
                                  rating=rating,
@@ -201,9 +206,9 @@ async def index():
     return await render_template('index.html',
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
-                                 cur_rec=nextup_trackname,
-                                 np_name=trackname,
-                                 np_id=trackid,
+                                 cur_rec=nextup_track.trackname,
+                                 np_name=track.trackname,
+                                 np_id=track.spotifyid,
                                  rating=rating,
                                  activeusers=displaynames,
                                  history=playhistory
@@ -249,10 +254,10 @@ async def spotify_authorization():
     logging.debug("auths: %s", auths)
     logging.debug("auth_url: %s", auth.url)
     
-    trackid, _ = await getnext()
-    trackname = await trackinfo(spotify, trackid)
+    recommendation = await getnext()
+        
     return await render_template('auth.html', 
-                                 trackname=trackname,
+                                 trackname=recommendation.track.trackname,
                                  spoturl=auth.url)
 
 
@@ -333,7 +338,7 @@ async def dashboard():
 
     # queued = [await trackinfo(trackid) for trackid in queue]
     try:
-        dbqueue = await UpcomingQueue.all().values_list('trackid', flat=True)
+        dbqueue = await Recommendation.all().values_list('trackid', flat=True)
     except Exception as e: # pylint: disable=W0718
         logging.error("dashboard database queue retrieval exception: %s", e)
 
@@ -367,11 +372,7 @@ async def pullratings(spotifyid=None):
         await rate_history(spotify, user, token)
         
         # rate saved tracks
-        value = 4
-        st = await spotify.all_items(await spotify.saved_tracks())
-        for each in st:
-            await rate(spotify, user.spotifyid, each.track.id,
-                       value=value, last_played="1970-01-01")
+        await rate_saved(spotify, user, token)
         
         # tops = await spotify.all_items(await spotify.current_user_top_tracks())
 

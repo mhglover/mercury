@@ -16,8 +16,8 @@ from users import getactiveusers
 async def recently_rated_tracks(days=7):
     """fetch tracks that have been rated in the last few days"""
     interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
-    tids = await Rating.filter(last_played__gte=interval).values_list('trackid', flat=True)
-    return tids
+    ratings = await Rating.filter(last_played__gte=interval)
+    return ratings
 
 
 async def popular_tracks(count=1, rating=0):
@@ -25,21 +25,24 @@ async def popular_tracks(count=1, rating=0):
     
     """
     procname = "popular_tracks"
-    recent_tids = await recently_rated_tracks()
+    recent_tracks = await recently_rated_tracks()
+    recent_tids = [x.id for x in recent_tracks]
+    
     activeusers = await getactiveusers()
+    active_uids = [x.id for x in activeusers]
 
     logging.debug("%s pulled %s recently played tracks",
                  procname, len(recent_tids))
 
     tids = ( await Rating.annotate(sum=Sum("rating"))
                         .annotate(order=Random())
-                        .group_by('trackid')
+                        .group_by('track_id')
                         .filter(sum__gte=rating)
-                        .filter(userid__in=activeusers)
-                        .exclude(trackid__in=recent_tids)
+                        .filter(user_id__in=active_uids)
+                        .exclude(track_id__in=recent_tids)
                         .order_by('order')
                         .limit(count)
-                        .values_list("trackid", flat=True))
+                        .values_list("track_id", flat=True))
     
     logging.debug("%s pulled %s results", procname, len(tids))
 

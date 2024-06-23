@@ -3,7 +3,7 @@ import logging
 import asyncio
 import datetime
 import pickle
-from models import User, UpcomingQueue
+from models import User, Recommendation
 from users import getuser
 from queue_manager import trackinfo, getnext
 from raters import rate, record, rate_history
@@ -143,7 +143,8 @@ async def spotify_watcher(cred, spotify, userid):
         else:
             
             trackid = currently.item.id
-            trackname, _ = await trackinfo(spotify, trackid, return_track=True)
+            track = await trackinfo(spotify, trackid)
+            trackname = track.trackname
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             position = currently.progress_ms/currently.item.duration_ms
             
@@ -231,19 +232,22 @@ async def spotify_watcher(cred, spotify, userid):
                 await each.save()
             
             # note details from the last loop for comparison
-            last_trackid = trackid
+            last_track = track
             last_position = position
 
             # pull details from the current item
             trackid = currently.item.id
-            trackname, _ = await trackinfo(spotify, trackid, return_track=True)
+            track = await trackinfo(spotify, trackid)
+            trackname = track.trackname
             position = currently.progress_ms/currently.item.duration_ms
             
             # pull details for the next track in the queue
-            nextup_tid, nextup_expires_at = await getnext()
-
-            if nextup_tid is not None:
-                nextup_name, nextup_track = await trackinfo(spotify, nextup_tid, return_track=True)
+            # nextup_tid, nextup_expires_at = await getnext()
+            nextup = await getnext()
+            nextup_track = nextup.track
+            nextup_expires_at = nextup.expires_at
+            nextup_tid = nextup.track.spotifyid
+            nextup_trackname = nextup.track.trackname
             
             # do some math
             remaining_ms = currently.item.duration_ms - currently.progress_ms
@@ -255,7 +259,7 @@ async def spotify_watcher(cred, spotify, userid):
                 
                 # if we're playing the lead track in the Upcoming Queue
                 # and nobody else has set the expiration yet
-                if nextup_tid == trackid and nextup_expires_at is None:
+                if nextup.track.spotifyid == trackid and nextup.expires_at is None:
                     logging.info("%s first to start track %s, setting expiration",
                                  procname, trackname)
                     
@@ -264,28 +268,28 @@ async def spotify_watcher(cred, spotify, userid):
                     expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
                                     datetime.timedelta(milliseconds=remaining_ms - 30000))
                     
-                    _ = ( await UpcomingQueue.select_for_update()
-                                                .filter(trackid=nextup_tid)
+                    _ = ( await Recommendation.select_for_update()
+                                                .filter(id=nextup.id)
                                                 .update(expires_at=expires_at))
                     
                     # record it in the playhistory table
                     # a recommendation was started by a player and we saw it
                     logging.debug("%s recording play history %s",
-                                procname, trackname)
-                    await record(spotify, userid, trackid)
+                                procname, nextup.track.trackname)
+                    await record(spotify, userid, nextup.track.spotifyid)
 
 
                 # detect track changes
-                if trackid != last_trackid:
+                if trackid != last_track.spotifyid:
                     logging.debug("%s track change at %.0d%% - now playing %s",
                                 procname, last_position, trackname)
                     
                     # did we skip
-                    if last_trackid == nextup_tid:
+                    if last_track.spotifyid == nextup.track.spotifyid:
                         logging.warning("%s removing skipped track from radio queue: %s",
-                                    procname, last_trackid)
+                                    procname, last_track.trackname)
                         try:
-                            await UpcomingQueue.filter(trackid=nextup_tid).delete()
+                            await Recommendation.filter(trackid=nextup_tid).delete()
                         except Exception as e:
                             logging.error("%s exception removing track from queue\n%s",
                                         procname, e)
@@ -294,13 +298,13 @@ async def spotify_watcher(cred, spotify, userid):
                     if last_position < 0.33:
                         value = -2
                         logging.info("%s early skip rating, %s %s %s",
-                                    userid, last_trackid, value, procname)
-                        await rate(spotify, userid, last_trackid, value)
+                                    userid, last_track.trackname, value, procname)
+                        await rate(user, last_track, value)
                     elif last_position < 0.7:
                         value = -1
                         logging.info("%s late skip rating, %s %s %s",
-                                    userid, last_trackid, value, procname)
-                        await rate(spotify, userid, last_trackid, value)
+                                    userid, last_track.spotifyid, value, procname)
+                        await rate(spotify, userid, last_track.trackname, value)
             
                 if (remaining_ms - 30000) < 30000: # sleep for a few seconds
                     sleep = (remaining_ms - 30000) / 1000 # about to hit the autorate window
@@ -310,40 +314,42 @@ async def spotify_watcher(cred, spotify, userid):
             # welcome to the end zone
             elif remaining_ms <= 30000:
                 logging.info("%s endzone %s - next up %s",
-                            procname, trackname, nextup_name)
+                            procname, trackname, nextup_trackname)
                 
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
                 logging.debug("%s setting a rating, %s %s %s", 
                              user.displayname, trackname, value, procname)
-                await rate(spotify, userid, trackid, value=value)
+                await rate(user, track, value=value)
                 
                 # record a +1 for followers
+                value = 1
                 for each in followers:
                     logging.info("%s setting a follower rating, %s %s %s",
                              procname, trackname, each.displayname, value)
-                    await rate(spotify, each.spotifyid, trackid, value=value)
+                    await rate(each, track, value=value)
                 
                 # if we're in the endzone and this same track is still next in the queue
                 # we must be first to the endzone, so let's remove the track from dbqueue
-                if trackid == nextup_tid:
+                if trackid == nextup.track.spotifyid:
                     logging.info("%s first to endzone, removing track from radio queue: %s",
-                                procname, nextup_name)
+                                procname, nextup_trackname)
                     try:
-                        await UpcomingQueue.filter(trackid=nextup_tid).delete()
+                        await Recommendation.filter(id=nextup.id).delete()
                     except Exception as e:
                         logging.error("%s exception removing track from upcomingqueue\n%s",
                                         procname, e)
                     
                     # now get the next queued track
-                    nextup_tid, nextup_expires_at = await getnext()
-                    nextup_name, nextup_track = await trackinfo(spotify, 
-                                                            nextup_tid, 
-                                                            return_track=True)
+                    # nextup_tid, nextup_expires_at = await getnext()
+                    nextup = await getnext()
+                    nextup_track = nextup.track
+                    nextup_tid = nextup.track.spotifyid
+                    nextup_trackname = nextup.track.trackname
                     
                     # if there's nothing yet, fine, jump to the next cycle now
-                    if nextup_tid is None:
+                    if nextup is None:
                         logging.warning("%s nothing in queue to queue, starting next loop early",
                                         procname)
                         continue
@@ -355,20 +361,20 @@ async def spotify_watcher(cred, spotify, userid):
                 playbackqueue = await get_player_queue(spotify, token, userid)
                 playbackqueueids = [x.id for x in playbackqueue.queue]
                 
-                if nextup_tid in playbackqueueids:
+                if nextup.track.spotifyid in playbackqueueids:
                     logging.warning("%s track already queued, won't send again - %s",
-                                    procname, nextup_name)
+                                    procname, nextup.track.trackname)
                 else:
                     logging.info("%s sending to spotify queue %s",
-                                    procname, nextup_name)
+                                    procname, nextup.track.trackname)
                     
                     with spotify.token_as(token):
                         try:
-                            _ = await spotify.playback_queue_add(nextup_track.trackuri)
+                            _ = await spotify.playback_queue_add(nextup.track.trackuri)
                         except Exception as e: 
                             logging.error(
                                 "%s exception spotify.playback_queue_add %s\n%s",
-                                procname, nextup_name, e)
+                                procname, nextup.track.trackname, e)
 
                 # sleep until this track is done
                 sleep = (remaining_ms /1000) + 2

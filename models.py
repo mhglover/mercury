@@ -8,6 +8,7 @@ from tortoise.models import Model
 
 class User(Model):
     """track users"""
+    id = fields.IntField(primary_key=True)
     spotifyid = fields.TextField()
     displayname = fields.TextField()
     token = fields.BinaryField()
@@ -15,6 +16,8 @@ class User(Model):
     status = fields.TextField()
     watcherid = fields.TextField()
     role = fields.TextField(default="user")
+    
+    ratings: fields.ReverseRelation["Rating"]
 
     def __str__(self):
         return str(self.spotifyid)
@@ -22,10 +25,13 @@ class User(Model):
 
 class Track(Model):
     """track tracks"""
-    trackid = fields.CharField(max_length=255)
+    id = fields.IntField(primary_key=True)
+    spotifyid = fields.CharField(max_length=255)
     trackname = fields.TextField()
     trackuri = fields.CharField(max_length=255)
     duration_ms = fields.IntField()
+    
+    ratings: fields.ReverseRelation["Rating"]
 
     def __str__(self):
         return str(self.trackname)
@@ -33,11 +39,15 @@ class Track(Model):
 
 class Rating(Model):
     """track likes"""
-    userid = fields.TextField()
-    trackid = fields.TextField()
+    id = fields.IntField(primary_key=True)
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="ratings" )
+    track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
+        "models.Track", related_name="ratings")
     trackname = fields.TextField()
     rating = fields.IntField()
-    last_played = fields.DatetimeField(auto_now=True)
+    last_played = fields.DatetimeField()
+    comment = fields.TextField(null=True)
 
     def __str__(self):
         return str(self.trackname)
@@ -45,18 +55,24 @@ class Rating(Model):
 
 class PlayHistory(Model):
     """track the history of songs played"""
-    trackid = fields.TextField()
+    id = fields.IntField(primary_key=True)
+    track = fields.ForeignKeyField('models.Track', related_name='histories')
     played_at = fields.DatetimeField(auto_now=True)
+    trackname = fields.TextField()
 
     def __str__(self):
-        return str(self.trackid)
+        return str(self.trackname)
 
 
-class UpcomingQueue(Model):
-    """track the upcoming songs"""
-    trackid = fields.TextField()
+class Recommendation(Model):
+    """track the recommended tracks"""
+    id = fields.IntField(primary_key=True)
+    track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
+        "models.Track", related_name="recommendations")
+    trackname = fields.TextField()
     queued_at = fields.DatetimeField(auto_now=True)
-    expires_at = fields.DatetimeField()
+    expires_at = fields.DatetimeField(null=True)
+    reason = fields.TextField(null=True)
 
     def __str__(self):
-        return str(self.trackid)
+        return str(self.trackname)

@@ -15,11 +15,12 @@
 
 <h3>some recent recommendations were</h3>
 <table>
-    {% for each in history %}
-    <tr><td>{{ each if each != np_name }}</td></tr>
+    {% for name, rating in history %}
+        {% if name != np_name %}
+    <tr><td>{{ name }} - {{ rating }}</td></tr>
+        {% endif %}
     {% endfor %}
 </table>
-
 
 <h3>actively vibing</h3>
 <table>

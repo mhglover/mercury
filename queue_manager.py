@@ -3,7 +3,7 @@ import logging
 import datetime
 import asyncio
 import pickle
-from models import UpcomingQueue, Track, PlayHistory
+from models import Recommendation, Track, PlayHistory, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
 
@@ -21,22 +21,22 @@ async def queue_manager(spotify):
     while True:
         logging.debug("%s checking queue state", procname)
 
-        query = await UpcomingQueue.all()
-        try:
-            uqueue = [x.trackid for x in iter(query)]
-        except Exception as e:
-            logging.error("%s failed pulling queue from database, exception type: %e\n%s",
-                          procname, type(e), e)
+        recommendations = await Recommendation.all()
+        # try:
+        #     uqueue = [x.trackid for x in iter(query)]
+        # except Exception as e:
+        #     logging.error("%s failed pulling queue from database, exception type: %e\n%s",
+                        #   procname, type(e), e)
 
         await expire_queue()
 
-        while len(uqueue) > 2:
-            newest = uqueue.pop()
+        while len(recommendations) > 2:
+            newest = recommendations.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
                          procname, newest)
-            await UpcomingQueue.filter(trackid=newest).delete()
+            await Recommendation.filter(id=newest.id).delete()
 
-        while len(uqueue) < 2:
+        while len(recommendations) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
@@ -68,30 +68,34 @@ async def queue_manager(spotify):
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            trackname = await trackinfo(spotify, upcoming_tid)
-            logging.info("%s adding to radio queue: %s", procname, trackname)
+            track = await gettrack(upcoming_tid)
+            logging.info("%s adding to radio queue: %s", procname, track.trackname)
             
-            u = await UpcomingQueue.create(trackid=upcoming_tid)
+            u = await Recommendation.create(track_id=upcoming_tid,
+                                            trackname=track.trackname)
             await u.save()
-            uqueue.append(upcoming_tid)
+            recommendations.append(upcoming_tid)
 
         logging.debug("%s sleeping for %s", procname, 10)
         await asyncio.sleep(10)
 
 
-async def trackinfo(spotify, trackid, return_track=False, return_time=False):
+async def gettrack(tid):
+    """get a track from the database"""
+    return await Track.get(id=tid)
+
+
+async def trackinfo(spotify, spotifyid):
     """pull track name (and details))
 
     Args:
+        spotify (obj): spotify object
         trackid (str): Spotify's unique track id
-        return_track (bool, optional): also return the track. Defaults to False.
-        return_time (bool, optional): also return the track duration
 
     Returns:
-        str: track artist and title
-        str, track object: track artist and title, track object
+        track object
     """
-    track, created = await Track.get_or_create(trackid=trackid,
+    track, created = await Track.get_or_create(spotifyid=spotifyid,
                                       defaults={
                                           "duration_ms": 0,
                                           "trackname": "",
@@ -99,62 +103,69 @@ async def trackinfo(spotify, trackid, return_track=False, return_time=False):
                                           })
     
     if created or track.trackuri == '' or track.duration_ms == '':
-        spotify_details = await spotify.track(trackid)
+        spotify_details = await spotify.track(spotifyid)
         trackartist = " & ".join([x.name for x in spotify_details.artists])
         track.trackname = f"{trackartist} - {spotify_details.name}"
         track.duration_ms = spotify_details.duration_ms
         track.trackuri = spotify_details.uri
         await track.save()
-
-    name = track.trackname
-
-    if return_time:
-        milliseconds = track.duration_ms
-        seconds = int(milliseconds / 1000) % 60
-        minutes = int(milliseconds / (1000*60)) % 60
-        name = f"{track.trackname} {minutes}:{seconds:02}"
-
-    if return_track is True:
-        return name, track
     
-    return name
+    return track
 
 
 async def getrecents(spotify):
-    """pull recently played tracks from history table"""
+    """pull recently played tracks from history table
+    
+    returns: list of track ids"""
     try:
         ph_query = await PlayHistory.all().order_by('-id').limit(10)
     except Exception as e:
         logging.error("exception ph_query %s", e)
 
     try:
-        playhistory = [await trackinfo(spotify, x.trackid) for x in ph_query]
+        tracks = [await trackinfo(spotify, x.trackid) for x in ph_query]
+        playhistory = [x.trackname for x in tracks]
     except Exception as e:
         logging.error("exception playhistory %s", e)
 
     return playhistory
 
 
+async def getratings(trackids, uid):
+    """pull ratings for a list of tracks for a given user"""
+    ratings = []
+    for tid in trackids:
+        r = await Rating.filter(userid=uid).filter(trackid=tid).get()
+        if r.rating >= 1:
+            color = "love"
+        elif r.rating == 1:
+            color = "like"
+        elif r.rating == 0:
+            color = "shrug"
+        elif r.rating == -1:
+            color = "dislike"
+        elif r.rating <= -2:
+            color = "hate"
+                
+    ratings.append((r.trackname, color))
+    return ratings
+    
+
 async def getnext():
     """get the next track's details from the queue and database
     
-    returns: trackid, expires_at
+    returns: recommendation object with track prefetched
     """
     logging.debug("pulling queue from db")
-    n = await UpcomingQueue.filter().order_by("id").limit(1)
-    
-    if n == []:
-        return None, None
-    
-    return n[0].trackid, n[0].expires_at
+    return await Recommendation.first().prefetch_related("track")
 
 
 async def expire_queue():
     """remove old tracks from the upcoming queue"""
     now = datetime.datetime.now(datetime.timezone.utc)
     logging.debug("expire_queue removing old tracks")
-    expired = await UpcomingQueue.filter(expires_at__lte=now)
+    expired = await Recommendation.filter(expires_at__lte=now)
     for each in expired:
         logging.info("expire_queue removing track: %s %s",
-                     each.trackid, each.expires_at)
-        _ = await UpcomingQueue.filter(id=each.id).delete()
+                     each.trackname, each.expires_at)
+        _ = await Recommendation.filter(id=each.id).delete()
