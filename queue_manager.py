@@ -95,7 +95,7 @@ async def getratings(trackids: list, uid: int):
         if r is None:
             continue
         
-        if r.rating >= 1:
+        if r.rating > 1:
             color = "love"
         elif r.rating == 1:
             color = "like"

@@ -50,17 +50,17 @@ body {
 }
 
 td.love {
-  color: blue
+  color: #350fec
 }
 
 td.like {
-  color: lightblue
+  color: #26a2df
 }
 
 td.dislike {
-  color: pink
+  color: #f391a1
 }
 
 td.hate {
-  color: red
+  color: #ca3232
 }
