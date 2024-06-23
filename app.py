@@ -12,8 +12,9 @@ from tortoise.contrib.quart import register_tortoise
 from models import User, Recommendation, Track
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
-from queue_manager import queue_manager, trackinfo, getrecents, getnext
+from queue_manager import queue_manager, getnext
 from raters import get_current_rating, rate_history, rate_saved
+from spot_funcs import trackinfo, getrecents
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -125,11 +126,7 @@ async def index():
     activeusers = await getactiveusers()
     displaynames = [x.displayname for x in activeusers]
     
-    # nextup_trackid, _ = await getnext()
-    recommendation = await getnext()
-    nextup_track = recommendation.track
-    nextup_trackname = nextup_track.trackname
-    nextup_spotifyid = nextup_track.spotifyid
+    nextup = await getnext()
     
     # check whether this is a known user or they need to login
     spotifyid = session.get('spotifyid', "login")
@@ -141,7 +138,7 @@ async def index():
         # get outta here kid ya bother me
         return await render_template('index.html',
                                  spotifyid=spotifyid,
-                                 cur_rec=nextup_trackname,
+                                 cur_rec=nextup.track.trackname,
                                  activeusers=displaynames,
                                  history=playhistory
                                 )
@@ -196,7 +193,7 @@ async def index():
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
                                  np_name=track.trackname,
-                                 cur_rec=nextup_trackname,
+                                 cur_rec=nextup.trackname,
                                  np_id=trackid,
                                  rating=rating,
                                  activeusers=displaynames,
@@ -206,7 +203,7 @@ async def index():
     return await render_template('index.html',
                                  spotifyid=spotifyid,
                                  displayname=user.displayname,
-                                 cur_rec=nextup_track.trackname,
+                                 cur_rec=nextup.trackname,
                                  np_name=track.trackname,
                                  np_id=track.spotifyid,
                                  rating=rating,

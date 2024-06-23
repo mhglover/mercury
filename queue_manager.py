@@ -3,7 +3,7 @@ import logging
 import datetime
 import asyncio
 import pickle
-from models import Recommendation, Track, PlayHistory, Rating
+from models import Recommendation, Track, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
 
@@ -47,7 +47,7 @@ async def queue_manager(spotify):
             
             logging.debug("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = ["pop", "pop", "spotrec"]
+                block = ["spotrec","popular", "popular"]
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)
@@ -59,76 +59,29 @@ async def queue_manager(spotify):
                 
                 logging.info("%s queuing a spotify recommendation", procname)
                 seeds = await popular_tracks(5)
-                upcoming_tid = await spotrec_tracks(spotify, token, seeds)
+                rec = await spotrec_tracks(spotify, token, seeds)
 
-            elif playtype == "pop":
+            elif playtype == "popular":
                 logging.info("%s queuing a popular recommendation", procname)
-                upcoming_tid = await popular_tracks()
+                rec = await popular_tracks(count=1)
             
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            track = await gettrack(upcoming_tid)
-            logging.info("%s adding to radio queue: %s", procname, track.trackname)
+            logging.info("%s adding to radio queue: %s", procname, rec.trackname)
             
-            u = await Recommendation.create(track_id=upcoming_tid,
-                                            trackname=track.trackname)
+            u = await Recommendation.create(track_id=rec.id,
+                                            trackname=rec.trackname)
             await u.save()
-            recommendations.append(upcoming_tid)
+            recommendations.append(u)
 
         logging.debug("%s sleeping for %s", procname, 10)
         await asyncio.sleep(10)
 
 
-async def gettrack(tid):
+async def gettrack(track_id):
     """get a track from the database"""
-    return await Track.get(id=tid)
-
-
-async def trackinfo(spotify, spotifyid):
-    """pull track name (and details))
-
-    Args:
-        spotify (obj): spotify object
-        trackid (str): Spotify's unique track id
-
-    Returns:
-        track object
-    """
-    track, created = await Track.get_or_create(spotifyid=spotifyid,
-                                      defaults={
-                                          "duration_ms": 0,
-                                          "trackname": "",
-                                          "trackuri": ""
-                                          })
-    
-    if created or track.trackuri == '' or track.duration_ms == '':
-        spotify_details = await spotify.track(spotifyid)
-        trackartist = " & ".join([x.name for x in spotify_details.artists])
-        track.trackname = f"{trackartist} - {spotify_details.name}"
-        track.duration_ms = spotify_details.duration_ms
-        track.trackuri = spotify_details.uri
-        await track.save()
-    
-    return track
-
-
-async def getrecents(spotify):
-    """pull recently played tracks from history table
-    
-    returns: list of track ids"""
-    try:
-        ph_query = await PlayHistory.all().order_by('-id').limit(10)
-    except Exception as e:
-        logging.error("exception ph_query %s", e)
-
-    try:
-        tracks = [await trackinfo(spotify, x.trackid) for x in ph_query]
-        playhistory = [x.trackname for x in tracks]
-    except Exception as e:
-        logging.error("exception playhistory %s", e)
-
-    return playhistory
+    return await Track.get(id=track_id)
 
 
 async def getratings(trackids, uid):

@@ -3,8 +3,8 @@
 import logging
 import datetime
 from tortoise.functions import Sum
-from queue_manager import trackinfo
 from models import Rating, PlayHistory
+from spot_funcs import trackinfo
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace

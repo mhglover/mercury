@@ -5,9 +5,9 @@ import datetime
 import pickle
 from models import User, Recommendation
 from users import getuser
-from queue_manager import trackinfo, getnext
+from queue_manager import getnext
 from raters import rate, record, rate_history
-from spot_funcs import is_saved
+from spot_funcs import is_saved, trackinfo
 
 # pylint: disable=trailing-whitespace
 # pylint: disable=broad-exception-caught
@@ -244,8 +244,6 @@ async def spotify_watcher(cred, spotify, userid):
             # pull details for the next track in the queue
             # nextup_tid, nextup_expires_at = await getnext()
             nextup = await getnext()
-            nextup_track = nextup.track
-            nextup_expires_at = nextup.expires_at
             nextup_tid = nextup.track.spotifyid
             nextup_trackname = nextup.track.trackname
             
@@ -344,7 +342,6 @@ async def spotify_watcher(cred, spotify, userid):
                     # now get the next queued track
                     # nextup_tid, nextup_expires_at = await getnext()
                     nextup = await getnext()
-                    nextup_track = nextup.track
                     nextup_tid = nextup.track.spotifyid
                     nextup_trackname = nextup.track.trackname
                     
