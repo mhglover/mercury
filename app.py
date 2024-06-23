@@ -12,7 +12,7 @@ from tortoise.contrib.quart import register_tortoise
 from models import User, WebData
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser
-from queue_manager import queue_manager, getnext
+from queue_manager import queue_manager, getnext, getratings
 from raters import rate_history, rate_saved
 from spot_funcs import trackinfo, getrecents
 
@@ -125,9 +125,10 @@ async def index():
     
     # what's happening y'all
     web_data = WebData(
-        history=await getrecents(),
-        activeusers = await getactiveusers(),
-        nextup = await getnext()
+        history=await getrecents(limit=20),
+        activeusers=await getactiveusers(),
+        nextup=await getnext(),
+        ratings=None
         )
     
     if user_spotifyid is None:
@@ -149,6 +150,9 @@ async def index():
 
     # see if we need to launch a task for this user
     await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
+    
+    #get the ratings for the recent history
+    web_data.ratings = await getratings([x.track_id for x in web_data.history], web_data.user.id)
 
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())

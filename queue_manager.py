@@ -3,7 +3,7 @@ import logging
 import datetime
 import asyncio
 import pickle
-from models import Recommendation, Track, Rating
+from models import Recommendation, Track, Rating, WebTrack
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
 
@@ -84,11 +84,17 @@ async def gettrack(track_id):
     return await Track.get(id=track_id)
 
 
-async def getratings(trackids, uid):
+async def getratings(trackids: list, uid: int):
     """pull ratings for a list of tracks for a given user"""
-    ratings = []
+    ratings: list = []
     for tid in trackids:
-        r = await Rating.filter(userid=uid).filter(trackid=tid).get()
+        r = await ( Rating.filter(user_id=uid)
+                          .filter(track_id=tid)
+                          .get_or_none()
+                          .prefetch_related("track"))
+        if r is None:
+            continue
+        
         if r.rating >= 1:
             color = "love"
         elif r.rating == 1:
@@ -99,8 +105,14 @@ async def getratings(trackids, uid):
             color = "dislike"
         elif r.rating <= -2:
             color = "hate"
-                
-    ratings.append((r.trackname, color))
+        else:
+            color = "what"
+
+        ratings.append(WebTrack(track_id=r.track.id,
+                                trackname=r.trackname,
+                                color=color,
+                                rating=r.rating))
+        
     return ratings
     
 

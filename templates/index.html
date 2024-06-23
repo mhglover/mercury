@@ -25,8 +25,8 @@
 
 <h3>some recent recommendations were</h3>
 <table>
-    {% for name in w.history %}
-    <tr><td>{{ name }}</td></tr>
+    {% for id, track in w.ratings.items() %}
+    <tr><td class="{{track.color}}">{{ track.trackname }}</td></tr>
     {% endfor %}
 </table>
 

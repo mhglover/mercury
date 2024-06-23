@@ -48,3 +48,19 @@ body {
   color: #3d2cff;
   /* border-bottom-color: #3d2cff; */
 }
+
+td.love {
+  color: blue
+}
+
+td.like {
+  color: lightblue
+}
+
+td.dislike {
+  color: pink
+}
+
+td.hate {
+  color: red
+}

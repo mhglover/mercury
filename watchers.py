@@ -46,7 +46,7 @@ async def watchman(taskset, cred, spotify, watcher, user):
         return
     
     if watchname in [x.get_name() for x in asyncio.all_tasks()]:
-        logging.warning("%s is already running, won't start another", watchname)
+        logging.debug("%s is already running, won't start another", watchname)
         return
 
     logging.debug("%s creating a spotify watcher for: %s", 
@@ -101,8 +101,8 @@ async def spotify_watcher(cred, spotify, user):
     soon = datetime.timedelta(minutes=20)
     timestamp = now.strftime('%s')
     ttl = now + soon
-    then = datetime.timedelta(minutes=1)
-    recent = now - then
+    # then = datetime.timedelta(minutes=1)
+    # recent = now - then
     
     # set this as the current watcher in the database
     user.watcherid = f"watcher_{user.spotifyid}_{timestamp}"
@@ -227,11 +227,7 @@ async def spotify_watcher(cred, spotify, user):
             position = currently.progress_ms/currently.item.duration_ms
             
             # pull details for the next track in the queue
-            # nextup_tid, nextup_expires_at = await getnext()
             nextup = await getnext()
-            if nextup is not None:
-                nextup_tid = nextup.track.spotifyid
-                nextup_trackname = nextup.track.trackname
             
             # do some math
             remaining_ms = currently.item.duration_ms - currently.progress_ms
@@ -273,7 +269,7 @@ async def spotify_watcher(cred, spotify, user):
                         logging.warning("%s removing skipped track from radio queue: %s",
                                     procname, last_track.trackname)
                         try:
-                            await Recommendation.filter(track_id=nextup_tid).delete()
+                            await Recommendation.get(id=nextup.track_id).delete()
                         except Exception as e:
                             logging.error("%s exception removing track from queue\n%s",
                                         procname, e)
@@ -298,7 +294,7 @@ async def spotify_watcher(cred, spotify, user):
             # welcome to the end zone
             elif remaining_ms <= 30000:
                 logging.info("%s endzone %s - next up %s",
-                            procname, trackname, nextup_trackname)
+                            procname, trackname, nextup.trackname)
                 
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
@@ -307,29 +303,18 @@ async def spotify_watcher(cred, spotify, user):
                              user.displayname, trackname, value, procname)
                 await rate(user, track, value=value)
                 
-                # record a +1 for followers
-                value = 1
-                for each in followers:
-                    logging.info("%s setting a follower rating, %s %s %s",
-                             procname, trackname, each.displayname, value)
-                    await rate(each, track, value=value)
-                
-                # if we're in the endzone and this same track is still next in the queue
-                # we must be first to the endzone, so let's remove the track from dbqueue
+                # remove the track from dbqueue
                 if trackid == nextup.track.spotifyid:
                     logging.info("%s first to endzone, removing track from radio queue: %s",
-                                procname, nextup_trackname)
+                                procname, nextup.trackname)
                     try:
                         await Recommendation.filter(id=nextup.id).delete()
                     except Exception as e:
                         logging.error("%s exception removing track from upcomingqueue\n%s",
                                         procname, e)
                     
-                    # now get the next queued track
-                    # nextup_tid, nextup_expires_at = await getnext()
+                    # now get the real next queued track
                     nextup = await getnext()
-                    nextup_tid = nextup.track.spotifyid
-                    nextup_trackname = nextup.track.trackname
                     
                     # if there's nothing yet, fine, jump to the next cycle now
                     if nextup is None:

@@ -83,24 +83,36 @@ class Recommendation(Model):
         return str(self.trackname)
 
 
+@dataclass
+class WebTrack():
+    """data model for passing track data to a web template"""
+    trackname: str
+    track_id: int
+    color: str
+    rating: int
+
 
 @dataclass
 class WebData():
     """data model for passing state to web template"""
     history: List[PlayHistory]
     activeusers: List[User]
+    ratings: List[WebTrack]
     nextup: Recommendation
     user: User = None
     track: Track = None
     redirect_url: str = None
-
 
     def to_dict(self):
         """Convert to dict with custom serialization for datetime"""
         return {
             "user": {"displayname": self.user.displayname,
                      "spotifyid": self.user.spotifyid},
-            "history": list(set([x.trackname for x in self.history])),
+            "ratings": {track.track_id: {"color": track.color,
+                                         "trackname": track.trackname,
+                                         "rating": track.rating}
+                            for track in self.ratings},
+            "history": list(set(x.trackname for x in self.history)),
             "playing_trackname": self.track.trackname,
             "activeusers": [x.displayname for x in self.activeusers],
             "nextup_trackname": self.nextup.trackname,
