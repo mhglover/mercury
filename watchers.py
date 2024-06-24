@@ -285,7 +285,7 @@ async def spotify_watcher(cred, spotify, user):
                         value = -1
                         logging.info("%s late skip rating, %s %s %s",
                                     user.spotifyid, last_track.spotifyid, value, procname)
-                        await rate(spotify, user.spotifyid, last_track.trackname, value)
+                        await rate(user, last_track, value)
             
                 if (remaining_ms - 30000) < 30000: # sleep for a few seconds
                     sleep = (remaining_ms - 30000) / 1000 # about to hit the autorate window
@@ -295,13 +295,13 @@ async def spotify_watcher(cred, spotify, user):
             # welcome to the end zone
             elif remaining_ms <= 30000:
                 logging.info("%s endzone %s - next up %s",
-                            procname, trackname, truncate_middle(nextup.trackname))
+                            procname, truncate_middle(trackname), truncate_middle(nextup.trackname))
                 
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
                 value = 4 if await is_saved(spotify, token, trackid) else 1
                 logging.debug("%s setting a rating, %s %s %s", 
-                             user.displayname, trackname, value, procname)
+                             user.displayname, truncate_middle(trackname), value, procname)
                 await rate(user, track, value=value)
                 
                 # remove the track from dbqueue
