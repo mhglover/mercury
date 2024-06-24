@@ -242,7 +242,7 @@ async def spotify_watcher(cred, spotify, user):
                 # and nobody else has set the expiration yet
                 if nextup.track.spotifyid == trackid and nextup.expires_at is None:
                     logging.info("%s first to start track %s, setting expiration",
-                                 procname, trackname)
+                                 procname, truncate_middle(trackname))
                     
                     # set it for our endzone
                     # which we can calculate pretty closely
@@ -295,7 +295,7 @@ async def spotify_watcher(cred, spotify, user):
             # welcome to the end zone
             elif remaining_ms <= 30000:
                 logging.info("%s endzone %s - next up %s",
-                            procname, trackname, nextup.trackname)
+                            procname, trackname, truncate_middle(nextup.trackname))
                 
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
@@ -307,7 +307,7 @@ async def spotify_watcher(cred, spotify, user):
                 # remove the track from dbqueue
                 if trackid == nextup.track.spotifyid:
                     logging.info("%s first to endzone, removing track from radio queue: %s",
-                                procname, nextup.trackname)
+                                procname, truncate_middle(nextup.trackname))
                     try:
                         await Recommendation.filter(id=nextup.id).delete()
                     except Exception as e:
