@@ -109,8 +109,8 @@ class WebData():
     users: List[WebUser]
     ratings: List[WebTrack]
     nextup: Recommendation
-    user: User = None
-    track: Track = None
+    user: User = User()
+    track: Track = Track()
     redirect_url: str = None
 
     def to_dict(self):

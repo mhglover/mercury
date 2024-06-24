@@ -6,6 +6,7 @@ import pickle
 from models import Recommendation, Track, Rating, WebTrack
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
+from spot_funcs import truncate_middle
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -68,7 +69,7 @@ async def queue_manager(spotify):
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            logging.info("%s adding to radio queue: %s", procname, rec.trackname)
+            logging.info("%s adding to radio queue: %s", procname, truncate_middle(rec.trackname))
             
             u = await Recommendation.create(track_id=rec.id,
                                             trackname=rec.trackname)

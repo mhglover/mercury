@@ -4,7 +4,7 @@ import logging
 import datetime
 from tortoise.functions import Sum
 from models import Rating, PlayHistory
-from spot_funcs import trackinfo
+from spot_funcs import trackinfo, truncate_middle
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -53,7 +53,7 @@ async def record(spotify, uid, tid):
     procname = "record"
     track = await trackinfo(spotify, tid)
     trackname = track.trackname
-    logging.info("%s play history %s %s", procname, uid, trackname)
+    logging.info("%s play history %s %s", procname, uid, truncate_middle(trackname))
     try:
         insertedkey = await PlayHistory.create(track_id=track.id, trackname=trackname)
         await insertedkey.save()

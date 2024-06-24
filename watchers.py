@@ -4,11 +4,11 @@ import logging
 import asyncio
 import datetime
 import pickle
-from models import User, Recommendation
+from models import User, Recommendation, Track
 from users import getuser
 from queue_manager import getnext
 from raters import rate, record
-from spot_funcs import is_saved, trackinfo
+from spot_funcs import is_saved, trackinfo, truncate_middle
 
 # pylint: disable=trailing-whitespace
 # pylint: disable=broad-exception-caught
@@ -117,6 +117,7 @@ async def spotify_watcher(cred, spotify, user):
         
         if currently is None:
             logging.debug("%s not currently playing", procname)
+            track = Track()
             sleep = 30
             # track = None
         elif currently.is_playing is False:
@@ -347,6 +348,8 @@ async def spotify_watcher(cred, spotify, user):
                 # sleep until this track is done
                 sleep = (remaining_ms /1000) + 2
 
+            # shorten long track names
+            trackname = truncate_middle(trackname)
             status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
