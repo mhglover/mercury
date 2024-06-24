@@ -145,7 +145,9 @@ async def index():
 
     # set some return values
     if currently is not None:
+        web_data.refresh = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
         web_data.track = await trackinfo(spotify, currently.item.id)
+        
         # web_data.rating = await get_current_rating(
             # web_data.track, activeusers=web_data.activeusers)
 

@@ -112,6 +112,7 @@ class WebData():
     user: User = User()
     track: Track = Track()
     redirect_url: str = None
+    refresh: int = 60
 
     def to_dict(self):
         """Convert to dict with custom serialization for datetime"""
@@ -126,4 +127,5 @@ class WebData():
             "playing_trackname": self.track.trackname,
             "users": self.users,
             "nextup_trackname": self.nextup.trackname,
+            "refresh": self.refresh
         }
