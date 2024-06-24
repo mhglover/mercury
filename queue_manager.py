@@ -2,7 +2,6 @@
 import logging
 import datetime
 import asyncio
-import pickle
 from models import Recommendation, Track, Rating, WebTrack
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
@@ -55,24 +54,23 @@ async def queue_manager(spotify):
             
             # pick the next track to add to the queue
             if playtype == "spotrec":
-                first = activeusers[0]
-                token = pickle.loads(first.token)
-                
-                logging.info("%s queuing a spotify recommendation", procname)
-                seeds = await popular_tracks(5)
-                rec = await spotrec_tracks(spotify, token, seeds)
+                reason = "recommended by spotify for {first.displayname}"
+                logging.debug("%s queuing a popular recommendation", procname)
+                rec = await spotrec_tracks(spotify, activeusers)
 
             elif playtype == "popular":
-                logging.info("%s queuing a popular recommendation", procname)
+                reason = "well rated by active listeners"
+                logging.debug("%s queuing a popular recommendation", procname)
                 rec = await popular_tracks(count=1)
             
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            logging.info("%s adding to radio queue: %s", procname, truncate_middle(rec.trackname))
+            logging.info("%s adding [%s] recommendation: %s", procname, playtype, rec.trackname)
             
             u = await Recommendation.create(track_id=rec.id,
-                                            trackname=rec.trackname)
+                                            trackname=rec.trackname,
+                                            reason=reason)
             await u.save()
             recommendations.append(u)
 

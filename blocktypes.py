@@ -1,6 +1,8 @@
 """functions for pulling tracks for recommendations"""
 import datetime
 import logging
+import pickle
+from random import choice
 from tortoise.functions import Sum
 from tortoise.contrib.postgres.functions import Random
 from models import Rating
@@ -63,7 +65,7 @@ async def popular_tracks(count=1, rating=0):
     return tracks
 
 
-async def spotrec_tracks(spotify, token, seeds, count=1):
+async def spotrec_tracks(spotify, activeusers, count=1):
     """recommendation - fetch a number of spotify recommendations for a specific user
     
     takes:
@@ -72,6 +74,12 @@ async def spotrec_tracks(spotify, token, seeds, count=1):
         seeds: a list of tracks
     """
     procname = "spotrec_tracks"
+    
+    rando = choice(activeusers)
+    token = pickle.loads(rando.token)
+                
+    logging.debug("%s queuing a spotify recommendation", procname)
+    seeds = await popular_tracks(5)
     
     seed_spotifyids = [x.spotifyid for x in seeds]
 
