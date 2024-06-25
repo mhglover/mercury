@@ -11,7 +11,7 @@ from spot_funcs import validatetrack
 # pylint: disable=trailing-whitespace
 
 
-async def queue_manager(spotify):
+async def queue_manager(spotify, sleep=10):
     """manage the queue"""
     procname = "queue_manager"
     logging.info('%s starting', procname)
@@ -21,16 +21,20 @@ async def queue_manager(spotify):
     while True:
         logging.debug("%s checking queue state", procname)
 
-        recommendations = await Recommendation.all()
-
+        # remove the old and busted
         await expire_queue()
 
+        # get the new hotness
+        recommendations = await Recommendation.all()
+
+        # too much, baby, trim that back
         while len(recommendations) > 2:
             newest = recommendations.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
                          procname, newest)
             await Recommendation.filter(id=newest.id).delete()
 
+        # oh honey, fix you a plate
         while len(recommendations) < 2:
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = await getactiveusers()
@@ -49,33 +53,33 @@ async def queue_manager(spotify):
             
             # pick the next track to add to the queue
             if playtype == "spotrec":
-                reason = "recommended by spotify for {first.displayname}"
-                rec = await spotrec_tracks(spotify, activeusers)
+                # reason = f"recommended by spotify for {activeusers[0].displayname}"
+                track = await spotrec_tracks(spotify, activeusers)
             
             elif playtype == "popular":
-                reason = "well rated by active listeners"
-                rec = await popular_tracks()
+                # reason = "well rated by active listeners"
+                track = await popular_tracks()
             
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
-            logging.info("%s adding [%s] recommendation: %s", procname, playtype, rec.trackname)
+            logging.info("%s adding [%s] recommendation: %s", procname, playtype, track.trackname)
             
             # validate the track before we add it to the recommendations
-            if not await validatetrack(spotify, rec):
-                logging.error("invalid track, don't recommend: [%s] %s", rec.id, rec.trackname)
+            if not await validatetrack(spotify, track):
+                logging.error("invalid track, don't recommend: [%s] %s", track.id, track.trackname)
                 # just sleep and loop again
                 logging.error("sleeping until the next loop")
                 continue
             
-            u = await Recommendation.create(track_id=rec.id,
-                                            trackname=rec.trackname,
-                                            reason=reason)
+            u = await Recommendation.create(track_id=track.id,
+                                            trackname=track.trackname,
+                                            reason=playtype)
             await u.save()
             recommendations.append(u)
 
-        logging.debug("%s sleeping for %s", procname, 10)
-        await asyncio.sleep(10)
+        logging.debug("%s sleeping for %s", procname, sleep)
+        await asyncio.sleep(sleep)
 
 
 async def gettrack(track_id):

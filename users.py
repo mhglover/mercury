@@ -50,23 +50,29 @@ async def getactiveusers():
     return await User.exclude(status="inactive")
 
 
-async def getactivewebusers(trackid):
-    """fetch
+async def getactivewebusers(track):
+    """fetch users and ratings for a Track
     
     returns: list of Webusers   
     """
     webusers = []
     activeusers = await getactiveusers()
-    track = await Track.filter(id=trackid).get().prefetch_related("ratings")
+    logging.debug("activeusers: %s", activeusers)
+    # ratings = Rating.filter(track__spotifyid=track.spotifyid)
+    track = await Track.filter(id=track.id).get().prefetch_related("ratings")
     user_ratings = {x.user_id:x.rating for x in track.ratings}
+    logging.debug("user_ratings: %s", user_ratings)
     for user in activeusers:
         if user.id in user_ratings:
-            webusers.append(WebUser(displayname=user.displayname,
-                    user_id=user.id,
-                    color=colorize(user_ratings[user.id]),
-                    rating=user_ratings[user.id],
-                    track_id=trackid,
-                    trackname=track.trackname))
+            r = user_ratings[user.id]
+        else: 
+            r = 0
+        webusers.append(WebUser(displayname=user.displayname,
+                user_id=user.id,
+                color=colorize(r),
+                rating=r,
+                track_id=track.id,
+                trackname=track.trackname))
     
     return webusers
 

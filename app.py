@@ -78,11 +78,12 @@ async def before_serving():
     """pre"""
     procname="before_serving"
 
+    # check to see which tasks we're supposed to be running on this instance
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
-    logging.info("before_serving running tasks: %s", run_tasks)
+    logging.debug("before_serving running tasks: %s", run_tasks)
     
     if "queue_manager" in run_tasks:
-        logging.info("before_serving creating a queue manager task")
+        logging.debug("%s creating a queue manager task", procname)
         qm = asyncio.create_task(queue_manager(spotify),name="queue_manager")
         taskset.add(qm)
         qm.add_done_callback(taskset.remove(qm))
@@ -94,20 +95,21 @@ async def before_serving():
                         procname)    
             await User.select_for_update().exclude(watcherid='').update(watcherid='')
 
-        logging.info("%s launching a user_reaper task", procname)
+        logging.debug("%s launching a user_reaper task", procname)
         reaper_task = asyncio.create_task(user_reaper(), name="user_reaper")
         taskset.add(reaper_task)
         reaper_task.add_done_callback(taskset.remove(reaper_task))
         
-        # give the reaper a couple seconds to clean out inactive users
-        await asyncio.sleep(2)
-        
-        logging.info("%s pulling active users for spotify watchers", procname)
+        logging.debug("%s pulling active users for spotify watchers", procname)
         active_users = await getactiveusers()
         for user in active_users:
             await watchman(taskset, cred, spotify, spotify_watcher, user)
         
-        logging.info("%s ready", procname)
+        nextup = await getnext(get_all=True)
+        for track in nextup:
+            logging.info("upcoming recommendation: %s", track.trackname)
+        
+        logging.debug("%s ready", procname)
 
 
 @app.before_request
@@ -128,7 +130,7 @@ async def index():
     web_data = WebData(
         history=await getrecents(limit=20),
         nextup=nextup,
-        users=await getactivewebusers(nextup.track_id),
+        users=await getactivewebusers(nextup.track),
         ratings=[]
         )
     
@@ -156,7 +158,7 @@ async def index():
     
     #get the ratings for the recent history
     web_data.ratings = await getratings([x.track_id for x in web_data.history], web_data.user.id)
-
+    
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
 

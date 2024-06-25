@@ -109,7 +109,7 @@ async def validatetrack(spotify, track):
         spot_track = await spotify.track(spotifyid.spotifyid, market='US')
         
         if track.spotifyid == spotifyid.spotifyid:
-            logging.info("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
+            logging.debug("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
         else:
             logging.info("validatetrack secondary spotifyid: [%s]", spotifyid.spotifyid)
         

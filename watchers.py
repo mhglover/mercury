@@ -89,6 +89,8 @@ async def get_player_queue(spotify, token, userid):
 
 async def spotify_watcher(cred, spotify, user):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""
+
+    sleep = 30
     
     logging.debug("fetching user for watcher: %s", user)
     user, token = await getuser(cred, user)
@@ -115,7 +117,6 @@ async def spotify_watcher(cred, spotify, user):
         except Exception as e:
             logging.error("%s spotify_currently_playing exception %s", procname, e)
         
-        sleep = 30
         position = 0
         track = Track()
         
@@ -174,10 +175,6 @@ async def spotify_watcher(cred, spotify, user):
                 currently = await spotify.playback_currently_playing()
             except Exception as e:
                 logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
-
-        # logging.debug("%s checking player queue state", procname)
-        # playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
-        # playbackqueueids = [x.id for x in playbackqueue.queue]
 
         sleep = 30
         # not playing
@@ -241,25 +238,21 @@ async def spotify_watcher(cred, spotify, user):
             if remaining_ms > 30000:
                 endzone = False
                 
-                # if we're playing the lead track in the Upcoming Queue
-                # and nobody else has set the expiration yet
-                if nextup and nextup.track.spotifyid == trackid and nextup.expires_at is None:
+                if (nextup                                  # we've got a Recommendation
+                    and nextup.track.spotifyid == trackid   # that we're currently playing
+                    and nextup.expires_at is None           # and nobody has set the expiration yet
+                    ):
                     logging.info("%s first to start track %s, setting expiration",
-                                 procname, truncate_middle(trackname))
+                                 procname, truncate_middle(track.trackname))
                     
-                    # set it for our endzone
-                    # which we can calculate pretty closely
-                    expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
+                    # set it for approximately our endzone, which we can calculate pretty closely
+                    nextup.expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
                                     datetime.timedelta(milliseconds=remaining_ms - 30000))
+                    await nextup.save()
                     
-                    _ = ( await Recommendation.select_for_update()
-                                                .filter(id=nextup.id)
-                                                .update(expires_at=expires_at))
-                    
-                    # record it in the playhistory table
-                    # a recommendation was started by a player and we saw it
+                    # record a PlayHistory - a recommendation was started by a player and we saw it
                     logging.info("%s recording play history %s",
-                                procname, truncate_middle(nextup.track.trackname))
+                                procname, truncate_middle(track.trackname))
                     await record(user, nextup.track)
 
                 # detect track changes
@@ -304,7 +297,7 @@ async def spotify_watcher(cred, spotify, user):
                             truncate_middle(nextup.trackname))
                 
                 # if we're listening to the next rec, remove the track from dbqueue
-                if trackid == nextup.track.spotifyid:
+                if track.id == nextup.track.id:
                     logging.info("%s removing track from Recommendations: %s",
                                 procname, truncate_middle(nextup.trackname))
                     try:
@@ -329,18 +322,25 @@ async def spotify_watcher(cred, spotify, user):
                     else:
                         value = 1
                 
-                    logging.info("%s setting a rating, %s %s %s", 
-                             user.displayname, truncate_middle(trackname), value, procname)
+                    logging.info("%s rating (%s) [%s][%s] %s", 
+                                 procname, value, track.id, track.spotifyid,
+                                 truncate_middle(trackname))
                     
                     await rate(user, track, value=value)
 
-                # queue up the next track unless there's are good
-                # reasons not to send something to the player
+                # queue up the next track unless there are good reasons
                 if nextup is None:
                     # don't send a none
                     logging.warning("%s no Recommendations, nothing to queue", procname)
                 
-                # don't send a track we already played and remove it from the queue
+                # don't queue the track we're currently playing, dingus
+                elif track.id == nextup.track.id:
+                    logging.warning("%s track is playing now, won't send again, removing - %s",
+                                    procname, nextup.track.trackname)
+                    # remove it from the queue
+                    await nextup.track.delete()
+                
+                # don't send a track we already played 
                 # this may cause a problem down the road
                 elif await was_recently_played(spotify, token, nextup.track.spotifyid):
                     logging.warning("%s track was played recently, won't send again, removing - %s",
@@ -355,14 +355,14 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # okay fine, queue it
                 else:
-                    logging.info("%s sending to spotify queue %s",
-                                 procname, nextup.track.trackname)
+                    logging.info("%s sending to spotify queue %s - %s",
+                                 procname, nextup.trackname, nextup.reason)
                     await send_to_player(spotify, token, nextup.track)
 
                     # sleep until this track is done
                     sleep = (remaining_ms /1000) + 2
             
-            t = truncate_middle(trackname)
+            t = truncate_middle(track.trackname)
             status = f"{t} {position:.0%} {minutes}:{seconds:0>2} remaining"
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
