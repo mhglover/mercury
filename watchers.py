@@ -303,19 +303,6 @@ async def spotify_watcher(cred, spotify, user):
                             truncate_middle(track.trackname), 
                             truncate_middle(nextup.trackname))
                 
-                # if this is the first time we hit the endzone, 
-                # let's do stuff that shouldn't be repeated
-                if not endzone:
-                    endzone = True
-                    
-                    # autorate based on whether or not this is a saved track
-                    value = 4 if await is_saved(spotify, token, trackid) else 1
-                
-                    logging.info("%s setting a rating, %s %s %s", 
-                             user.displayname, truncate_middle(trackname), value, procname)
-                    
-                    await rate(user, track, value=value)
-                
                 # if we're listening to the next rec, remove the track from dbqueue
                 if trackid == nextup.track.spotifyid:
                     logging.info("%s removing track from Recommendations: %s",
@@ -329,21 +316,45 @@ async def spotify_watcher(cred, spotify, user):
                     # now get the real next queued track
                     nextup = await getnext()
                 
+                # if this is the first time we hit the endzone, 
+                # let's do stuff that shouldn't be repeated
+                if not endzone:
+                    # this is dumb trickery to prevent re-rating 
+                    # the track multiple times if paused during the endzone
+                    endzone = True
+                    
+                    # autorate based on whether or not this is a saved track
+                    if await is_saved(spotify, token, trackid):
+                        value = 4
+                    else:
+                        value = 1
+                
+                    logging.info("%s setting a rating, %s %s %s", 
+                             user.displayname, truncate_middle(trackname), value, procname)
+                    
+                    await rate(user, track, value=value)
+
+                # queue up the next track unless there's are good
                 # reasons not to send something to the player
                 if nextup is None:
+                    # don't send a none
                     logging.warning("%s no Recommendations, nothing to queue", procname)
                 
+                # don't send a track we already played and remove it from the queue
+                # this may cause a problem down the road
                 elif await was_recently_played(spotify, token, nextup.track.spotifyid):
                     logging.warning("%s track was played recently, won't send again, removing - %s",
                                     procname, nextup.track.trackname)
                     await nextup.track.delete()
                 
+                # don't resend something that's already in the player queue/context
+                # this may cause a problem down the road
                 elif await is_already_queued(spotify, token, nextup.track.spotifyid):
                     logging.warning("%s track already queued, won't send again - %s",
                                     procname, nextup.track.trackname)
                 
+                # okay fine, queue it
                 else:
-                    # okay fine, queue it
                     logging.info("%s sending to spotify queue %s",
                                  procname, nextup.track.trackname)
                     await send_to_player(spotify, token, nextup.track)
