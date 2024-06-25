@@ -1,10 +1,22 @@
 """functions for user manipulations"""
 import logging
 import pickle
-from models import User, Rating, WebUser, Track
+from models import User, WebUser, Track
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
+
+# used by feelabout()
+USER_RATINGS_TO_FEELINGS = {
+    None:   "unrated",
+    -2:     "hate",
+    -1:     "dislike",
+     0:     "shrug",
+     1:     "like",
+     2:     "love",
+     3:     "love",
+     4:     "love"
+}
 
 async def getuser(cred, user):
     """fetch user details
@@ -13,32 +25,42 @@ async def getuser(cred, user):
     
     returns: user object, spotify token
     """
+    
+    # if it's a string, it'll be a user's spotifyid, so fetch the User
     if isinstance(user, str):
         try:
             user = await User.get(spotifyid=user)
         except Exception as e:
             logging.error("getuser exception 1 fetching user\n%s", e)
     
+    # if it's an int, it'll be a User record id, so fetch the User
     elif isinstance(user, int):
         try:
             user = await User.get(id=user)
         except Exception as e:
             logging.error("getuser exception 2 fetching user\n%s", e)
     
+    # if it's not a User by now, it's broken.
     if not isinstance(user, User):
         logging.error("getuser unable to find user %s", user)
         user = None
         token = None
     else:
+        # pull the latest saved token
         token = pickle.loads(user.token)
+        
+        # renew it if necessary
         if token.is_expiring:
             try:
                 token = cred.refresh(token)
             except Exception as e:
                 logging.error("getuser exception refreshing token\n%s", e)
+            
+            # save the new token
             user.token = pickle.dumps(token)
             await user.save()
-
+    
+    # return the user object and an unpickled token
     return user, token
 
 
@@ -51,43 +73,33 @@ async def getactiveusers():
 
 
 async def getactivewebusers(track):
-    """fetch users and ratings for a Track
+    """Fetch users and ratings for a Track
     
-    returns: list of Webusers   
+    Returns: list of Webusers   
     """
-    webusers = []
     activeusers = await getactiveusers()
     logging.debug("activeusers: %s", activeusers)
-    # ratings = Rating.filter(track__spotifyid=track.spotifyid)
-    track = await Track.filter(id=track.id).get().prefetch_related("ratings")
-    user_ratings = {x.user_id:x.rating for x in track.ratings}
+    
+    track = await Track.filter(id=track.id).prefetch_related("ratings").get()
+    
+    # dict comprehension to create a ratings map
+    user_ratings = {rating.user_id: rating.rating for rating in track.ratings}
     logging.debug("user_ratings: %s", user_ratings)
-    for user in activeusers:
-        if user.id in user_ratings:
-            r = user_ratings[user.id]
-        else: 
-            r = 0
-        webusers.append(WebUser(displayname=user.displayname,
-                user_id=user.id,
-                color=colorize(r),
-                rating=r,
-                track_id=track.id,
-                trackname=track.trackname))
+
+    webusers = [
+        WebUser(
+            displayname=user.displayname,
+            user_id=user.id,
+            rating=feelabout(user_ratings.get(user.id)),
+            track_id=track.id,
+            trackname=track.trackname
+        )
+        for user in activeusers
+    ]
     
     return webusers
 
-
-def colorize(value: int):
+def feelabout(value: int):
     """return a text string based on value"""
-    if value is None:
-        return 'unrated'
-    if value <= -2: 
-        return 'hate'
-    elif value == -1:
-        return 'dislike'
-    elif value == 0:
-        return 'shrug'
-    elif value == 1:
-        return 'like'
-    elif value > 1:
-        return 'love'
+    return USER_RATINGS_TO_FEELINGS.get(value)
+

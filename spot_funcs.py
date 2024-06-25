@@ -8,10 +8,10 @@ from models import Track, PlayHistory, SpotifyID
 # pylint: disable=trailing-newlines
 
 
-async def is_saved(spotify, token, trackid):
+async def is_saved(spotify, token, track):
     """check whether a track has been saved to your Spotify saved songs"""
     with spotify.token_as(token):
-        saved = await spotify.saved_tracks_contains([trackid])
+        saved = await spotify.saved_tracks_contains([track.spotifyid])
     return saved[0]
 
 
@@ -54,7 +54,7 @@ async def trackinfo(spotify, spotifyid):
                                         })
             
             if created:
-                logging.info("created track [%s][%s] for %s",
+                logging.debug("trackinfo created track [%s][%s] for %s",
                              track.id, track.spotifyid, track.trackname)
             
             # Create the SpotifyID entry
@@ -80,21 +80,12 @@ async def validatetrack(spotify, track):
     """for a track in the database, validate it's playable"""
     logging.debug("validatetrack validating a track: %s", track)
     
-    if isinstance(track, str):
-        logging.debug("validatetrack this is a string, fetching Track record: %s", track)
-        track = await Track.get(spotifyid=track)
-    elif isinstance(track, Track):
-        logging.debug("validatetrack this is a Track object: [%s] %s", track.id, track.trackname)
-    elif isinstance(track, int):
-        logging.debug("validatetrack this is an int, fetching Track record: %s", track)
-        track = await Track.get(id=track)
-    else:
-        logging.error("this isn't a string or a track object: %s", type(track))
-        logging.error(track)
-
+    track = await normalizetrack(track)
+    
     # make sure we have a canonical spotifyid in the Track record
     if not track.spotifyid:
-        logging.warning("validatetrack track missing canonical spotifyid: [%s] %s", track.id, track.trackname)
+        logging.warning("validatetrack track missing canonical spotifyid: [%s] %s",
+                        track.id, track.trackname)
 
     # check the spotid table for this track
     spotifyids = await track.spotifyids.all()
@@ -190,3 +181,31 @@ async def send_to_player(spotify, token, track: Track):
             logging.error(
                 "%s exception spotify.playback_queue_add %s\n%s",
                 "send_to_player", track.trackname, e)
+
+
+def copy_track_data(original_track):
+    """Creates a copy of the track data without saving a new row in the database"""
+    new_track = Track(
+        spotifyid=original_track.spotifyid,
+        trackname=original_track.trackname,
+        trackuri=original_track.trackuri,
+        duration_ms=original_track.duration_ms
+    )
+    return new_track
+
+async def normalizetrack(track):
+    """figure out where a track is and return it"""
+    
+    if isinstance(track, str):
+        logging.debug("normalizetrack this is a string, fetching Track record: %s", track)
+        track = await Track.get(spotifyid=track)
+    elif isinstance(track, Track):
+        logging.debug("normalizetrack this is a Track object: [%s] %s", track.id, track.trackname)
+    elif isinstance(track, int):
+        logging.debug("normalizetrack this is an int, fetching Track record: %s", track)
+        track = await Track.get(id=track)
+    else:
+        logging.error("normalizetrack this isn't a string or a track object: %s", type(track))
+        logging.error(track)
+    
+    return track

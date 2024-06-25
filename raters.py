@@ -4,7 +4,7 @@ import logging
 import datetime
 from tortoise.functions import Sum
 from models import Rating, PlayHistory
-from spot_funcs import trackinfo, truncate_middle
+from spot_funcs import trackinfo, truncate_middle, normalizetrack
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -16,6 +16,8 @@ async def rate(user, track,
                downrate=False):
     """rate a track, don't downrate unless forced"""
     procname="rate"
+    
+    track = await normalizetrack(track)
     
     logging.debug("%s writing a rating: %s %s %s", 
                  procname, user.displayname, track.trackname, value)

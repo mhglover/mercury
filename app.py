@@ -107,7 +107,7 @@ async def before_serving():
         
         nextup = await getnext(get_all=True)
         for track in nextup:
-            logging.info("upcoming recommendation: %s", track.trackname)
+            logging.info("recommendation upcoming: %s", track.trackname)
         
         logging.debug("%s ready", procname)
 

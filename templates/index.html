@@ -15,7 +15,7 @@
 <h3>actively vibing</h3>
 <table>
         {% for user in w.users %}
-        <tr><td class="{{ user.color }}">{{ user.displayname }}</td></tr>
+        <tr><td class="{{ user.rating }}">{{ user.displayname }}</td></tr>
         {% endfor %}
 </table>
 {% endif %}
