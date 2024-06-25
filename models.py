@@ -26,18 +26,29 @@ class User(Model):
 
 
 class Track(Model):
-    """track tracks"""
+    """Tracks model"""
     id = fields.IntField(primary_key=True)
-    spotifyid = fields.CharField(max_length=255)
     trackname = fields.TextField()
     trackuri = fields.CharField(max_length=255)
     duration_ms = fields.IntField()
+    spotifyid = fields.TextField(null=True)
     
     ratings: fields.ReverseRelation["Rating"]
     histories: fields.ReverseRelation["PlayHistory"]
+    spotifyids: fields.ReverseRelation["SpotifyID"]
 
     def __str__(self):
         return str(self.trackname)
+
+
+class SpotifyID(Model):
+    """Spotify ID model"""
+    id = fields.IntField(primary_key=True)
+    spotifyid = fields.CharField(max_length=255)
+    track = fields.ForeignKeyField('models.Track', related_name='spotifyids')
+
+    def __str__(self):
+        return self.spotifyid
 
 
 class Rating(Model):

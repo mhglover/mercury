@@ -5,7 +5,7 @@ import asyncio
 from models import Recommendation, Track, Rating, WebTrack
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks
-from spot_funcs import truncate_middle
+from spot_funcs import validatetrack
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -22,11 +22,6 @@ async def queue_manager(spotify):
         logging.debug("%s checking queue state", procname)
 
         recommendations = await Recommendation.all()
-        # try:
-        #     uqueue = [x.trackid for x in iter(query)]
-        # except Exception as e:
-        #     logging.error("%s failed pulling queue from database, exception type: %e\n%s",
-                        #   procname, type(e), e)
 
         await expire_queue()
 
@@ -67,6 +62,13 @@ async def queue_manager(spotify):
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
 
             logging.info("%s adding [%s] recommendation: %s", procname, playtype, rec.trackname)
+            
+            # validate the track before we add it to the recommendations
+            if not await validatetrack(spotify, rec):
+                logging.error("invalid track, don't recommend: [%s] %s", rec.id, rec.trackname)
+                # just sleep and loop again
+                logging.error("sleeping until the next loop")
+                continue
             
             u = await Recommendation.create(track_id=rec.id,
                                             trackname=rec.trackname,

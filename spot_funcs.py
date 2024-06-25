@@ -1,7 +1,7 @@
 """spotify support functions"""
 
 import logging
-from models import Track, PlayHistory
+from models import Track, PlayHistory, SpotifyID
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -16,31 +16,109 @@ async def is_saved(spotify, token, trackid):
 
 
 async def trackinfo(spotify, spotifyid):
-    """pull track name (and details))
+    """Pull track name (and details)
 
     Args:
-        spotify (obj): spotify object
-        trackid (str): Spotify's unique track id
+        spotify (obj): Spotify object
+        spotifyid (str): Spotify's unique track id
 
     Returns:
         track object
     """
-    track, created = await Track.get_or_create(spotifyid=spotifyid,
-                                      defaults={
-                                          "duration_ms": 0,
-                                          "trackname": "",
-                                          "trackuri": ""
-                                          })
-    
-    if created or track.trackuri == '' or track.duration_ms == '':
+    # Check if the Spotify ID already exists
+    spotify_id_entry = await SpotifyID.filter(spotifyid=spotifyid).first()
+
+    if spotify_id_entry:
+        # Fetch the associated track
+        logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", spotifyid)
+        track = await Track.get(id=spotify_id_entry.track_id)
+    else:
+        logging.info("trackinfo - spotifyid not in db %s", spotifyid)
+        
+        # what is this?
         spotify_details = await spotify.track(spotifyid)
-        trackartist = " & ".join([x.name for x in spotify_details.artists])
-        track.trackname = f"{trackartist} - {spotify_details.name}"
-        track.duration_ms = spotify_details.duration_ms
-        track.trackuri = spotify_details.uri
-        await track.save()
-    
+        
+        # do we have an alternative version already in the db?
+        if spotify_details.linked_from is None:
+        
+            # Create the track
+            logging.info("trackinfo - creating track for [%s]", spotifyid)
+            trackartist = " & ".join([artist.name for artist in spotify_details.artists])
+            trackname = f"{trackartist} - {spotify_details.name}"
+            track, _ = await Track.get_or_create(
+                                        duration_ms=spotify_details.duration_ms,
+                                        trackuri=spotify_details.uri,
+                                        trackname=trackname,
+                                        defaults={
+                                            'spotifyid': spotifyid
+                                        })
+            
+            # Create the SpotifyID entry
+            logging.info("trackinfo - creating spotifyid for %s", trackname)
+            await SpotifyID.create(spotifyid=spotifyid, track=track)
+            
+        else:
+            logging.warning("trackinfo - spotifyid [%s] linked to [%s], recursively fetching track",
+                            spotifyid, spotify_details.linked_from.id)
+            track = trackinfo(spotify, spotify_details.linked_from.id)
+
     return track
+
+
+async def validatetrack(spotify, track):
+    """for a track in the database, validate it's playable"""
+    logging.debug("validatetrack validating a track: %s", track)
+    
+    if isinstance(track, str):
+        logging.debug("validatetrack this is a string, fetching Track record: %s", track)
+        track = await Track.get(spotifyid=track)
+    elif isinstance(track, Track):
+        logging.debug("validatetrack this is a Track object: [%s] %s", track.id, track.trackname)
+    elif isinstance(track, int):
+        logging.debug("validatetrack this is an int, fetching Track record: %s", track)
+        track = await Track.get(id=track)
+    else:
+        logging.error("this isn't a string or a track object: %s", type(track))
+        logging.error(track)
+
+    # make sure we have a canonical spotifyid in the Track record
+    if not track.spotifyid:
+        logging.warning("validatetrack track missing canonical spotifyid: [%s] %s", track.id, track.trackname)
+
+    # check the spotid table for this track
+    spotifyids = await track.spotifyids.all()
+    
+    if len(spotifyids) > 1:
+        logging.warning("validatetrack found %s spotify ids for this track", len(spotifyids))
+    
+    # cheack each of these
+    for spotifyid in spotifyids:
+        
+        # does this exist in Spotify?
+        spot_track = await spotify.track(spotifyid.spotifyid, market='US')
+        
+        if track.spotifyid == spotifyid.spotifyid:
+            logging.info("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
+        else:
+            logging.info("validatetrack secondary spotifyid: [%s]", spotifyid.spotifyid)
+        
+        # does this exist in spotify?
+        if not spot_track:
+            logging.error("validatetrack no spotify track for id [%s], removing SpotifyId record",
+                          spotifyid.spotifyid)
+            _ = await SpotifyID.get(spotifyid=spotifyid.spotifyid).delete()
+            
+            if track.spotifyid == spotifyid.spotifyid:
+                logging.error("validatetrack removing canonical spotifyid from Track record")
+                track.spotifyid = ""
+                track.save()
+
+        # okay, it's real.  is this playable in the US?
+        if not spot_track.is_playable:
+            logging.error("validatetrack track is unplayable [%s], rejecting", spotifyid.spotifyid)
+            return False
+    
+    return True
 
 
 async def getrecents(limit=10):

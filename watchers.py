@@ -42,7 +42,7 @@ async def watchman(taskset, cred, spotify, watcher, user):
     
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager')
     if "spotify_watcher" not in run_tasks:
-        logging.warning("%s this instance doesn't run spot watchers", procname)
+        logging.debug("%s this instance doesn't run spot watchers", procname)
         return
     
     if watchname in [x.get_name() for x in asyncio.all_tasks()]:
@@ -115,15 +115,14 @@ async def spotify_watcher(cred, spotify, user):
         except Exception as e:
             logging.error("%s spotify_currently_playing exception %s", procname, e)
         
+        sleep = 30
+        position = 0
+        track = Track()
+        
         if currently is None:
             logging.debug("%s not currently playing", procname)
-            track = Track()
-            sleep = 30
-            # track = None
         elif currently.is_playing is False:
             logging.debug("%s paused", procname)
-            sleep = 30
-            # track = None
         else:
             
             trackid = currently.item.id
@@ -174,9 +173,9 @@ async def spotify_watcher(cred, spotify, user):
             except Exception as e:
                 logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
 
-        logging.debug("%s checking player queue state", procname)
-        playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
-        playbackqueueids = [x.id for x in playbackqueue.queue]
+        # logging.debug("%s checking player queue state", procname)
+        # playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
+        # playbackqueueids = [x.id for x in playbackqueue.queue]
 
         sleep = 30
         # not playing
@@ -221,16 +220,17 @@ async def spotify_watcher(cred, spotify, user):
             last_track = track
             last_position = position
 
-            # pull details from the current item
-            trackid = currently.item.id
-            track = await trackinfo(spotify, trackid)
-            trackname = track.trackname
-            position = currently.progress_ms/currently.item.duration_ms
+            # if the track has changed, pull details from the current item
+            if track != last_track:
+                trackid = currently.item.id
+                track = await trackinfo(spotify, trackid)
+                trackname = track.trackname
             
             # pull details for the next track in the queue
             nextup = await getnext()
             
             # do some math
+            position = currently.progress_ms/currently.item.duration_ms
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
@@ -240,7 +240,7 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # if we're playing the lead track in the Upcoming Queue
                 # and nobody else has set the expiration yet
-                if nextup.track.spotifyid == trackid and nextup.expires_at is None:
+                if nextup and nextup.track.spotifyid == trackid and nextup.expires_at is None:
                     logging.info("%s first to start track %s, setting expiration",
                                  procname, truncate_middle(trackname))
                     
@@ -295,7 +295,9 @@ async def spotify_watcher(cred, spotify, user):
             # welcome to the end zone
             elif remaining_ms <= 30000:
                 logging.info("%s endzone %s - next up %s",
-                            procname, truncate_middle(trackname), truncate_middle(nextup.trackname))
+                            procname, 
+                            truncate_middle(track.trackname), 
+                            truncate_middle(nextup.trackname))
                 
                 # we got to the end of the track, so autorate
                 # base on whether or not this is a saved track
