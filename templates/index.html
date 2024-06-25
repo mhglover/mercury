@@ -4,9 +4,11 @@
 {% if w.playing_trackname != w.nextup_trackname %}
 <h3>you are listening to</h3>
 <h1>{{ w.playing_trackname }}</h1>
+<h3>the upcoming recommendation is</h3>
+{% else %}
+<h3>the current recommendation is</h3>
 {% endif %}
 
-<h3>the current recommendation is</h3>
 <h1>{{ w.nextup_trackname }}</h1>
 
 {% if w.users|length > 0 %}
