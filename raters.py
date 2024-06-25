@@ -17,7 +17,7 @@ async def rate(user, track,
     """rate a track, don't downrate unless forced"""
     procname="rate"
     
-    logging.info("%s writing a rating: %s %s %s", 
+    logging.debug("%s writing a rating: %s %s %s", 
                  procname, user.displayname, track.trackname, value)
 
     # fetch it or create it if it didn't already exist

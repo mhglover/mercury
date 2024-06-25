@@ -33,7 +33,7 @@ async def trackinfo(spotify, spotifyid):
         logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", spotifyid)
         track = await Track.get(id=spotify_id_entry.track_id)
     else:
-        logging.info("trackinfo - spotifyid not in db %s", spotifyid)
+        logging.debug("trackinfo - spotifyid not in db %s", spotifyid)
         
         # what is this?
         spotify_details = await spotify.track(spotifyid)
@@ -41,11 +41,11 @@ async def trackinfo(spotify, spotifyid):
         # do we have an alternative version already in the db?
         if spotify_details.linked_from is None:
         
-            # Create the track
-            logging.info("trackinfo - creating track for [%s]", spotifyid)
+            # Create or fetch the track
+            logging.debug("trackinfo - new track [%s]", spotifyid)
             trackartist = " & ".join([artist.name for artist in spotify_details.artists])
             trackname = f"{trackartist} - {spotify_details.name}"
-            track, _ = await Track.get_or_create(
+            track, created = await Track.get_or_create(
                                         duration_ms=spotify_details.duration_ms,
                                         trackuri=spotify_details.uri,
                                         trackname=trackname,
@@ -53,9 +53,20 @@ async def trackinfo(spotify, spotifyid):
                                             'spotifyid': spotifyid
                                         })
             
+            if created:
+                logging.info("created track [%s][%s] for %s",
+                             track.id, track.spotifyid, track.trackname)
+            
             # Create the SpotifyID entry
-            logging.info("trackinfo - creating spotifyid for %s", trackname)
-            await SpotifyID.create(spotifyid=spotifyid, track=track)
+            sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
+            
+            if spotifyid != track.spotifyid:
+                if created:
+                    logging.info("trackinfo - created and linked spotifyid [%s][%s] to [%s][%s] %s",
+                         sid.id, spotifyid, track.id, track.spotifyid, track.trackname)
+                else:
+                    logging.info("found SpotifyId [%s][%s] linked to Track [%s][%s] %s",
+                         sid.id, spotifyid, track.id, track.spotifyid, track.trackname)
             
         else:
             logging.warning("trackinfo - spotifyid [%s] linked to [%s], recursively fetching track",
@@ -145,3 +156,37 @@ def truncate_middle(s, n=30):
     # whatever's left
     n_1 = n - n_2 - 3
     return '{0}...{1}'.format(s[:n_1], s[-n_2:]) # pylint: disable=consider-using-f-string
+
+
+async def was_recently_played(spotify, token, track: str):
+    """check player history"""
+    logging.debug("was_recently_played checking player history")
+    with spotify.token_as(token):
+        h = await spotify.playback_recently_played()
+        tids = [x.track.id for x in h.items]
+        if track in tids:
+            return True
+    return False
+
+
+async def is_already_queued(spotify, token, track: str):
+    """check if track is in player's queue/context"""
+    logging.debug("is_already_queued checking player queue")
+    with spotify.token_as(token):
+        h = await spotify.playback_queue()
+        tids = [x.id for x in h.queue]
+        
+        if track in tids:
+            return True
+    return False
+
+
+async def send_to_player(spotify, token, track: Track):
+    """send a track to a player's queue"""
+    with spotify.token_as(token):
+        try:
+            _ = await spotify.playback_queue_add(track.trackuri)
+        except Exception as e: 
+            logging.error(
+                "%s exception spotify.playback_queue_add %s\n%s",
+                "send_to_player", track.trackname, e)

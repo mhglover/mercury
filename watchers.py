@@ -8,7 +8,7 @@ from models import User, Recommendation, Track
 from users import getuser
 from queue_manager import getnext
 from raters import rate, record
-from spot_funcs import is_saved, trackinfo, truncate_middle
+from spot_funcs import is_saved, trackinfo, truncate_middle, was_recently_played, is_already_queued, send_to_player
 
 # pylint: disable=trailing-whitespace
 # pylint: disable=broad-exception-caught
@@ -133,6 +133,8 @@ async def spotify_watcher(cred, spotify, user):
             
             seconds = int(remaining_ms / 1000) % 60
             minutes = int(remaining_ms / (1000*60)) % 60
+            endzone = False
+
             logging.info("%s initial status - playing %s, %s:%0.02d remaining",
                          procname, trackname, minutes, seconds)
 
@@ -237,6 +239,7 @@ async def spotify_watcher(cred, spotify, user):
 
             # we aren't in the endzone yet
             if remaining_ms > 30000:
+                endzone = False
                 
                 # if we're playing the lead track in the Upcoming Queue
                 # and nobody else has set the expiration yet
@@ -258,7 +261,6 @@ async def spotify_watcher(cred, spotify, user):
                     logging.debug("%s recording play history %s",
                                 procname, nextup.track.trackname)
                     await record(spotify, user.spotifyid, nextup.track.spotifyid)
-
 
                 # detect track changes
                 if trackid != last_track.spotifyid:
@@ -287,28 +289,36 @@ async def spotify_watcher(cred, spotify, user):
                                     user.spotifyid, last_track.spotifyid, value, procname)
                         await rate(user, last_track, value)
             
-                if (remaining_ms - 30000) < 30000: # sleep for a few seconds
-                    sleep = (remaining_ms - 30000) / 1000 # about to hit the autorate window
-                else: # sleep for thirty seconds
+                # less than 30 seconds to the endzone, just sleep until then
+                if (remaining_ms - 30000) < 30000: 
+                    sleep = (remaining_ms - 30000) / 1000 
+                
+                # otherwise sleep for thirty seconds
+                else: 
                     sleep = 30
 
             # welcome to the end zone
             elif remaining_ms <= 30000:
-                logging.info("%s endzone %s - next up %s",
-                            procname, 
+                logging.info("%s endzone %s - next up %s", procname, 
                             truncate_middle(track.trackname), 
                             truncate_middle(nextup.trackname))
                 
-                # we got to the end of the track, so autorate
-                # base on whether or not this is a saved track
-                value = 4 if await is_saved(spotify, token, trackid) else 1
-                logging.debug("%s setting a rating, %s %s %s", 
-                             user.displayname, truncate_middle(trackname), value, procname)
-                await rate(user, track, value=value)
+                # if this is the first time we hit the endzone, 
+                # let's do stuff that shouldn't be repeated
+                if not endzone:
+                    endzone = True
+                    
+                    # autorate based on whether or not this is a saved track
+                    value = 4 if await is_saved(spotify, token, trackid) else 1
                 
-                # remove the track from dbqueue
+                    logging.info("%s setting a rating, %s %s %s", 
+                             user.displayname, truncate_middle(trackname), value, procname)
+                    
+                    await rate(user, track, value=value)
+                
+                # if we're listening to the next rec, remove the track from dbqueue
                 if trackid == nextup.track.spotifyid:
-                    logging.info("%s first to endzone, removing track from radio queue: %s",
+                    logging.info("%s removing track from Recommendations: %s",
                                 procname, truncate_middle(nextup.trackname))
                     try:
                         await Recommendation.filter(id=nextup.id).delete()
@@ -318,41 +328,31 @@ async def spotify_watcher(cred, spotify, user):
                     
                     # now get the real next queued track
                     nextup = await getnext()
-                    
-                    # if there's nothing yet, fine, jump to the next cycle now
-                    if nextup is None:
-                        logging.warning("%s nothing in queue to queue, starting next loop early",
-                                        procname)
-                        continue
-
-                # don't requeue something already forthcoming
-                # this has potential to pause recommendations if we recommend something that was
-                # already in the context queue, so let's warn about it
-                logging.debug("%s checking player queue state", procname)
-                playbackqueue = await get_player_queue(spotify, token, user.spotifyid)
-                playbackqueueids = [x.id for x in playbackqueue.queue]
                 
-                if nextup.track.spotifyid in playbackqueueids:
+                # reasons not to send something to the player
+                if nextup is None:
+                    logging.warning("%s no Recommendations, nothing to queue", procname)
+                
+                elif await was_recently_played(spotify, token, nextup.track.spotifyid):
+                    logging.warning("%s track was played recently, won't send again, removing - %s",
+                                    procname, nextup.track.trackname)
+                    await nextup.track.delete()
+                
+                elif await is_already_queued(spotify, token, nextup.track.spotifyid):
                     logging.warning("%s track already queued, won't send again - %s",
                                     procname, nextup.track.trackname)
+                
                 else:
+                    # okay fine, queue it
                     logging.info("%s sending to spotify queue %s",
-                                    procname, nextup.track.trackname)
-                    
-                    with spotify.token_as(token):
-                        try:
-                            _ = await spotify.playback_queue_add(nextup.track.trackuri)
-                        except Exception as e: 
-                            logging.error(
-                                "%s exception spotify.playback_queue_add %s\n%s",
-                                procname, nextup.track.trackname, e)
+                                 procname, nextup.track.trackname)
+                    await send_to_player(spotify, token, nextup.track)
 
-                # sleep until this track is done
-                sleep = (remaining_ms /1000) + 2
-
-            # shorten long track names
-            trackname = truncate_middle(trackname)
-            status = f"{trackname} {position:.0%} {minutes}:{seconds:0>2} remaining"
+                    # sleep until this track is done
+                    sleep = (remaining_ms /1000) + 2
+            
+            t = truncate_middle(trackname)
+            status = f"{t} {position:.0%} {minutes}:{seconds:0>2} remaining"
             logging.debug("%s sleeping %0.2ds - %s", procname, sleep, status)
         
         await asyncio.sleep(sleep)

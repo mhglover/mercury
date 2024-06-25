@@ -132,3 +132,5 @@ todo.md
 old.py
 .gitignore
 .vscode/launch.json
+settings.py
+.gitignore
