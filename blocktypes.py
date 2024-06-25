@@ -83,7 +83,7 @@ async def spotrec_tracks(spotify, activeusers, count=1):
     
     seed_spotifyids = [x.spotifyid for x in seeds]
 
-    logging.info("%s getting spotify recommendations", procname)
+    logging.debug("%s getting spotify recommendations", procname)
     with spotify.token_as(token):
         utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
     

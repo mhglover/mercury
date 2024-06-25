@@ -50,13 +50,11 @@ async def queue_manager(spotify):
             # pick the next track to add to the queue
             if playtype == "spotrec":
                 reason = "recommended by spotify for {first.displayname}"
-                logging.debug("%s queuing a popular recommendation", procname)
                 rec = await spotrec_tracks(spotify, activeusers)
-
+            
             elif playtype == "popular":
                 reason = "well rated by active listeners"
-                logging.debug("%s queuing a popular recommendation", procname)
-                rec = await popular_tracks(count=1)
+                rec = await popular_tracks()
             
             else:
                 logging.error("%s nothing to recommend, we shouldn't be here", procname)
