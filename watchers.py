@@ -258,14 +258,14 @@ async def spotify_watcher(cred, spotify, user):
                     
                     # record it in the playhistory table
                     # a recommendation was started by a player and we saw it
-                    logging.debug("%s recording play history %s",
-                                procname, nextup.track.trackname)
-                    await record(spotify, user.spotifyid, nextup.track.spotifyid)
+                    logging.info("%s recording play history %s",
+                                procname, truncate_middle(nextup.track.trackname))
+                    await record(user, nextup.track)
 
                 # detect track changes
-                if trackid != last_track.spotifyid:
+                if track.spotifyid != last_track.spotifyid:
                     logging.debug("%s track change at %.0d%% - now playing %s",
-                                procname, last_position, trackname)
+                                procname, last_position, track.trackname)
                     
                     # did we skip
                     if last_track.spotifyid == nextup.track.spotifyid:

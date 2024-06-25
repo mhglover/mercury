@@ -48,20 +48,15 @@ async def rate(user, track,
             await rating.save()
 
 
-async def record(spotify, uid, tid):
+async def record(user, track):
     """write a record to the play history table"""
-    procname = "record"
-    track = await trackinfo(spotify, tid)
-    trackname = track.trackname
-    logging.info("%s play history %s %s", procname, uid, truncate_middle(trackname))
+    logging.debug("recording play history %s %s",
+                  user.displayname, truncate_middle(track.trackname))
     try:
-        insertedkey = await PlayHistory.create(track_id=track.id, trackname=trackname)
+        insertedkey = await PlayHistory.create(track_id=track.id, trackname=track.trackname)
         await insertedkey.save()
     except Exception as e:
-        logging.error("record exception creating playhistory: %s\n%s",
-                      uid, e)
-    
-    logging.debug("record inserted play history record %s", insertedkey)
+        logging.error("record exception creating playhistory\n%s", e)
 
 
 async def rate_history(spotify, user, token, value=1, limit=20):
