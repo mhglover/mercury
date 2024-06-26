@@ -1,6 +1,7 @@
 """functions for user manipulations"""
 import logging
 import pickle
+import tekore as tk
 from models import User, WebUser, Track
 
 # pylint: disable=broad-exception-caught
@@ -109,8 +110,12 @@ async def getplayer(spotify, user):
     procname = "users.getplayer"
     try:
         currently = await spotify.playback_currently_playing()
+    except tk.Unauthorised as e:
+        logging.error("%s unauthorized access - renew token?\n%s",procname, e)
+        return
     except Exception as e:
         logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
+        return
 
     # is it not playing?
     if currently is None:

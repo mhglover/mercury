@@ -9,7 +9,7 @@ from tortoise import fields
 from tortoise.models import Model
 from helpers import truncate_middle
 
-# pylint: disable=trailing-whitespace, trailing-newlines
+# pylint: disable=trailing-whitespace, trailing-newlines, too-many-instance-attributes
 
 class User(Model):
     """track users"""

@@ -144,30 +144,27 @@ async def spotify_watcher(cred, spotify, user):
             and state.track.spotifyid == state.last_track.spotifyid 
             and state.was_saved != state.is_this_saved):
             
-            logging.info("autorating from the Save button")
             # we saved it, so rate it a 4
             if state.is_this_saved:
                 await rate(state.user, state.track, 4)
-                logging.info("rating a 4")
+                logging.info("%s user just saved this track, autorating at 4")
                 
             # we unsaved it, so rate it a 1
             else:
                 await rate(state.user, state.track, 1, downrate=True)
-                logging.info("rating a 1")
-        
+                logging.info("%s user just saved this track, autorating at 1")
         
         # has anybody set this rec to expire yet? no? I will.
         if (state.nextup                                  # we've got a Recommendation
             and state.nextup.track.id == state.track.id         # that we're currently playing
             and state.nextup.expires_at is None           # and nobody has set the expiration yet
             ):
-            logging.info("%s first to start track %s, setting expiration",
-                            procname, state.t())
             
             # set it for approximately our endzone, which we can calculate pretty closely
             state.nextup.expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
                             datetime.timedelta(milliseconds=state.remaining_ms - 30000))
             await state.nextup.save()
+            logging.info("%s set expiration for %s", procname, state.t())
             
             # record a PlayHistory only when we set the expiration on a recommendation? 
             logging.info("%s recording play history %s", procname, state.t())
@@ -178,12 +175,14 @@ async def spotify_watcher(cred, spotify, user):
             state.endzone = False
 
             # detect track changes
+            # move this into a state function
             if (state.last_track and state.last_track.spotifyid is not None 
                 and state.last_track.spotifyid != state.track.spotifyid):
                 logging.debug("%s track change at %.0d%% - now playing %s",
                             procname, state.last_position, state.track.trackname)
                 
                 # did we skip?
+                # move this into a db_func
                 if state.last_track.spotifyid == state.nextup.track.spotifyid:
                     logging.warning("%s removing skipped track from radio queue: %s",
                                 procname, state.last_track.trackname)
@@ -206,17 +205,19 @@ async def spotify_watcher(cred, spotify, user):
                     await rate(state.user, state.last_track, value)
         
             # less than 30 seconds to the endzone, just sleep until then
+            # move sleep calculation into state function
             if (state.remaining_ms - 30000) < 30000: 
-                state.sleep = (state.remaining_ms - 30000) / 1000 
-            
+                state.sleep = (state.remaining_ms - 30000) / 1000             
             # otherwise sleep for thirty seconds
             else: 
                 state.sleep = 30
 
         # welcome to the end zone
+        # put this magic number into Settings? at least a const
         elif state.remaining_ms <= 30000:
             
             # if we're listening to the next rec, remove the track from dbqueue
+            # make this into a db_func
             if state.track.id == state.nextup.track.id:
                 logging.info("%s removing track from Recommendations: %s",
                             procname, state.n())
@@ -242,6 +243,7 @@ async def spotify_watcher(cred, spotify, user):
                 # autorate based on whether or not this is a saved track
                 state.is_saved = await is_saved(spotify, token, state.track)
                 
+                # move rating value into data model
                 if state.is_saved:
                     value = 4
                 else:
@@ -251,9 +253,12 @@ async def spotify_watcher(cred, spotify, user):
                                 procname, value, state.track.id, state.track.spotifyid,
                                 state.t())
                 
+                # rework rate so it just needs the state by default and
+                # allows keyword args for explicit rating
                 await rate(state.user, state.track, value=value)
 
             # queue up the next track unless there are good reasons
+            # move to db_func should_send_recommendation bool
             if state.nextup is None:
                 # don't send a none
                 logging.warning("%s no Recommendations, nothing to queue", procname)
@@ -262,7 +267,7 @@ async def spotify_watcher(cred, spotify, user):
             elif state.track.id == state.nextup.track.id:
                 logging.warning("%s track is playing now, won't send again, removing - %s",
                                 procname, state.nextup.track.trackname)
-                # remove it from the queue
+                # and remove it from the queue
                 await state.nextup.track.delete()
             
             # don't send a track we already played 
@@ -270,10 +275,11 @@ async def spotify_watcher(cred, spotify, user):
             elif await was_recently_played(spotify, token, state.nextup.track.spotifyid):
                 logging.warning("%s track was played recently, won't send again, removing - %s",
                                 procname, state.nextup.track.trackname)
+                # and remove it from the queue
                 await state.nextup.track.delete()
             
             # don't resend something that's already in the player queue/context
-            # this may cause a problem down the road
+            # figure out the context and ignore those tracks
             elif await is_already_queued(spotify, token, state.nextup.track.spotifyid):
                 logging.warning("%s track already queued, won't send again - %s",
                                 procname, state.nextup.track.trackname)
@@ -282,7 +288,7 @@ async def spotify_watcher(cred, spotify, user):
             else:
                 await send_to_player(spotify, token, state.nextup.track)
                 logging.info("%s sent to player queue [%s] %s",
-                                procname, state.nextup.reason, state.nextup.trackname)
+                                procname, state.nextup.reason, state.n())
 
                 # sleep until this track is done
                 state.sleep = (state.remaining_ms /1000) + 2
