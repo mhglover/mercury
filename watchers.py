@@ -7,7 +7,7 @@ from models import User, Recommendation, Track
 from users import getuser
 from queue_manager import getnext
 from raters import rate, record
-from spot_funcs import trackinfo, truncate_middle, send_to_player
+from spot_funcs import trackinfo, truncate_middle, send_to_player, get_player_queue
 from spot_funcs import is_already_queued, is_saved, was_recently_played, copy_track_data
 
 # pylint: disable=trailing-whitespace
@@ -73,19 +73,6 @@ async def watchman(taskset, cred, spotify, watcher, user):
     #                         procname, user.spotifyid, interval)
             
     #         await asyncio.sleep(sleep)
-    
-
-
-async def get_player_queue(spotify, token, userid):
-    """fetch the items in the player queue for a given user"""
-    procname = "get_player_queue"
-    logging.debug("%s fetching player queue for %s", procname, userid)
-    with spotify.token_as(token):
-        try: 
-            playbackqueue = await spotify.playback_queue()
-        except Exception as e:
-            logging.error("%s exception %s", procname, e)
-    return playbackqueue
 
 
 async def spotify_watcher(cred, spotify, user, sleep=30):
@@ -170,7 +157,6 @@ async def spotify_watcher(cred, spotify, user, sleep=30):
         # paused
         elif currently.is_playing is False:
             user.status = "paused"
-            trackid = currently.item.id
             logging.debug("%s is paused", procname)
 
         # nothing weird happening?  playing a track?  oh yeah now we cook
@@ -207,7 +193,7 @@ async def spotify_watcher(cred, spotify, user, sleep=30):
             remaining_ms = currently.item.duration_ms - currently.progress_ms
             displaytime = "{:}:{:02}".format(*divmod(remaining_ms // 1000, 60)) # pylint: disable=consider-using-f-string
 
-            # if the track hasn't changed but the savestate has, rate it
+            # if the track hasn't changed but the savestate has, rate it love/like
             logging.debug("is saved? %s - was saved? %s", is_this_saved, was_saved)
             if (track and last_track 
                 and track.spotifyid == last_track.spotifyid 
@@ -224,6 +210,9 @@ async def spotify_watcher(cred, spotify, user, sleep=30):
                     await rate(user, track, 1, downrate=True)
                     logging.info("rating a 1")
             
+            player_queue = await get_player_queue(spotify.token_as(token))
+            
+            # if currently.track.id == queue.[0].id, we're playing the current recomendation
             
 
             # we aren't in the endzone yet
@@ -344,7 +333,7 @@ async def spotify_watcher(cred, spotify, user, sleep=30):
                 
                 # don't resend something that's already in the player queue/context
                 # this may cause a problem down the road
-                elif await is_already_queued(spotify, token, nextup.track.spotifyid):
+                elif await is_already_queued(spotify.token_as(token), nextup.track.spotifyid):
                     logging.warning("%s track already queued, won't send again - %s",
                                     procname, nextup.track.trackname)
                 

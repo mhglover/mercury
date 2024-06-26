@@ -160,15 +160,25 @@ async def was_recently_played(spotify, token, track: str):
     return False
 
 
-async def is_already_queued(spotify, token, track: str):
+async def get_player_queue(spotify):
+    """fetch the items in the player queue for a given user"""
+    procname = "get_player_queue"
+    logging.debug("%s fetching player queue", procname)
+    try: 
+        return await spotify.playback_queue()
+    except Exception as e:
+        logging.error("%s exception %s", procname, e)
+
+
+async def is_already_queued(spotify, track: str):
     """check if track is in player's queue/context"""
     logging.debug("is_already_queued checking player queue")
-    with spotify.token_as(token):
-        h = await spotify.playback_queue()
-        tids = [x.id for x in h.queue]
+    h = await get_player_queue(spotify)
+    tids = [x.id for x in h.queue]
         
-        if track in tids:
-            return True
+    if track in tids:
+        return True
+    
     return False
 
 
@@ -192,6 +202,7 @@ def copy_track_data(original_track):
         duration_ms=original_track.duration_ms
     )
     return new_track
+
 
 async def normalizetrack(track):
     """figure out where a track is and return it"""
