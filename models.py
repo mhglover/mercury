@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 """mercury radio database models"""
 
-from dataclasses import dataclass
+import datetime
+from dataclasses import dataclass, field
 from typing import List
+import tekore as tk
 from tortoise import fields
 from tortoise.models import Model
+from helpers import truncate_middle
 
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 class User(Model):
     """track users"""
@@ -140,3 +143,40 @@ class WebData():
             "nextup_trackname": self.nextup.trackname,
             "refresh": self.refresh
         }
+        
+@dataclass
+class WatcherState(): # pylint: disable=too-many-instance-attributes
+    """hold the state of a spotify watcher"""
+    
+    cred: tk.Credentials
+    user: User = field(default_factory=User)
+    token: tk.AccessToken = None
+    
+    currently: tk.model.CurrentlyPlaying = None
+    track: Track = field(default_factory=Track)
+    last_track: Track = field(default_factory=Track)
+    nextup: Track = field(default_factory=Track)
+    
+    displaytime: str = ""
+    position: int = 0
+    last_position: int = 0
+    sleep: int = 30
+    
+    rated: str = None
+    is_this_saved: str = None
+    was_saved: str = None
+    endzone: str = None
+    
+    def __post_init__(self):
+        # timeout if they stop playing
+        now = datetime.datetime.now(datetime.timezone.utc)
+        self.ttl = now + datetime.timedelta(minutes=20)
+        
+    def t(self):
+        """return a middle-truncated track name"""
+        return str(truncate_middle(self.track.trackname))
+    
+    def n(self):
+        """return a middle-truncated name for the nextup track"""
+        return str(truncate_middle(self.nextup.trackname))
+
