@@ -15,7 +15,7 @@ async def is_saved(spotify, token, track):
     return saved[0]
 
 
-async def trackinfo(spotify, spotifyid):
+async def trackinfo(spotify_object, check_spotifyid):
     """Pull track name (and details)
 
     Args:
@@ -26,23 +26,23 @@ async def trackinfo(spotify, spotifyid):
         track object
     """
     # Check if the Spotify ID already exists
-    spotify_id_entry = await SpotifyID.filter(spotifyid=spotifyid).first()
+    spotify_id_entry = await SpotifyID.filter(spotifyid=check_spotifyid).first()
 
     if spotify_id_entry:
         # Fetch the associated track
-        logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", spotifyid)
+        logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", check_spotifyid)
         track = await Track.get(id=spotify_id_entry.track_id)
     else:
-        logging.debug("trackinfo - spotifyid not in db %s", spotifyid)
+        logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
         
         # what is this?
-        spotify_details = await spotify.track(spotifyid)
+        spotify_details = await spotify_object.track(track.spotifyid)
         
         # do we have an alternative version already in the db?
         if spotify_details.linked_from is None:
         
             # Create or fetch the track
-            logging.debug("trackinfo - new track [%s]", spotifyid)
+            logging.debug("trackinfo - new track [%s]", track.spotifyid)
             trackartist = " & ".join([artist.name for artist in spotify_details.artists])
             trackname = f"{trackartist} - {spotify_details.name}"
             track, created = await Track.get_or_create(
@@ -50,7 +50,7 @@ async def trackinfo(spotify, spotifyid):
                                         trackuri=spotify_details.uri,
                                         trackname=trackname,
                                         defaults={
-                                            'spotifyid': spotifyid
+                                            'spotifyid': track.spotifyid
                                         })
             
             if created:
@@ -58,20 +58,20 @@ async def trackinfo(spotify, spotifyid):
                              track.id, track.spotifyid, track.trackname)
             
             # Create the SpotifyID entry
-            sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
+            sid, created = await SpotifyID.get_or_create(spotifyid=check_spotifyid, track=track)
             
-            if spotifyid != track.spotifyid:
+            if sid.spotifyid != track.spotifyid:
                 if created:
                     logging.info("trackinfo - created and linked spotifyid [%s][%s] to [%s][%s] %s",
-                         sid.id, spotifyid, track.id, track.spotifyid, track.trackname)
+                         sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)
                 else:
                     logging.info("found SpotifyId [%s][%s] linked to Track [%s][%s] %s",
-                         sid.id, spotifyid, track.id, track.spotifyid, track.trackname)
+                         sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)
             
         else:
             logging.warning("trackinfo - spotifyid [%s] linked to [%s], recursively fetching track",
-                            spotifyid, spotify_details.linked_from.id)
-            track = trackinfo(spotify, spotify_details.linked_from.id)
+                            sid.spotifyid, spotify_details.linked_from.id)
+            track = trackinfo(spotify_object, spotify_details.linked_from.id)
 
     return track
 
