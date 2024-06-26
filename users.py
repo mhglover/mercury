@@ -103,3 +103,35 @@ def feelabout(value: int):
     """return a text string based on value"""
     return USER_RATINGS_TO_FEELINGS.get(value)
 
+
+async def getplayer(spotify, user):
+    """check the current player stat and update user status"""
+    procname = "users.getplayer"
+    try:
+        currently = await spotify.playback_currently_playing()
+    except Exception as e:
+        logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
+
+    # is it not playing?
+    if currently is None:
+        user.status = "not playing"
+        logging.debug("%s not currently playing", procname)
+
+    # not playing but not paused?  weird state
+    elif currently.currently_playing_type == "unknown":
+        user.status = "not playing"
+        logging.debug("%s not currently playing", procname)
+        raise ValueError(f"currently_playing_type says 'unknown'\n{currently}")
+
+    # paused
+    elif currently.is_playing is False:
+        user.status = "paused"
+        logging.debug("%s is paused", procname)
+    
+    # must be active then
+    else:
+        user.status = "active"
+    
+    await user.save()
+    return currently
+        
