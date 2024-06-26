@@ -4,7 +4,8 @@ import logging
 import datetime
 from tortoise.functions import Sum
 from models import Rating, PlayHistory
-from spot_funcs import trackinfo, truncate_middle, normalizetrack
+from spot_funcs import trackinfo, normalizetrack
+from helpers import truncate_middle
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
