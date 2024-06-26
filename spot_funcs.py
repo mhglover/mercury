@@ -170,10 +170,11 @@ async def get_player_queue(spotify):
         logging.error("%s exception %s", procname, e)
 
 
-async def is_already_queued(spotify, track: str):
+async def is_already_queued(spotify, token, track: str):
     """check if track is in player's queue/context"""
     logging.debug("is_already_queued checking player queue")
-    h = await get_player_queue(spotify)
+    with spotify.token_as(token):
+        h = await get_player_queue(spotify)
     tids = [x.id for x in h.queue]
         
     if track in tids:
@@ -195,6 +196,9 @@ async def send_to_player(spotify, token, track: Track):
 
 def copy_track_data(original_track):
     """Creates a copy of the track data without saving a new row in the database"""
+    if original_track.id is None:
+        return Track()
+    
     new_track = Track(
         spotifyid=original_track.spotifyid,
         trackname=original_track.trackname,
@@ -220,3 +224,4 @@ async def normalizetrack(track):
         logging.error(track)
     
     return track
+
