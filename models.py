@@ -105,6 +105,7 @@ class WebTrack():
     color: str
     rating: int
 
+
 @dataclass
 class WebUser():
     """data model for passing track data to a web template"""
@@ -119,14 +120,16 @@ class WebUser():
 @dataclass
 class WebData():
     """data model for passing state to web template"""
-    history: List[PlayHistory]
-    users: List[WebUser]
-    ratings: List[WebTrack]
-    nextup: Recommendation
-    user: User = User()
-    track: Track = Track()
+    track: Track = field(default_factory=Track)
+    history: List[PlayHistory] = field(default_factory=list)
+    users: List[WebUser] = field(default_factory=list)
+    ratings: List[WebTrack] = field(default_factory=list)
+    nextup: Recommendation = field(default_factory=Recommendation)
+    user: User = field(default_factory=User)
+    track: Track = field(default_factory=Track)
     redirect_url: str = None
     refresh: int = 60
+    currently: tk.model.CurrentlyPlaying = None
 
     def to_dict(self):
         """Convert to dict with custom serialization for datetime"""

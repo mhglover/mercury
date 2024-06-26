@@ -117,7 +117,7 @@ async def getratings(trackids: list, uid: int):
                                 rating=r.rating))
         
     return ratings
-    
+
 
 async def getnext(get_all=False):
     """get the next track's details from the queue and database
@@ -129,7 +129,6 @@ async def getnext(get_all=False):
         return await Recommendation.all().order_by("id").prefetch_related("track")
     else:
         return await Recommendation.first().order_by("id").prefetch_related("track")
-    
 
 
 async def expire_queue():
