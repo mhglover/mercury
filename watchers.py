@@ -218,7 +218,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # if we're listening to the next rec, remove the track from dbqueue
             # make this into a db_func
-            if state.track.id == state.nextup.track.id:
+            if state.nextup and state.track.id == state.nextup.track.id:
                 logging.info("%s removing track from Recommendations: %s",
                             procname, state.n())
                 try:
