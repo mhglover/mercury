@@ -178,18 +178,18 @@ async def spotify_watcher(cred, spotify, user):
             # move this into a state function
             if (state.last_track and state.last_track.spotifyid is not None 
                 and state.last_track.spotifyid != state.track.spotifyid):
-                logging.debug("%s track change at %.0d%% - now playing %s",
+                logging.info("%s track change at %.0d%% - now playing %s",
                             procname, state.last_position, state.track.trackname)
                 
                 # did we skip?
                 # move this into a db_func
                 if state.last_track.spotifyid == state.nextup.track.spotifyid:
-                    logging.warning("%s removing skipped track from radio queue: %s",
+                    logging.info("%s removing skipped track from recs: %s",
                                 procname, state.last_track.trackname)
                     try:
                         await Recommendation.get(id=state.nextup.track_id).delete()
                     except Exception as e:
-                        logging.error("%s exception removing track from queue\n%s",
+                        logging.error("%s exception removing track from recommendations\n%s",
                                     procname, e)
                 
                 # rate skipped tracks based on last position
