@@ -36,7 +36,7 @@ async def trackinfo(spotify_object, check_spotifyid):
         logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
         
         # what is this?
-        spotify_details = await spotify_object.track(track.spotifyid)
+        spotify_details = await spotify_object.track(check_spotifyid)
         
         # do we have an alternative version already in the db?
         if spotify_details.linked_from is None:
