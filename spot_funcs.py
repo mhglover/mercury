@@ -222,6 +222,9 @@ async def normalizetrack(track):
     
     elif isinstance(track, Track):
         logging.debug("normalizetrack this is a Track object: [%s] %s", track.id, track.trackname)
+        if track.id is None and track.spotifyid is not None:
+            s = str(track.spotifyid)            
+            track = await Track.get(spotifyid=s)
     else:
         logging.error("normalizetrack this isn't a string or a track object: %s", type(track))
         logging.error(track)
