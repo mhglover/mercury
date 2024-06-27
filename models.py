@@ -126,7 +126,6 @@ class WebData():
     ratings: List[WebTrack] = field(default_factory=list)
     nextup: Recommendation = field(default_factory=Recommendation)
     user: User = field(default_factory=User)
-    track: Track = field(default_factory=Track)
     redirect_url: str = None
     refresh: int = 60
     currently: tk.model.CurrentlyPlaying = None
@@ -134,7 +133,8 @@ class WebData():
     def to_dict(self):
         """Convert to dict with custom serialization for datetime"""
         return {
-            "user": {"displayname": self.user.displayname,
+            "user": {"id": self.user.id,
+                     "displayname": self.user.displayname,
                      "spotifyid": self.user.spotifyid},
             "ratings": {track.track_id: {"color": track.color,
                                          "trackname": track.trackname,
@@ -144,9 +144,16 @@ class WebData():
             "playing_trackname": self.track.trackname,
             "users": self.users,
             "nextup_trackname": self.nextup.trackname,
-            "refresh": self.refresh
+            "refresh": self.refresh,
+            "track": {
+                "id": self.track.id,
+                "trackname": self.track.trackname,
+                "spotifyid": self.track.spotifyid
+            }
+            
         }
-        
+
+
 @dataclass
 class WatcherState(): # pylint: disable=too-many-instance-attributes
     """hold the state of a spotify watcher"""

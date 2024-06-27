@@ -14,7 +14,7 @@ from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext, getratings
 from raters import rate_history, rate_saved
-from spot_funcs import trackinfo, getrecents
+from spot_funcs import trackinfo, getrecents, normalizetrack
 
 # pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
@@ -392,6 +392,30 @@ async def follow(targetid=None):
             await user.save()
     return redirect("/")
 
+
+@app.route('/track/<track_id>')
+async def web_track(track_id):
+    """display/edit track details"""
+    
+    # get user details
+    user_spotifyid = session.get('spotifyid', None)
+    user, _ = await getuser(cred, user_spotifyid) if user_spotifyid else None
+    
+    # check the recs
+    nextup = await getnext()
+    
+    # what's happening y'all
+    w = WebData(
+        user = user,
+        track = await normalizetrack(track_id),
+        history = await getrecents(limit=20),
+        nextup = nextup,
+        users = await getactivewebusers(nextup.track),
+        ratings = [],
+        refresh = 600
+        )
+    
+    return await render_template('track.html', w=w)
 
 async def main():
     """kick it"""
