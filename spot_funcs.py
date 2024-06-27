@@ -212,13 +212,16 @@ async def normalizetrack(track):
     """figure out where a track is and return it"""
     
     if isinstance(track, str):
-        logging.debug("normalizetrack this is a string, fetching Track record: %s", track)
-        track = await Track.get(spotifyid=track)
+        # this is a stupid way to test this 
+        if len(track) < 7:
+            logging.debug("normalizetrack this is a short string, fetching Track record: %s", track)
+            track = await Track.get(id=track)
+        else:
+            logging.debug("normalizetrack this is a short string, fetching Track record: %s", track)
+            track = await Track.get(spotifyid=track)
+    
     elif isinstance(track, Track):
         logging.debug("normalizetrack this is a Track object: [%s] %s", track.id, track.trackname)
-    elif isinstance(track, int):
-        logging.debug("normalizetrack this is an int, fetching Track record: %s", track)
-        track = await Track.get(id=track)
     else:
         logging.error("normalizetrack this isn't a string or a track object: %s", type(track))
         logging.error(track)
