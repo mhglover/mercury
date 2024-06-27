@@ -42,7 +42,7 @@ async def trackinfo(spotify_object, check_spotifyid):
         if spotify_details.linked_from is None:
         
             # Create or fetch the track
-            logging.debug("trackinfo - new track [%s]", track.spotifyid)
+            logging.debug("trackinfo - new track [%s]", spotify_details.id)
             trackartist = " & ".join([artist.name for artist in spotify_details.artists])
             trackname = f"{trackartist} - {spotify_details.name}"
             track, created = await Track.get_or_create(
