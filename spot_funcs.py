@@ -50,7 +50,7 @@ async def trackinfo(spotify_object, check_spotifyid):
                                         trackuri=spotify_details.uri,
                                         trackname=trackname,
                                         defaults={
-                                            'spotifyid': track.spotifyid
+                                            'spotifyid': spotify_details.id
                                         })
             
             if created:
