@@ -91,7 +91,7 @@ async def before_serving():
     if "spotify_watcher" in run_tasks:
         
         if os.getenv("NOOVERTAKE") is not True:
-            logging.warning("%s overtaking any existing watcher tasks", 
+            logging.info("%s overtaking any existing watcher tasks", 
                         procname)    
             await User.select_for_update().exclude(watcherid='').update(watcherid='')
 
