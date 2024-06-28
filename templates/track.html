@@ -4,12 +4,15 @@
 <h1>{{ w.track.trackname }}</h1>
 
 {% if w.ratings|length > 0 %}
-<h3>people who have rated this</h3>
-<table>
-        {% for id, rating in w.ratings.items() %}
-        <tr><td><a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a></td></tr>
-        {% endfor %}
-</table>
+  <h3>people who have rated this</h3>
+  <table>
+    {% for id, rating in w.ratings.items() %}
+      <tr>
+        <td> <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> </td>
+        <td> {{rating.last_played}} </td>
+      </tr>
+    {% endfor %}
+  </table>
 {% endif %}
 
 {% endblock %}

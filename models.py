@@ -4,10 +4,11 @@
 import datetime
 from dataclasses import dataclass, field
 from typing import List
+import humanize
 import tekore as tk
 from tortoise import fields
 from tortoise.models import Model
-from helpers import truncate_middle, feelabout
+from helpers import feelabout, truncate_middle
 
 # pylint: disable=trailing-whitespace, trailing-newlines, too-many-instance-attributes
 
@@ -142,7 +143,10 @@ class WebData():
                                            "trackname": rating.trackname,
                                            "rating": rating.rating,
                                            "displayname": rating.user.displayname,
-                                           "userid": rating.user.id
+                                           "userid": rating.user.id,
+                                           "last_played": humanize.naturaltime(
+                                               datetime.datetime.now(datetime.timezone.utc) 
+                                               - rating.last_played)
                                            } for rating in self.ratings},
             "history": list(set(x.trackname for x in self.history)),
             "users": {user.user_id: { "displayname": user.displayname,
