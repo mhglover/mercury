@@ -1,8 +1,6 @@
 """functions for pulling tracks for recommendations"""
 import datetime
 import logging
-import pickle
-from random import choice
 from tortoise.functions import Sum
 from tortoise.contrib.postgres.functions import Random
 from models import Rating, PlayHistory
