@@ -47,7 +47,7 @@ async def queue_manager(spotify, sleep=10):
             
             logging.debug("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = BLOCK
+                block = list(BLOCK)
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)
