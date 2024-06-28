@@ -307,3 +307,4 @@ async def spotify_watcher(cred, spotify, user):
     
     logging.info("%s exiting", procname)
     return procname
+
