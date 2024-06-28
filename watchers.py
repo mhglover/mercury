@@ -103,6 +103,11 @@ async def spotify_watcher(cred, spotify, user):
         with spotify.token_as(token):
             logging.debug("%s checking currently playing", procname)
             state.currently = await getplayer(spotify, state.user)
+        
+        if state.currently == 401:
+            # player says we're no longer authorized, let's error and exit
+            logging.error("401 unauthorized from spotify player, breaking")
+            break
 
         # nothing weird happening?  playing a track?  oh yeah now we cook
         if state.user.status != "active":
@@ -147,12 +152,12 @@ async def spotify_watcher(cred, spotify, user):
             # we saved it, so rate it a 4
             if state.is_this_saved:
                 await rate(state.user, state.track, 4)
-                logging.info("%s user just saved this track, autorating at 4")
+                logging.info("%s user just saved this track, autorating at 4", state.user.displayname)
                 
             # we unsaved it, so rate it a 1
             else:
                 await rate(state.user, state.track, 1, downrate=True)
-                logging.info("%s user just saved this track, autorating at 1")
+                logging.info("%s user just un-saved this track, autorating down to 1", state.user.displayname)
         
         # has anybody set this rec to expire yet? no? I will.
         if (state.nextup                                  # we've got a Recommendation
