@@ -65,7 +65,7 @@ async def popular_tracks(count=1, rating=0):
     return tracks
 
 
-async def spotrec_tracks(spotify, activeusers, count=1):
+async def spotrec_tracks(spotify, count=1):
     """recommendation - fetch a number of spotify recommendations for a specific user
     
     takes:
