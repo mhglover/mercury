@@ -8,7 +8,7 @@ from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 BLOCK = ["fresh", "popular", "popular", "spotrec"]
 

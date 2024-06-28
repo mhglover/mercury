@@ -9,7 +9,7 @@ from users import getactiveusers
 from spot_funcs import trackinfo
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 # each recommendation function should return a single track object by default
 # all functions should return either a single track object, a list of track objects,

@@ -5,7 +5,7 @@ import tekore as tk
 from models import User, WebUser, Track
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 # used by feelabout()
 USER_RATINGS_TO_FEELINGS = {

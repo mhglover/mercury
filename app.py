@@ -16,9 +16,8 @@ from queue_manager import queue_manager, getnext, getratings
 from raters import rate_history, rate_saved
 from spot_funcs import trackinfo, getrecents, normalizetrack
 
-# pylint: disable=W0718,global-statement
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 load_dotenv()  # take environment variables from .env
 

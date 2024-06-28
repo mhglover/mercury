@@ -10,8 +10,8 @@ from raters import rate, record
 from spot_funcs import trackinfo, send_to_player
 from spot_funcs import is_already_queued, is_saved, was_recently_played, copy_track_data
 
-# pylint: disable=trailing-whitespace
 # pylint: disable=broad-exception-caught
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 
 async def user_reaper():
@@ -314,4 +314,3 @@ async def spotify_watcher(cred, spotify, user):
     
     logging.info("%s exiting", procname)
     return procname
-
