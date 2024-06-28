@@ -198,6 +198,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         now = datetime.datetime.now(datetime.timezone.utc)
         self.ttl = now + datetime.timedelta(minutes=20)
         
+        
     def t(self):
         """return a middle-truncated track name"""
         return str(truncate_middle(self.track.trackname))
@@ -205,4 +206,16 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     def n(self):
         """return a middle-truncated name for the nextup track"""
         return str(truncate_middle(self.nextup.trackname))
+
+
+    def track_changed(self):
+        """has the track changed since the last state?"""
+        
+        if (self.last_track is not None and
+            self.last_track.spotifyid is not None and
+            self.track.spotifyid != self.last_track.spotifyid):
+            return True
+        
+        return False
+
 

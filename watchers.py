@@ -145,9 +145,7 @@ async def spotify_watcher(cred, spotify, user):
 
         # if the track hasn't changed but the savestate has, rate it love/like
         logging.debug("is saved? %s - was saved? %s", state.is_this_saved, state.was_saved)
-        if (state.track and state.last_track 
-            and state.track.spotifyid == state.last_track.spotifyid 
-            and state.was_saved != state.is_this_saved):
+        if not state.track_changed() and state.was_saved != state.is_this_saved:
             
             # we saved it, so rate it a 4
             if state.is_this_saved:
