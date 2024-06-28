@@ -3,21 +3,12 @@ import logging
 import pickle
 import tekore as tk
 from models import User, WebUser, Track
+from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
 
 # used by feelabout()
-USER_RATINGS_TO_FEELINGS = {
-    None:   "unrated",
-    -2:     "hate",
-    -1:     "dislike",
-     0:     "shrug",
-     1:     "like",
-     2:     "love",
-     3:     "love",
-     4:     "love"
-}
 
 async def getuser(cred, user):
     """fetch user details
@@ -99,10 +90,6 @@ async def getactivewebusers(track):
     ]
     
     return webusers
-
-def feelabout(value: int):
-    """return a text string based on value"""
-    return USER_RATINGS_TO_FEELINGS.get(value)
 
 
 async def getplayer(spotify, token, user):

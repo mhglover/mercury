@@ -7,7 +7,7 @@ from typing import List
 import tekore as tk
 from tortoise import fields
 from tortoise.models import Model
-from helpers import truncate_middle
+from helpers import truncate_middle, feelabout
 
 # pylint: disable=trailing-whitespace, trailing-newlines, too-many-instance-attributes
 
@@ -121,30 +121,39 @@ class WebUser():
 class WebData():
     """data model for passing state to web template"""
     track: Track = field(default_factory=Track)
+    tracks: List[WebTrack] = field(default_factory=list)
     history: List[PlayHistory] = field(default_factory=list)
-    users: List[WebUser] = field(default_factory=list)
-    ratings: List[WebTrack] = field(default_factory=list)
-    nextup: Recommendation = field(default_factory=Recommendation)
     user: User = field(default_factory=User)
+    users: List[WebUser] = field(default_factory=list)
+    ratings: List[Rating] = field(default_factory=list)
+    nextup: Recommendation = field(default_factory=Recommendation)
+    
     redirect_url: str = None
     refresh: int = 60
     currently: tk.model.CurrentlyPlaying = None
 
     def to_dict(self):
-        """Convert to dict with custom serialization for datetime"""
+        """Convert to dict with custom serialization"""
         return {
             "user": {"id": self.user.id,
                      "displayname": self.user.displayname,
                      "spotifyid": self.user.spotifyid},
-            "ratings": {track.track_id: {"color": track.color,
-                                         "trackname": track.trackname,
-                                         "rating": track.rating,
-                                         "id": track.track_id}
-                            for track in self.ratings},
+            "ratings": {rating.track_id: { "color": feelabout(rating.rating),
+                                           "trackname": rating.trackname,
+                                           "rating": rating.rating,
+                                           "displayname": rating.user.displayname,
+                                           "userid": rating.user.id
+                                           } for rating in self.ratings},
             "history": list(set(x.trackname for x in self.history)),
-            "users": self.users,
+            "users": {user.user_id: { "displayname": user.displayname,
+                                      "user_id": user.user_id,
+                                      "color": user.color,
+                                      "rating": user.rating,
+                                      "track_id": user.track_id,
+                                      "trackname": user.trackname
+                                      } for user in self.users},
             "nextup": {
-                "id": self.nextup.track.id,
+                "id": self.nextup.track.id or None,
                 "trackname": self.nextup.trackname
             },
             "refresh": self.refresh,

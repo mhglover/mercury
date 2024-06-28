@@ -8,8 +8,7 @@ from spot_funcs import trackinfo, normalizetrack
 from helpers import truncate_middle
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
-
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 async def rate(user, track,
                value=1, 
@@ -81,7 +80,6 @@ async def rate_saved(spotify, user, token, value=4,
         for each in all_items:
             track = await trackinfo(spotify, each.track.id)
             await rate(user, track, value=value, last_played=last_played)
-    
 
 
 async def get_current_rating(track, activeusers=None):
@@ -92,6 +90,7 @@ async def get_current_rating(track, activeusers=None):
         selector = ( Rating.get_or_none()
                          .annotate(sum=Sum("rating"))
                          .filter(id=track.id)
+                         .filter(userid__in=activeusers)
                          .group_by('track_id')
                          .values_list("sum", flat=True))
 
@@ -99,8 +98,31 @@ async def get_current_rating(track, activeusers=None):
         selector = ( Rating.get_or_none()
                          .annotate(sum=Sum("rating"))
                          .filter(id=track.id)
-                         .filter(userid__in=activeusers)
                          .group_by('track_id')
                          .values_list("sum", flat=True))
         
     return await selector
+
+
+async def get_track_ratings(track, users=None):
+    """pull all ratings for a track, optionally limited to a set of users"""
+
+    selector = Rating.filter(id=track.id).prefetch_related("user")
+    
+    # there is a better way to do this but I haven't found it yet
+    if users is not None:
+        selector = selector.filter(userid__in=[x.id for x in users])
+        
+    return await selector
+
+
+async def get_user_ratings(user, tracks):
+    """pull ratings for a list of tracks for a given user"""
+    ratings: list = []
+    tids = [x.id for x in tracks]
+    ratings = await ( Rating.filter(user_id=user.id)
+                        .filter(track_id__in=tids)
+                        .prefetch_related("track")
+                        .prefetch_related('user'))
+    
+    return ratings

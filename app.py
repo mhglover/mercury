@@ -12,8 +12,8 @@ from tortoise.contrib.quart import register_tortoise
 from models import User, WebData
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
-from queue_manager import queue_manager, getnext, getratings
-from raters import rate_history, rate_saved
+from queue_manager import queue_manager, getnext
+from raters import rate_history, rate_saved, get_track_ratings, get_user_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack
 
 # pylint: disable=broad-exception-caught
@@ -22,7 +22,7 @@ from spot_funcs import trackinfo, getrecents, normalizetrack
 load_dotenv()  # take environment variables from .env
 
 app = Quart(__name__)
-app.secret_key = os.getenv("APP_SECRET", default="1234567890")
+app.config.from_prefixed_env()
 
 conf = tk.config_from_environment()
 cred = tk.Credentials(*conf)
@@ -133,12 +133,16 @@ async def index():
         ratings=[]
         )
     
+    # go ahead and return if this isn't an active user
     if user_spotifyid is None:
         # get outta here kid ya bother me
         return await render_template('index.html', w=web_data.to_dict())
     
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_spotifyid)
+    
+    #get the user's ratings for the recent history
+    web_data.ratings = await get_user_ratings(web_data.user, [x.track for x in web_data.history])
     
     # what's the player's current status?
     with spotify.token_as(token):
@@ -155,8 +159,6 @@ async def index():
     # see if we need to launch a task for this user
     await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
-    #get the ratings for the recent history
-    web_data.ratings = await getratings([x.track_id for x in web_data.history], web_data.user.id)
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
@@ -396,25 +398,28 @@ async def follow(targetid=None):
 async def web_track(track_id):
     """display/edit track details"""
     
-    # get user details
+    # get the details we need to show
     user_spotifyid = session.get('spotifyid', None)
     user, _ = await getuser(cred, user_spotifyid) if user_spotifyid else None
     
-    # check the recs
+    track = await normalizetrack(track_id)
+    
     nextup = await getnext()
+    
+    ratings = await get_track_ratings(track)
     
     # what's happening y'all
     w = WebData(
         user = user,
         track = await normalizetrack(track_id),
         history = await getrecents(limit=20),
+        ratings = ratings,
         nextup = nextup,
-        users = await getactivewebusers(nextup.track),
-        ratings = [],
-        refresh = 600
+        refresh = 0
         )
     
-    return await render_template('track.html', w=w)
+    return await render_template('track.html', w=w.to_dict())
+
 
 async def main():
     """kick it"""
