@@ -98,7 +98,10 @@ async def get_fresh_tracks(count=1):
     """get a list of tracks that haven't been rated by the current listeners"""
     user_ids = [user.id for user in await getactiveusers()]
     subquery = Rating.filter(user_id__in=user_ids).values('track_id')
-    tracks = await Track.exclude(id__in=Subquery(subquery)).limit(count)
+    tracks = await ( Track.annotate(order=Random())
+                          .exclude(id__in=Subquery(subquery))
+                          .order_by('order')
+                          .limit(count))
 
     if len(tracks) == 1:
         return tracks[0]
