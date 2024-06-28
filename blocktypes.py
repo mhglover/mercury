@@ -2,7 +2,7 @@
 import datetime
 import logging
 from tortoise.functions import Sum
-from tortoise.expressions import Subquery
+from tortoise.expressions import Subquery, F
 from tortoise.contrib.postgres.functions import Random
 from models import Rating, PlayHistory, Track
 from users import getactiveusers
@@ -25,6 +25,8 @@ async def recently_rated_tracks(days=7):
 
 async def popular_tracks(count=1, rating=0):
     """recommendation - fetch a number of rated tracks that haven't been played recently
+    excludes played in the last 1 day
+    excludes duration less than 1 minute or more than 7 minutes
     
     returns either one or a list of rating objects
     """
@@ -44,6 +46,8 @@ async def popular_tracks(count=1, rating=0):
                         .filter(sum__gte=rating)
                         .filter(user_id__in=active_uids)
                         .exclude(track_id__in=recent_tids)
+                        .exclude(track__duration_ms__lte=60000)
+                        .exclude(track__duration_ms__gte=420000)
                         .order_by('order')
                         .limit(count)
                         .prefetch_related("track"))
@@ -100,6 +104,8 @@ async def get_fresh_tracks(count=1):
     subquery = Rating.filter(user_id__in=user_ids).values('track_id')
     tracks = await ( Track.annotate(order=Random())
                           .exclude(id__in=Subquery(subquery))
+                          .exclude(duration_ms__lte=60000)
+                          .exclude(duration_ms__gte=420000)
                           .order_by('order')
                           .limit(count))
 
