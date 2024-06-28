@@ -3,12 +3,13 @@ import os
 import logging
 import asyncio
 import datetime
-from models import User, Recommendation, WatcherState
+from models import User, WatcherState, Track
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
-from raters import rate, record
+from raters import rate, record, rate_by_position, get_track_ratings
 from spot_funcs import trackinfo, queue_safely
 from spot_funcs import is_saved, copy_track_data
+
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -61,21 +62,6 @@ async def watchman(taskset, cred, spotify, watcher, user):
         logging.error("%s failed adding task to taskset?")
 
 
-    # else:
-    #     while True:
-    #         procname="night_watchman"
-    #         logging.info("%s checking for active users without watchers every %s seconds",
-    #                       procname, sleep)
-    #         actives = User.filter(status="active")
-    #         for user in actives:
-    #             interval = datetime.datetime.now(datetime.timezone.utc) - user.last_active
-    #             logging.info("%s active user %s last active %s ago",
-    #                         procname, user.spotifyid, interval)
-            
-    #         await asyncio.sleep(sleep)
-    
-
-
 async def spotify_watcher(cred, spotify, user):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""    
     
@@ -96,12 +82,11 @@ async def spotify_watcher(cred, spotify, user):
         
         # set the watcherid for the spotwatcher process
         state.user.watcherid = (f"watcher_{state.user.spotifyid}_" 
-                                + "{datetime.datetime.now(datetime.timezone.utc)}")
+                                + f"{datetime.datetime.now(datetime.timezone.utc)}")
         await state.user.save()
 
         # see what the user's player is doing
         with spotify.token_as(token):
-            logging.debug("%s checking currently playing", procname)
             state.currently = await getplayer(spotify, token, state.user)
         
         if state.currently == 401:
@@ -124,41 +109,30 @@ async def spotify_watcher(cred, spotify, user):
         for each in await User.filter(status=f"following:{state.user.displayname}"):
             each.last_active = datetime.datetime.now(datetime.timezone.utc)
             await each.save()
-            
-        # note details from the last loop for comparison
-        if state.track is not None:
-            state.last_track = copy_track_data(state.track)
-            state.last_position = float(state.position)
-            state.was_saved = bool(state.is_this_saved)
-            
+        
         # pull details for the next track in the queue
         state.nextup = await getnext()
 
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
         state.is_this_saved = await is_saved(spotify, token, state.track)
+        state.rating = await get_track_ratings(state.track, [state.user])
         
         # do some math
-        state.position = state.currently.progress_ms/state.currently.item.duration_ms
+        state.position = int((state.currently.progress_ms/state.currently.item.duration_ms) * 100)
         state.remaining_ms = state.currently.item.duration_ms - state.currently.progress_ms
         state.displaytime = "{:}:{:02}".format(*divmod(state.remaining_ms // 1000, 60)) # pylint: disable=consider-using-f-string
 
         # if the track hasn't changed but the savestate has, rate it love/like
-        logging.debug("is saved? %s - was saved? %s", state.is_this_saved, state.was_saved)
-        if not state.track_changed() and state.was_saved != state.is_this_saved:
+        if ( state.was_saved is not None and 
+            not state.track_changed() and 
+            state.was_saved != state.is_this_saved):
             
-            # we saved it, so rate it a 4
-            if state.is_this_saved:
-                await rate(state.user, state.track, 4)
-                logging.info("%s user %s just saved this track, autorating at 4",
-                             procname, state.user.displayname)
-                
-            # we unsaved it, so rate it a 1
-            else:
-                await rate(state.user, state.track, 1, downrate=True)
-                logging.info("%s user %s just un-saved this track, autorating down to 1",
-                             procname, state.user.displayname)
-        
+            # set a rating
+            value = 4 if await is_saved(spotify, token, state.track) else 1
+            await rate(state.user, state.track, value=value, downrate=True)
+            logging.info("%s savestate changed, autorating (%s) [%s][%s] %s", 
+                            procname, value, state.track.id, state.track.spotifyid, state.t())
         
         # has anybody set this rec to expire yet? no? I will.
         if (state.nextup                                  # we've got a Recommendation
@@ -175,109 +149,57 @@ async def spotify_watcher(cred, spotify, user):
             logging.info("%s recorded play history %s", procname, state.t())
 
         # we aren't in the endzone yet
-        if state.remaining_ms > 30000:
-            state.endzone = False
+        state.update_endzone_status()
+        if not state.endzone:
+            state.calculate_sleep_duration()
 
             # detect track changes
             # move this into a state function
-            if (state.last_track and state.last_track.spotifyid is not None 
-                and state.last_track.spotifyid != state.track.spotifyid):
-                logging.info("%s track change at %.0d%% - now playing %s",
+            if state.track_changed():
+                logging.info("%s track change at %s%% - now playing %s",
                             procname, state.last_position, state.track.trackname)
                 
-                # did we skip?
-                # move this into a db_func
-                if state.last_track.spotifyid == state.nextup.track.spotifyid:
-                    logging.info("%s removing skipped track from recs: %s",
-                                procname, state.last_track.trackname)
-                    try:
-                        await Recommendation.get(id=state.nextup.track_id).delete()
-                    except Exception as e:
-                        logging.error("%s exception removing track from recommendations\n%s",
-                                    procname, e)
-                
-                # rate skipped tracks based on last position
-                if state.last_position < 0.33:
-                    value = -2
-                    logging.info("%s early skip rating, %s %s %s",
-                                state.user.spotifyid, state.last_track.trackname, value, procname)
-                    await rate(state.user, state.last_track, value)
-                elif state.last_position < 0.7:
-                    value = -1
-                    logging.info("%s late skip rating, %s %s %s",
-                                state.user.spotifyid, state.last_track.spotifyid, value, procname)
-                    await rate(state.user, state.last_track, value)
-        
-            # less than 30 seconds to the endzone, just sleep until then
-            # move sleep calculation into state function
-            if (state.remaining_ms - 30000) < 30000: 
-                state.sleep = (state.remaining_ms - 30000) / 1000             
-            # otherwise sleep for thirty seconds
-            else: 
-                state.sleep = 30
+                # after a track change, rate tracks based on last known position
+                value = 4 if state.is_this_saved else 1
+                await rate_by_position(user, state.last_track, state.last_position, value=value)
 
         # welcome to the end zone
-        # put this magic number into Settings? at least a const
-        elif state.remaining_ms <= 30000:
+        else:
             
-            # if we're listening to the next rec, remove the track from dbqueue
-            # make this into a db_func
-            if state.nextup and state.track.id == state.nextup.track.id:
-                logging.info("%s removing track from Recommendations: %s",
-                            procname, state.n())
-                try:
-                    await Recommendation.filter(id=state.nextup.id).delete()
-                except Exception as e:
-                    logging.error("%s exception removing track from upcomingqueue\n%s",
-                                    procname, e)
+            # if we're listening to the upcoming rec, it's time to remove it
+            if state.next_is_now_playing():
+                state.nextup.delete()
+                logging.info("%s removed track from Recommendations: %s", procname, state.n())
                 
                 # now get the real next queued track
                 state.nextup = await getnext()
             
-            logging.info("%s endzone %s - next up %s", procname, 
-                        state.t(), state.n())
-            
-            # if this is the first time we hit the endzone, 
-            # let's do stuff that shouldn't be repeated
-            if not state.endzone:
-                # this is dumb trickery to prevent re-rating 
-                # the track multiple times if paused during the endzone
-                state.endzone = True
-                
-                # autorate based on whether or not this is a saved track
-                state.is_saved = await is_saved(spotify, token, state.track)
-                
-                # move rating value into data model
-                if state.is_saved:
-                    value = 4
-                else:
-                    value = 1
-            
-                logging.info("%s rating (%s) [%s][%s] %s", 
-                                procname, value, state.track.id, state.track.spotifyid,
-                                state.t())
-                
-                # rework rate so it just needs the state by default and
-                # allows keyword args for explicit rating
-                await rate(state.user, state.track, value=value)
+            logging.info("%s endzone %s - next up %s", procname, state.t(), state.n())
 
-                # queue up the next track unless there are good reasons
-                await queue_safely(spotify, token, state)
+            # set a rating
+            value = 4 if await is_saved(spotify, token, state.track) else 1
+            await rate(state.user, state.track, value=value)
+            logging.info("%s rating (%s) [%s][%s] %s", 
+                            procname, value, state.track.id, state.track.spotifyid,
+                            state.t())
 
-                # set the sleep for this cycle `until this track is done
-                state.sleep = (state.remaining_ms /1000) + 2
+            # queue up the next track unless there are good reasons
+            await queue_safely(spotify, token, state)
+
+            # set the sleep for this cycle until this track is done
+            state.sleep = (state.remaining_ms /1000) + 2
         
+        # set values for next loop
+        state.last_track = state.track
+        state.last_position = state.position
+        state.was_saved = state.is_this_saved
         
-        state.user.status = f"{state.t()} {state.position:.0%} {state.displaytime} remaining"
-        logging.debug("%s sleeping %0.2ds - %s", procname, state.sleep, state.user.status)
-        
+        logging.info("%s sleeping %0.2ds - %s %s %d%%",
+                        procname, state.sleep, state.t(),
+                        state.displaytime, state.position)
         await asyncio.sleep(state.sleep)
 
     # ttl expired, clean up before exit
-    logging.info("%s timed out, cleaning house", procname)
-    state.user.watcherid = ""
-    state.user.status = "inactive"
-    await state.user.save()
-    
+    await state.cleanup()
     logging.info("%s exiting", procname)
     return procname

@@ -95,6 +95,7 @@ async def getactivewebusers(track):
 async def getplayer(spotify, token, user):
     """check the current player stat and update user status"""
     procname = "users.getplayer"
+    logging.debug("%s checking currently playing", procname)
     with spotify.token_as(token):
         try:
             currently = await spotify.playback_currently_playing()

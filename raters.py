@@ -106,14 +106,15 @@ async def get_current_rating(track, activeusers=None):
 
 async def get_track_ratings(track, users=None):
     """pull all ratings for a track, optionally limited to a set of users"""
-
-    selector = Rating.filter(id=track.id).prefetch_related("user")
     
     # there is a better way to do this but I haven't found it yet
     if users is not None:
-        selector = selector.filter(userid__in=[x.id for x in users])
-        
-    return await selector
+        return await (Rating.filter(id=track.id)
+                            .filter(user_id__in=[x.id for x in users])
+                            .prefetch_related("user"))
+    
+    return await (Rating.filter(id=track.id)
+                        .prefetch_related("user"))
 
 
 async def get_user_ratings(user, tracks):
@@ -121,8 +122,20 @@ async def get_user_ratings(user, tracks):
     ratings: list = []
     tids = [x.id for x in tracks]
     ratings = await ( Rating.filter(user_id=user.id)
-                        .filter(track_id__in=tids)
-                        .prefetch_related("track")
-                        .prefetch_related('user'))
+                            .filter(track_id__in=tids)
+                            .prefetch_related("track")
+                            .prefetch_related('user'))
     
     return ratings
+
+
+async def rate_by_position(user, last_track, last_position, value=1):
+    """set the rating for a track based on the last position when we last saw it"""
+    if last_position <=33:
+        value = -2
+    elif last_position <=80:
+        value = -1
+    
+    await rate(user, last_track, value)
+    logging.info("%s track change detected, position autorate %d%% %s %s",
+                    __name__, last_position, value, last_track.trackname)

@@ -10,7 +10,13 @@ from tortoise import fields
 from tortoise.models import Model
 from helpers import feelabout, truncate_middle
 
-# pylint: disable=trailing-whitespace, trailing-newlines, too-many-instance-attributes
+
+ENDZONE_THRESHOLD_MS = 30000
+SKIP_THRESHOLD_PERCENTAGE = 80
+
+# pylint: disable=broad-exception-caught
+# pylint: disable=trailing-whitespace, trailing-newlines
+# pylint: disable=too-many-instance-attributes, missing-function-docstring
 
 class User(Model):
     """track users"""
@@ -180,6 +186,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     
     currently: tk.model.CurrentlyPlaying = None
     track: Track = field(default_factory=Track)
+    rating: Rating = field(default_factory=Rating)
     last_track: Track = field(default_factory=Track)
     nextup: Track = field(default_factory=Track)
     
@@ -192,12 +199,12 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     is_this_saved: str = None
     was_saved: str = None
     endzone: str = None
+    remaining_ms: int = 0
     
     def __post_init__(self):
-        # timeout if they stop playing
+        """timeout if they stop playing"""
         now = datetime.datetime.now(datetime.timezone.utc)
         self.ttl = now + datetime.timedelta(minutes=20)
-        
         
     def t(self):
         """return a middle-truncated track name"""
@@ -207,15 +214,33 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         """return a middle-truncated name for the nextup track"""
         return str(truncate_middle(self.nextup.trackname))
 
+    def update_endzone_status(self):
+        self.endzone = self.remaining_ms <= ENDZONE_THRESHOLD_MS
 
-    def track_changed(self):
-        """has the track changed since the last state?"""
-        
-        if (self.last_track is not None and
-            self.last_track.spotifyid is not None and
-            self.track.spotifyid != self.last_track.spotifyid):
-            return True
-        
-        return False
+    def track_changed(self) -> bool:
+        return ( self.last_track and 
+                 self.last_track.spotifyid is not None and 
+                 self.last_track.spotifyid != self.track.spotifyid)
+
+    def should_sleep_until_endzone(self) -> bool:
+        return (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS
+
+    def calculate_sleep_duration(self):
+        if self.should_sleep_until_endzone():
+            self.sleep = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
+        else:
+            self.sleep = 30
+
+    def was_skipped(self):
+        # if the last position we saw was less than 80% through, consider it a skip
+        return self.last_position < SKIP_THRESHOLD_PERCENTAGE
+
+    def next_is_now_playing(self):
+        return (self.nextup and self.track.id == self.nextup.id)
+
+    async def cleanup(self):
+        self.user.watcherid = ""
+        self.user.status = "inactive"
+        await self.user.save()
 
 
