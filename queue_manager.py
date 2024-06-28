@@ -63,7 +63,9 @@ async def queue_manager(spotify, sleep=10):
                 track = await popular_tracks()
             
             else:
-                logging.error("%s nothing to recommend, we shouldn't be here", procname)
+                logging.error("%s nothing to recommend", procname)
+                #dropping out of the while loop, try again later
+                break
 
             logging.info("%s adding [%s] recommendation: %s", procname, playtype, track.trackname)
             
