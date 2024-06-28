@@ -56,14 +56,14 @@ async def queue_manager(spotify, sleep=10):
             if playtype == "fresh":
                 track = await get_fresh_tracks()
                 
-            if playtype == "spotrec":
+            elif playtype == "spotrec":
                 track = await spotrec_tracks(spotify)
             
             elif playtype == "popular":
                 track = await popular_tracks()
             
             else:
-                logging.error("%s nothing to recommend", procname)
+                logging.error("%s playtype [%s] returned %s", procname, playtype, track)
                 #dropping out of the while loop, try again later
                 break
 
