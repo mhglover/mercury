@@ -5,7 +5,7 @@ import asyncio
 import datetime
 from models import User, Recommendation, WatcherState
 from users import getuser, getplayer
-from queue_manager import getnext
+from queue_manager import getnext, set_rec_expiration
 from raters import rate, record
 from spot_funcs import trackinfo, send_to_player
 from spot_funcs import is_already_queued, is_saved, was_recently_played, copy_track_data
@@ -109,7 +109,7 @@ async def spotify_watcher(cred, spotify, user):
             logging.error("401 unauthorized from spotify player, breaking")
             break
 
-        # nothing weird happening?  playing a track?  oh yeah now we cook
+        # if anything else weird is happening, sleep until the next loop
         if state.user.status != "active":
             logging.debug("%s player is not active, sleeping: %s", procname, state.user.status)
             continue
@@ -159,6 +159,7 @@ async def spotify_watcher(cred, spotify, user):
                 logging.info("%s user %s just un-saved this track, autorating down to 1",
                              procname, state.user.displayname)
         
+        
         # has anybody set this rec to expire yet? no? I will.
         if (state.nextup                                  # we've got a Recommendation
             and state.nextup.track.id == state.track.id         # that we're currently playing
@@ -166,14 +167,12 @@ async def spotify_watcher(cred, spotify, user):
             ):
             
             # set it for approximately our endzone, which we can calculate pretty closely
-            state.nextup.expires_at = (datetime.datetime.now(datetime.timezone.utc) + 
-                            datetime.timedelta(milliseconds=state.remaining_ms - 30000))
-            await state.nextup.save()
+            await set_rec_expiration(state.nextup, state.remaining_ms)
             logging.info("%s set expiration for %s", procname, state.t())
             
             # record a PlayHistory only when we set the expiration on a recommendation? 
-            logging.info("%s recording play history %s", procname, state.t())
             await record(state.user, state.nextup.track)
+            logging.info("%s recorded play history %s", procname, state.t())
 
         # we aren't in the endzone yet
         if state.remaining_ms > 30000:

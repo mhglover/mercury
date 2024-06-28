@@ -112,3 +112,11 @@ async def expire_queue():
         logging.info("expire_queue removing track: %s %s",
                      each.trackname, each.expires_at)
         _ = await Recommendation.filter(id=each.id).delete()
+
+
+async def set_rec_expiration(recommendation, remaining_ms):
+    """set the timestamp for expiring a recommendation"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - 30000)
+    recommendation.expires_at = now + expiration_interval
+    await recommendation.save()
