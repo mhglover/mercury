@@ -40,17 +40,17 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if w.playing_trackname != w.nextup_trackname %}
+{% if w.track.trackname != w.nextup.trackname %}
 <h3>you are listening to</h3>
-<h1>{{ w.playing_trackname }}</h1>
+<h1>{{ w.track.trackname }}</h1>
 {% endif %}
 
 <h3>the current recommendation is</h3>
-<h1>{{ w.nextup_trackname }}</h1>
+<h1>{{ w.nextup.trackname }}</h1>
 
 <h3>actively vibing</h3>
 <table>
-    {% if w.playing_trackname == "Not Playing" %}
+    {% if w.track.trackname == "Not Playing" %}
         <tr><td>click an active listener if you're listening with them</td></tr>
         {% for user in w.activeusers %}
         <tr><td><a href="/follow/{{ user }}">now playing</a></td></tr>

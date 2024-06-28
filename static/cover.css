@@ -19,6 +19,8 @@
 body {
   text-shadow: 0 .05rem .1rem rgba(0, 0, 0, .5);
   box-shadow: inset 0 0 5rem rgba(0, 0, 0, .5);
+  background-color: black;
+  color: white;
 }
 
 .cover-container {
@@ -49,18 +51,10 @@ body {
   /* border-bottom-color: #3d2cff; */
 }
 
-td.love {
-  color: #350fec
-}
 
-td.like {
-  color: #26a2df
-}
-
-td.dislike {
-  color: #f391a1
-}
-
-td.hate {
-  color: #ca3232
-}
+a.love    { color: #001ef4; text-decoration: none;} 
+a.like    { color: #53bcf9; text-decoration: none;}
+a.shrug   { color: #f5e798; text-decoration: none;}
+a.unrated { color: #f5e798; text-decoration: none;}
+a.dislike { color: #d07794; text-decoration: none;}
+a.hate    { color: #ea3223; text-decoration: none;}

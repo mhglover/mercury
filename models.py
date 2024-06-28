@@ -138,12 +138,15 @@ class WebData():
                      "spotifyid": self.user.spotifyid},
             "ratings": {track.track_id: {"color": track.color,
                                          "trackname": track.trackname,
-                                         "rating": track.rating}
+                                         "rating": track.rating,
+                                         "id": track.track_id}
                             for track in self.ratings},
             "history": list(set(x.trackname for x in self.history)),
-            "playing_trackname": self.track.trackname,
             "users": self.users,
-            "nextup_trackname": self.nextup.trackname,
+            "nextup": {
+                "id": self.nextup.track.id,
+                "trackname": self.nextup.trackname
+            },
             "refresh": self.refresh,
             "track": {
                 "id": self.track.id,

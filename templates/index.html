@@ -1,21 +1,19 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if w.playing_trackname != w.nextup_trackname %}
+{% if w.track.trackname != w.nextup.trackname %}
 <h3>you are listening to</h3>
-<h1>{{ w.playing_trackname }}</h1>
-<h3>the upcoming recommendation is</h3>
-{% else %}
-<h3>the current recommendation is</h3>
+<h2><a href="/track/{{w.track.id}}" class="like">{{ w.track.trackname }}</a></h2>
 {% endif %}
 
-<h1>{{ w.nextup_trackname }}</h1>
+<h3>coming up next</h3>
+<h1><a href="/track/{{w.nextup.id}}" class="{{like}}">{{ w.nextup.trackname }}</a></h1>
 
 {% if w.users|length > 0 %}
 <h3>actively vibing</h3>
 <table>
         {% for user in w.users %}
-        <tr><td class="{{ user.rating }}">{{ user.displayname }}</td></tr>
+        <tr><td><a href="/" class="{{ user.rating }}">{{ user.displayname }}</a></td></tr>
         {% endfor %}
 </table>
 {% endif %}
@@ -23,7 +21,7 @@
 <h3>some recent recommendations were</h3>
 <table>
     {% for id, track in w.ratings.items() %}
-    <tr><td class="{{ track.color }}">{{ track.trackname }}</td></tr>
+    <tr><td><a href="/track/{{id}}" class="{{ track.color }}">{{ track.trackname }}</a></td></tr>
     {% endfor %}
 </table>
 

@@ -38,17 +38,10 @@
           {% if w.user.id == None %}
             <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/auth">login w/spotify</a>
           {% else %}
-            {% if w.user.displayname != "" %}
-              <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/">{{ w.user.displayname }}</a>
-            {% else %}
-              <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/">{{ w.user.spotifyid }}</a>
-              <form action="/user" method="post">
-                <input type="text" name="displayname" value="set your displayname">
-              </form>
-            {% endif %}
+              <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/">home</a>
+          {% endif %}
             
             <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/logout">logout</a>
-          {% endif %}
       </nav>
     </div>
   </header>
