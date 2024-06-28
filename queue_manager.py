@@ -10,6 +10,7 @@ from spot_funcs import validatetrack
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
 
+BLOCK = ["popular", "popular", "spotrec"]
 
 async def queue_manager(spotify, sleep=10):
     """manage the queue"""
@@ -46,7 +47,7 @@ async def queue_manager(spotify, sleep=10):
             
             logging.debug("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = ["spotrec","popular", "popular"]
+                block = BLOCK
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)

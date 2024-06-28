@@ -5,7 +5,7 @@ import pickle
 from random import choice
 from tortoise.functions import Sum
 from tortoise.contrib.postgres.functions import Random
-from models import Rating
+from models import Rating, PlayHistory
 from users import getactiveusers
 from spot_funcs import trackinfo
 
@@ -30,7 +30,7 @@ async def popular_tracks(count=1, rating=0):
     returns either one or a list of rating objects
     """
     procname = "popular_tracks"
-    recent_tracks = await recently_rated_tracks()
+    recent_tracks = await recently_rated_tracks(days=1)
     recent_tids = [x.id for x in recent_tracks]
     
     activeusers = await getactiveusers()
@@ -75,17 +75,13 @@ async def spotrec_tracks(spotify, activeusers, count=1):
     """
     procname = "spotrec_tracks"
     
-    rando = choice(activeusers)
-    token = pickle.loads(rando.token)
-                
-    logging.debug("%s queuing a spotify recommendation", procname)
-    seeds = await popular_tracks(5)
+    # get the last five PlayHistory tracks for seeds
+    seed_tracks = await PlayHistory.filter().order_by('-id').limit(5).prefetch_related('track')
     
-    seed_spotifyids = [x.spotifyid for x in seeds]
+    seed_spotifyids = [x.track.spotifyid for x in seed_tracks]
 
     logging.debug("%s getting spotify recommendations", procname)
-    with spotify.token_as(token):
-        utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
+    utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
     
     tracks = [await trackinfo(spotify, x.id) for x in utrack.tracks]
         
