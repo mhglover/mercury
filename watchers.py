@@ -102,7 +102,7 @@ async def spotify_watcher(cred, spotify, user):
         # see what the user's player is doing
         with spotify.token_as(token):
             logging.debug("%s checking currently playing", procname)
-            state.currently = await getplayer(spotify, state.user)
+            state.currently = await getplayer(spotify, token, state.user)
         
         if state.currently == 401:
             # player says we're no longer authorized, let's error and exit

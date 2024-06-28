@@ -105,17 +105,18 @@ def feelabout(value: int):
     return USER_RATINGS_TO_FEELINGS.get(value)
 
 
-async def getplayer(spotify, user):
+async def getplayer(spotify, token, user):
     """check the current player stat and update user status"""
     procname = "users.getplayer"
-    try:
-        currently = await spotify.playback_currently_playing()
-    except tk.Unauthorised as e:
-        logging.error("%s unauthorized access - renew token?\n%s",procname, e)
-        return 401
-    except Exception as e:
-        logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
-        return
+    with spotify.token_as(token):
+        try:
+            currently = await spotify.playback_currently_playing()
+        except tk.Unauthorised as e:
+            logging.error("%s unauthorized access - renew token?\n%s",procname, e)
+            return 401
+        except Exception as e:
+            logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
+            return
 
     # is it not playing?
     if currently is None:
