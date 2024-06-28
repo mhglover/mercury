@@ -2,13 +2,14 @@
 import datetime
 import logging
 from tortoise.functions import Sum
+from tortoise.expressions import Subquery
 from tortoise.contrib.postgres.functions import Random
-from models import Rating, PlayHistory
+from models import Rating, PlayHistory, Track
 from users import getactiveusers
 from spot_funcs import trackinfo
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
 # each recommendation function should return a single track object by default
 # all functions should return either a single track object, a list of track objects,
@@ -90,4 +91,18 @@ async def spotrec_tracks(spotify, count=1):
     if len(tracks) == 1:
         tracks = tracks[0]
     
+    return tracks
+
+
+async def get_fresh_tracks(count=1):
+    """get a list of tracks that haven't been rated by the current listeners"""
+    user_ids = [user.id for user in await getactiveusers()]
+    subquery = Rating.filter(user_id__in=user_ids).values('track_id')
+    tracks = await ( Track.annotate(order=Random())
+                          .exclude(id__in=Subquery(subquery))
+                          .order_by('order')
+                          .limit(count))
+
+    if len(tracks) == 1:
+        return tracks[0]
     return tracks

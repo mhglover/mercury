@@ -4,13 +4,13 @@ import datetime
 import asyncio
 from models import Recommendation, Track, Rating, WebTrack
 from users import getactiveusers
-from blocktypes import popular_tracks, spotrec_tracks
+from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
 
 # pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace
+# pylint: disable=trailing-whitespace, trailing-newlines
 
-BLOCK = ["popular", "popular", "spotrec"]
+BLOCK = ["fresh", "popular", "popular", "spotrec"]
 
 async def queue_manager(spotify, sleep=10):
     """manage the queue"""
@@ -53,12 +53,13 @@ async def queue_manager(spotify, sleep=10):
                 playtype = block.pop(0)
             
             # pick the next track to add to the queue
+            if playtype == "fresh":
+                track = await get_fresh_tracks()
+                
             if playtype == "spotrec":
-                # reason = f"recommended by spotify for {activeusers[0].displayname}"
                 track = await spotrec_tracks(spotify)
             
             elif playtype == "popular":
-                # reason = "well rated by active listeners"
                 track = await popular_tracks()
             
             else:
