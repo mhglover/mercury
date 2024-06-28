@@ -112,7 +112,7 @@ async def getplayer(spotify, user):
         currently = await spotify.playback_currently_playing()
     except tk.Unauthorised as e:
         logging.error("%s unauthorized access - renew token?\n%s",procname, e)
-        return
+        return 401
     except Exception as e:
         logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
         return

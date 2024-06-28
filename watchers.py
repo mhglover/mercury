@@ -152,12 +152,14 @@ async def spotify_watcher(cred, spotify, user):
             # we saved it, so rate it a 4
             if state.is_this_saved:
                 await rate(state.user, state.track, 4)
-                logging.info("%s user just saved this track, autorating at 4", state.user.displayname)
+                logging.info("%s user %s just saved this track, autorating at 4",
+                             procname, state.user.displayname)
                 
             # we unsaved it, so rate it a 1
             else:
                 await rate(state.user, state.track, 1, downrate=True)
-                logging.info("%s user just un-saved this track, autorating down to 1", state.user.displayname)
+                logging.info("%s user %s just un-saved this track, autorating down to 1",
+                             procname, state.user.displayname)
         
         # has anybody set this rec to expire yet? no? I will.
         if (state.nextup                                  # we've got a Recommendation
