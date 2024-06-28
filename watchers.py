@@ -7,8 +7,8 @@ from models import User, Recommendation, WatcherState
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record
-from spot_funcs import trackinfo, send_to_player
-from spot_funcs import is_already_queued, is_saved, was_recently_played, copy_track_data
+from spot_funcs import trackinfo, queue_safely
+from spot_funcs import is_saved, copy_track_data
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -261,40 +261,10 @@ async def spotify_watcher(cred, spotify, user):
                 # allows keyword args for explicit rating
                 await rate(state.user, state.track, value=value)
 
-            # queue up the next track unless there are good reasons
-            # move to db_func should_send_recommendation bool
-            if state.nextup is None:
-                # don't send a none
-                logging.warning("%s no Recommendations, nothing to queue", procname)
-            
-            # don't queue the track we're currently playing, dingus
-            elif state.track.id == state.nextup.track.id:
-                logging.warning("%s track is playing now, won't send again, removing - %s",
-                                procname, state.nextup.track.trackname)
-                # and remove it from the queue
-                await state.nextup.track.delete()
-            
-            # don't send a track we already played 
-            # this may cause a problem down the road
-            elif await was_recently_played(spotify, token, state.nextup.track.spotifyid):
-                logging.warning("%s track was played recently, won't send again, removing - %s",
-                                procname, state.nextup.track.trackname)
-                # and remove it from the queue
-                await state.nextup.track.delete()
-            
-            # don't resend something that's already in the player queue/context
-            # figure out the context and ignore those tracks
-            elif await is_already_queued(spotify, token, state.nextup.track.spotifyid):
-                logging.warning("%s track already queued, won't send again - %s",
-                                procname, state.nextup.track.trackname)
-            
-            # okay fine, queue it
-            else:
-                await send_to_player(spotify, token, state.nextup.track)
-                logging.info("%s sent to player queue [%s] %s",
-                                procname, state.nextup.reason, state.n())
+                # queue up the next track unless there are good reasons
+                await queue_safely(spotify, token, state)
 
-                # sleep until this track is done
+                # set the sleep for this cycle `until this track is done
                 state.sleep = (state.remaining_ms /1000) + 2
         
         

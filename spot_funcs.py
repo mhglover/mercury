@@ -194,6 +194,47 @@ async def send_to_player(spotify, token, track: Track):
                 "send_to_player", track.trackname, e)
 
 
+async def queue_safely(spotify, token, state):
+    """make sure this is a good rec before we queue it"""
+    procname = "queue_safely"
+    
+    if state.nextup is None:
+        # don't send a none
+        logging.warning("%s no Recommendations, nothing to queue", procname)
+        return False
+    
+    # don't queue the track we're currently playing, dingus
+    if state.track.id == state.nextup.track.id:
+        logging.warning("%s track is playing now, won't send again, removing rec: %s",
+                        procname, state.nextup.track.trackname)
+        # and remove it from the queue
+        await state.nextup.track.delete()
+        return False
+    
+    # don't send a track we already played 
+    # this may cause a problem down the road
+    if await was_recently_played(spotify, token, state.nextup.track.spotifyid):
+        logging.warning("%s track was played recently, won't send again, removing - %s",
+                        procname, state.nextup.track.trackname)
+        # and remove it from the queue
+        await state.nextup.track.delete()
+        return False
+    
+    # don't resend something that's already in the player queue/context
+    # figure out the context and ignore those tracks
+    if await is_already_queued(spotify, token, state.nextup.track.spotifyid):
+        logging.warning("%s track already queued, won't send again - %s",
+                        procname, state.nextup.track.trackname)
+        return False
+    
+    # okay fine, queue it
+    await send_to_player(spotify, token, state.nextup.track)
+    logging.info("%s sent to player queue [%s] %s",
+                        procname, state.nextup.reason, state.n())
+    return True
+    
+
+
 def copy_track_data(original_track):
     """Creates a copy of the track data without saving a new row in the database"""
     if original_track.id is None:

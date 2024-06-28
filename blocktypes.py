@@ -2,7 +2,7 @@
 import datetime
 import logging
 from tortoise.functions import Sum
-from tortoise.expressions import Subquery, F
+from tortoise.expressions import Subquery
 from tortoise.contrib.postgres.functions import Random
 from models import Rating, PlayHistory, Track
 from users import getactiveusers
