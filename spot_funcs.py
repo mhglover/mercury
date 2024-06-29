@@ -208,7 +208,7 @@ async def queue_safely(spotify, token, state):
         logging.warning("%s track is playing now, won't send again, removing rec: %s",
                         procname, state.nextup.track.trackname)
         # and remove it from the queue
-        await state.nextup.track.delete()
+        await state.nextup.delete()
         return False
     
     # don't send a track we already played 
