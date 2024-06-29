@@ -2,6 +2,7 @@
 
 import logging
 from models import Track, PlayHistory, SpotifyID
+from pprint import pformat
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -118,6 +119,7 @@ async def validatetrack(spotify, track):
         # okay, it's real.  is this playable in the US?
         if not spot_track.is_playable:
             logging.error("validatetrack track is unplayable [%s], rejecting", spotifyid.spotifyid)
+            logging.error(pformat(spot_track))
             return False
     
     return True
@@ -268,7 +270,7 @@ async def normalizetrack(track):
             track = await Track.get(spotifyid=s)
     else:
         logging.error("normalizetrack this isn't a string or a track object: %s", type(track))
-        logging.error(track)
+        logging.error(pformat(track))
     
     return track
 
