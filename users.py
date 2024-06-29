@@ -1,7 +1,6 @@
 """functions for user manipulations"""
 import logging
 import pickle
-from pprint import pformat
 import tekore as tk
 from helpers import feelabout
 from models import Track, User, WebUser
@@ -96,7 +95,7 @@ async def getactivewebusers(track):
 async def getplayer(state):
     """check the current player stat and update user status"""
     # move into models.WatcherState?
-    procname = "users.getplayer"
+    procname = __name__
     logging.debug("%s checking currently playing", procname)
     with state.spotify.token_as(state.token):
         try:
@@ -105,8 +104,8 @@ async def getplayer(state):
             state.status = "unauthorized"
             logging.debug("%s unauthorized access from spotify player\n%s", procname, e)
             return
-            
         except Exception as e:
+            state.status = "unknown"
             logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
             return
 
