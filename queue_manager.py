@@ -41,22 +41,20 @@ async def queue_manager(spotify, sleep=10):
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
-            if len(activeusers) == 0:
-                logging.info("%s no active listeners, sleeping for 60 seconds", procname)
-                await asyncio.sleep(60)
-                continue
-            
-            logging.debug("BLOCK STATE: %s", block)
-            # when we empty a block, get the next makeup from the database
-            if len(block) == 0:
-                block_makeup, _ = await ( Option.get_or_create(
-                                                option_name="block_makeup", 
-                                                defaults = { 
-                                                    "option_value": BLOCK}))
+            if len(activeusers) > 0:
                 
-                block = block_makeup.option_value.split()
+                # get the next recommendation type from the current block
+                playtype = block.pop(0)
+                # when we empty a block, get the next block makeup from the database
+                if len(block) == 0:
+                    block_makeup, _ = await ( Option.get_or_create(
+                                                    option_name="block_makeup", 
+                                                    defaults = { 
+                                                        "option_value": BLOCK}))
+                    block = block_makeup.option_value.split()
 
-            playtype = block.pop(0)
+            else:
+                playtype = "spotrec"
             
             # pick the next track to add to the queue
             if playtype == "fresh":
