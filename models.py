@@ -2,6 +2,7 @@
 """mercury radio database models"""
 
 import datetime
+import logging
 from dataclasses import dataclass, field
 from typing import List
 import humanize
@@ -236,7 +237,9 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         return self.last_position < SKIP_THRESHOLD_PERCENTAGE
 
     def next_is_now_playing(self):
-        return (self.nextup and self.track.id == self.nextup.id)
+        result = (self.nextup and self.track.id == self.nextup.track.id)
+        logging.info("next_is_nowplaying? %s %s ? %s", result, self.track.id, self.nextup.track.id )
+        return result
 
     async def cleanup(self):
         self.user.watcherid = ""
