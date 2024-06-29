@@ -11,6 +11,7 @@ from spot_funcs import validatetrack
 # pylint: disable=trailing-whitespace, trailing-newlines
 
 BLOCK = "fresh popular popular spotrec"
+ENDZONE_THRESHOLD_MS = 30000
 
 async def queue_manager(spotify, sleep=10):
     """manage the queue"""
@@ -122,6 +123,6 @@ async def expire_queue():
 async def set_rec_expiration(recommendation, remaining_ms):
     """set the timestamp for expiring a recommendation"""
     now = datetime.datetime.now(datetime.timezone.utc)
-    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - 30000)
+    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
     recommendation.expires_at = now + expiration_interval
     await recommendation.save()

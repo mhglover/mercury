@@ -97,6 +97,8 @@ async def spotify_watcher(cred, spotify, user):
         state.track = await trackinfo(spotify, state.currently.item.id)
         state.rating = await get_track_ratings(state.track, [state.user])
         state.is_this_saved = await is_saved(state.spotify, state.token, state.track)
+        
+        # figure out the value for an autorate if we need it
         value = 4 if state.is_this_saved else 1
 
         # if the track hasn't changed but the savestate has, rate it love/like
@@ -109,7 +111,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # set it for approximately our endzone, which we can calculate pretty closely
             await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.info("%s -- recommendation started, expiration set - %s", procname, state.t())
+            logging.info("%s recommendation started, expiration set %s", procname, state.t())
             
             # record a PlayHistory when we set the expiration on a recommendation
             await record(state.user, state.nextup.track)
@@ -140,9 +142,8 @@ async def spotify_watcher(cred, spotify, user):
             # let's wrap this up - this should only run once while in the endzone, not every loop
             if not state.finished:
                 # set a rating
-                value = 4 if state.is_this_saved else 1
                 await rate(state.user, state.track, value=value)
-                logging.info("%s -- finishing track %s (%s)", procname, state.t(), value)
+                logging.info("%s finishing track %s (%s)", procname, state.t(), value)
                 
                 # queue up the next track unless there are good reasons
                 await queue_safely(state.spotify, state.token, state)
