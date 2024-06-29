@@ -10,7 +10,7 @@ from spot_funcs import validatetrack
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
 
-BLOCK = ["fresh", "popular", "popular", "spotrec"]
+BLOCK = "fresh popular popular spotrec"
 
 async def queue_manager(spotify, sleep=10):
     """manage the queue"""
@@ -46,16 +46,16 @@ async def queue_manager(spotify, sleep=10):
                 continue
             
             logging.debug("BLOCK STATE: %s", block)
+            # when we empty a block, get the next makeup from the database
             if len(block) == 0:
-                block_makeup, _ = await Option.get_or_create(option_name="block_makeup")
-                if block_makeup.option_value is None:
-                    block_makeup.option_value = BLOCK
-                    await block_makeup.save()
+                block_makeup, _ = await ( Option.get_or_create(
+                                                option_name="block_makeup", 
+                                                defaults = { 
+                                                    "option_value": BLOCK}))
                 
-                block = list(block_makeup.option_value)
-                playtype = block.pop(0)
-            else:
-                playtype = block.pop(0)
+                block = block_makeup.option_value.split()
+
+            playtype = block.pop(0)
             
             # pick the next track to add to the queue
             if playtype == "fresh":
@@ -68,7 +68,7 @@ async def queue_manager(spotify, sleep=10):
                 track = await popular_tracks()
             
             else:
-                logging.error("%s playtype [%s] returned %s", procname, playtype, track)
+                logging.error("%s invalid playtype [%s] returned", procname, playtype)
                 #dropping out of the while loop, try again later
                 break
 
