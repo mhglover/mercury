@@ -107,7 +107,7 @@ async def spotify_watcher(cred, spotify, user):
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
         # has anybody set this rec to expire yet? no? I will.
-        if not state.next_has_expiration():
+        if not state.nextup.expires_at:
             
             # set it for approximately our endzone, which we can calculate pretty closely
             await set_rec_expiration(state.nextup, state.remaining_ms)

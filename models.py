@@ -283,8 +283,10 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         return result
     
     def next_has_expiration(self):
-        result = (self.nextup and self.nextup.expires_at is not None)
-        logging.debug("next_has_expiration? %s: %s", result, self.nextup.expires_at )
+        result = (self.nextup and 
+                  self.nextup.expires_at is not None and 
+                  self.nextup.expires_at != '')
+        logging.info("next_has_expiration? %s: %s", result, self.nextup.expires_at )
         return result
     
     async def cleanup(self):
