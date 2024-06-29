@@ -1,9 +1,10 @@
 """functions for user manipulations"""
 import logging
 import pickle
+from pprint import pformat
 import tekore as tk
-from models import User, WebUser, Track
 from helpers import feelabout
+from models import Track, User, WebUser
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -101,6 +102,7 @@ async def getplayer(spotify, token, user):
             currently = await spotify.playback_currently_playing()
         except tk.Unauthorised as e:
             logging.error("%s unauthorized access - renew token?\n%s",procname, e)
+            logging.error(pformat(token))
             return 401
         except Exception as e:
             logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)

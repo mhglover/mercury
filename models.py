@@ -3,6 +3,7 @@
 
 import datetime
 import logging
+import pickle
 from dataclasses import dataclass, field
 from typing import List
 import humanize
@@ -210,13 +211,41 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     is_this_saved: str = None
     was_saved: str = None
     endzone: str = None
+    finished: bool = False
     remaining_ms: int = 0
     
     def __post_init__(self):
         """timeout if they stop playing"""
         now = datetime.datetime.now(datetime.timezone.utc)
         self.ttl = now + datetime.timedelta(minutes=20)
+                # set the watcherid for the spotwatcher process
+    
+    async def set_watcher_name(self):
+        self.user.watcherid = (f"watcher_{self.user.spotifyid}_" 
+                                + f"{datetime.datetime.now(datetime.timezone.utc)}")
+        await self.user.save()
+
+    async def refresh(self):
+        self.ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
+        logging.debug("updating ttl, last_active and status: %s", self.ttl)
+        self.user.last_active = datetime.datetime.now(datetime.timezone.utc)
+    
+    async def refresh_token(self):
+        # pull the latest saved token
+        token = pickle.loads(self.user.token)
         
+        # renew it if necessary
+        if token.is_expiring:
+            try:
+                token = self.cred.refresh(token)
+            except Exception as e:
+                logging.error("exception refreshing token\n%s", e)
+            
+            # save the new token
+            self.user.token = pickle.dumps(token)
+            await self.user.save()
+        return token
+
     def t(self):
         """return a middle-truncated track name"""
         return str(truncate_middle(self.track.trackname))
@@ -232,12 +261,16 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         return ( self.last_track and 
                  self.last_track.spotifyid is not None and 
                  self.last_track.spotifyid != self.track.spotifyid)
-
-    def should_sleep_until_endzone(self) -> bool:
-        return (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS
+    
+    def savestate_changed(self) -> bool:
+        return ( self.was_saved is not None and 
+                 not self.track_changed() and 
+                 self.was_saved != self.is_this_saved)
 
     def calculate_sleep_duration(self):
-        if self.should_sleep_until_endzone():
+        if self.remaining_ms < ENDZONE_THRESHOLD_MS:
+            self.sleep = self.remaining_ms / 2 / 1000
+        elif (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS:
             self.sleep = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
         else:
             self.sleep = 30
@@ -247,10 +280,16 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         return self.last_position < SKIP_THRESHOLD_PERCENTAGE
 
     def next_is_now_playing(self):
-        result = (self.nextup and self.track.id == self.nextup.track.id)
-        logging.info("next_is_nowplaying? %s %s ? %s", result, self.track.id, self.nextup.track.id )
+        result = (self.nextup and 
+                  self.track.id == self.nextup.track.id)
+        logging.debug("next_is_nowplaying? %s %s ? %s", result, self.track.id, self.nextup.track.id)
         return result
-
+    
+    def next_has_expiration(self):
+        result = (self.nextup and self.nextup.expires_at is None)
+        logging.debug("next_has_expiration? %s: %s", result, self.nextup.expires_at )
+        return result
+    
     async def cleanup(self):
         self.user.watcherid = ""
         self.user.status = "inactive"
