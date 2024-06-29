@@ -234,21 +234,6 @@ async def queue_safely(spotify, token, state):
     logging.info("%s sent to player queue [%s] %s",
                         procname, state.nextup.reason, state.n())
     return True
-    
-
-
-def copy_track_data(original_track):
-    """Creates a copy of the track data without saving a new row in the database"""
-    if original_track.id is None:
-        return Track()
-    
-    new_track = Track(
-        spotifyid=original_track.spotifyid,
-        trackname=original_track.trackname,
-        trackuri=original_track.trackuri,
-        duration_ms=original_track.duration_ms
-    )
-    return new_track
 
 
 async def normalizetrack(track):

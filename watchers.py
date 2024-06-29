@@ -3,12 +3,12 @@ import os
 import logging
 import asyncio
 import datetime
-from models import User, WatcherState, Track
+from models import User, WatcherState
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_track_ratings
 from spot_funcs import trackinfo, queue_safely
-from spot_funcs import is_saved, copy_track_data
+from spot_funcs import is_saved
 
 
 # pylint: disable=broad-exception-caught
@@ -173,6 +173,8 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # now get the real next queued track
                 state.nextup = await getnext()
+                logging.info("%s new nextup track from Recommendations: %s", 
+                             procname, state.nextup.trackname)
             
             logging.info("%s endzone %s - next up %s", procname, state.t(), state.n())
 
