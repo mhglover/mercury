@@ -121,15 +121,15 @@ async def spotify_watcher(cred, spotify, user):
             # set a rating
             value = 4 if await is_saved(spotify, token, state.track) else 1
             await rate(state.user, state.track, value=value, downrate=True)
-            logging.info("%s savestate changed, autorating (%s) [%s][%s] %s", 
-                            procname, value, state.track.id, state.track.spotifyid, state.t())
+            logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
         # has anybody set this rec to expire yet? no? I will.
         if not state.next_has_expiration():
             
+            
             # set it for approximately our endzone, which we can calculate pretty closely
             await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.info("%s set expiration for %s", procname, state.t())
+            logging.info("%s -- recommendation started, expiration set - %s", procname, state.t())
             
             # record a PlayHistory when we set the expiration on a recommendation
             await record(state.user, state.nextup.track)
@@ -139,9 +139,9 @@ async def spotify_watcher(cred, spotify, user):
         if not state.endzone:
             
             if state.track_changed():
-                logging.info("%s track change at %s%% -------------------------------------", 
-                             procname, state.last_position)
-                logging.info("%s - now playing %s", procname, state.track.trackname) 
+                logging.info("%s -- track change -- %s%% %s ", 
+                             procname, state.last_position, state.last_track.trackname)
+                logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
                 
                 # if we didn't finish cleanly, rate tracks based on last known position
                 if not state.finished:
@@ -164,16 +164,16 @@ async def spotify_watcher(cred, spotify, user):
 
             # let's wrap this up - this should only run once while in the endzone, not every loop
             if not state.finished:
-                logging.info("%s ---- finishing up with track - %s ------------------------", 
+                logging.info("%s -- finish -- finishing up with track - %s", 
                              procname, state.t())
                 
                 # set a rating
                 value = 4 if await is_saved(spotify, token, state.track) else 1
                 await rate(state.user, state.track, value=value)
-                logging.info("%s rating (%s) %s", procname, value, state.t())
+                logging.info("%s -- finish -- rating (%s) %s", procname, value, state.t())
 
                 # queue up the next track unless there are good reasons
-                logging.info("%s next Recommendation: %s", procname, state.nextup.trackname)
+                logging.info("%s -- finish -- next rec: %s", procname, state.nextup.trackname)
                 await queue_safely(spotify, token, state)
                 
                 # unset this when we detect a track change
