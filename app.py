@@ -158,8 +158,8 @@ async def index():
         # web_data.rating = await get_current_rating(
             # web_data.track, activeusers=web_data.activeusers)
 
-    # see if we need to launch a task for this user
-    await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
+        # see if we need to launch a task for this user
+        await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
     
     # let's see it then
