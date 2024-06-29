@@ -186,8 +186,9 @@ async def spotify_watcher(cred, spotify, user):
             # queue up the next track unless there are good reasons
             await queue_safely(spotify, token, state)
 
-            # set the sleep for this cycle until this track is done
-            state.sleep = (state.remaining_ms /1000) + 2
+            # zeno's cigarette breaks keep getting shorter
+            # sleep for half the remaining time
+            state.sleep = state.remaining_ms / 2 / 1000
         
         # set values for next loop
         state.last_track = state.track
