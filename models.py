@@ -3,7 +3,6 @@
 
 import datetime
 import logging
-import pickle
 from dataclasses import dataclass, field
 from typing import List
 import humanize
@@ -11,7 +10,6 @@ import tekore as tk
 from tortoise import fields
 from tortoise.models import Model
 from helpers import feelabout, truncate_middle
-
 
 ENDZONE_THRESHOLD_MS = 30000
 SKIP_THRESHOLD_PERCENTAGE = 80
@@ -193,9 +191,9 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     """hold the state of a spotify watcher"""
     
     cred: tk.Credentials
+    spotify: tk.Spotify
     user: User = field(default_factory=User)
-    token: tk.AccessToken = None
-    
+    token: tk.Token = None
     currently: tk.model.CurrentlyPlaying = None
     track: Track = field(default_factory=Track)
     rating: Rating = field(default_factory=Rating)
@@ -206,6 +204,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     position: int = 0
     last_position: int = 0
     sleep: int = 30
+    status: str = "unknown"
     
     rated: str = None
     is_this_saved: str = None
@@ -220,31 +219,21 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         self.ttl = now + datetime.timedelta(minutes=20)
                 # set the watcherid for the spotwatcher process
     
+    def refresh_token(self):
+        if self.token.is_expiring:
+            self.token = self.cred.refresh(self.token)
+    
     async def set_watcher_name(self):
         self.user.watcherid = (f"watcher_{self.user.spotifyid}_" 
                                 + f"{datetime.datetime.now(datetime.timezone.utc)}")
         await self.user.save()
 
     async def refresh(self):
+        self.refresh_token()
         self.ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
         logging.debug("updating ttl, last_active and status: %s", self.ttl)
         self.user.last_active = datetime.datetime.now(datetime.timezone.utc)
-    
-    async def refresh_token(self):
-        # pull the latest saved token
-        token = pickle.loads(self.user.token)
         
-        # renew it if necessary
-        if token.is_expiring:
-            try:
-                token = self.cred.refresh(token)
-            except Exception as e:
-                logging.error("exception refreshing token\n%s", e)
-            
-            # save the new token
-            self.user.token = pickle.dumps(token)
-            await self.user.save()
-        return token
 
     def t(self):
         """return a middle-truncated track name"""
@@ -268,10 +257,13 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
                  self.was_saved != self.is_this_saved)
 
     def calculate_sleep_duration(self):
-        if self.remaining_ms < ENDZONE_THRESHOLD_MS:
-            self.sleep = self.remaining_ms / 2 / 1000
-        elif (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS:
-            self.sleep = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
+        if self.status == "active":
+            if self.remaining_ms < ENDZONE_THRESHOLD_MS:
+                self.sleep = self.remaining_ms / 2 / 1000
+            elif (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS:
+                self.sleep = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
+            else:
+                self.sleep = 30
         else:
             self.sleep = 30
 
