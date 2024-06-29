@@ -93,41 +93,52 @@ async def getactivewebusers(track):
     return webusers
 
 
-async def getplayer(spotify, token, user):
+async def getplayer(state):
     """check the current player stat and update user status"""
+    # move into models.WatcherState?
     procname = "users.getplayer"
     logging.debug("%s checking currently playing", procname)
-    with spotify.token_as(token):
+    with state.spotify.token_as(state.token):
         try:
-            currently = await spotify.playback_currently_playing()
+            currently = await state.spotify.playback_currently_playing()
         except tk.Unauthorised as e:
-            logging.error("%s unauthorized access - renew token?\n%s",procname, e)
-            logging.error(pformat(token))
-            return 401
+            state.status = "unauthorized"
+            logging.error("%s unauthorized access from spotify player\n%s\%s",
+                          procname, e, pformat(state.token))
+            
         except Exception as e:
             logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
             return
 
+    if state.user.status != "active":
+        state.status = state.user.status
+        logging.info("%s player is not active, sleeping: %s", procname, state.user.status)
+        
     # is it not playing?
     if currently is None:
-        user.status = "not playing"
+        state.user.status = "not playing"
+        state.status = "not playing"
         logging.debug("%s not currently playing", procname)
 
     # not playing but not paused?  weird state
     elif currently.currently_playing_type == "unknown":
-        user.status = "not playing"
+        state.user.status = "not playing"
+        state.status = "not playing"
         logging.debug("%s not currently playing", procname)
         raise ValueError(f"currently_playing_type says 'unknown'\n{currently}")
 
     # paused
     elif currently.is_playing is False:
-        user.status = "paused"
+        state.user.status = "paused"
+        state.status = "paused"
         logging.debug("%s is paused", procname)
     
     # must be active then
     else:
-        user.status = "active"
+        state.status = "active"
+        state.user.status = "active"
+        logging.debug("%s is active", procname)
     
-    await user.save()
+    await state.user.save()
     return currently
         

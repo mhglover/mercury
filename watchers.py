@@ -79,24 +79,16 @@ async def spotify_watcher(cred, spotify, user):
     while state.ttl > datetime.datetime.now(datetime.timezone.utc):
 
         # see what the user's player is doing
-        state.currently = await getplayer(state.spotify, state.token, state.user)
+        state.currently = await getplayer(state)
         
-        if state.currently == 401:
-            state.status = "unauthorized"
-            # player says we're no longer authorized, let's error and exit
-            logging.error("401 unauthorized from spotify player, breaking\n%s", 
-                          pformat(state.token))
-            break
-
         # if anything else weird is happening, sleep for a minute and then loop
-        if state.user.status != "active":
+        if state.status != "active":
             state.status = state.user.status
             logging.info("%s player is not active, sleeping: %s", procname, state.user.status)
             await asyncio.sleep(60)
             continue
-            
-        # refresh the ttl for 20 minutes
-        # refresh the token if it's expiring - 3600 seconds
+
+        # refresh the ttl, token, do some math, etc
         await state.refresh()
         
         # pull details for the next track in the queue
@@ -106,18 +98,10 @@ async def spotify_watcher(cred, spotify, user):
         state.track = await trackinfo(spotify, state.currently.item.id)
         state.rating = await get_track_ratings(state.track, [state.user])
         state.is_this_saved = await is_saved(state.spotify, state.token, state.track)
-        
-        # do some math
-        state.position = int((state.currently.progress_ms/state.currently.item.duration_ms) * 100)
-        state.remaining_ms = state.currently.item.duration_ms - state.currently.progress_ms
-        state.displaytime = "{:}:{:02}".format(*divmod(state.remaining_ms // 1000, 60)) 
-        state.calculate_sleep_duration()
-        state.update_endzone_status()
+        value = 4 if state.is_this_saved else 1
 
         # if the track hasn't changed but the savestate has, rate it love/like
         if not state.track_changed() and state.savestate_changed():
-            # set a rating
-            value = 4 if await is_saved(state.spotify, state.token, state.track) else 1
             await rate(state.user, state.track, value=value, downrate=True)
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
@@ -139,9 +123,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # if we didn't finish cleanly, rate tracks based on last known position
             if not state.finished:
-                value = 4 if state.is_this_saved else 1
-                await rate_by_position(user, state.last_track, 
-                                        state.last_position, value=value)
+                await rate_by_position(user, state.last_track, state.last_position, value=value)
             
             # unset so we can handle the next track properly
             state.finished = False
@@ -158,16 +140,12 @@ async def spotify_watcher(cred, spotify, user):
 
             # let's wrap this up - this should only run once while in the endzone, not every loop
             if not state.finished:
-                logging.info("%s -- finish -- finishing up with track - %s", 
-                             procname, state.t())
-                
                 # set a rating
-                value = 4 if await is_saved(state.spotify, state.token, state.track) else 1
+                value = 4 if state.is_this_saved else 1
                 await rate(state.user, state.track, value=value)
-                logging.info("%s -- finish -- rating (%s) %s", procname, value, state.t())
-
+                logging.info("%s -- finishing track %s (%s)", procname, state.t(), value)
+                
                 # queue up the next track unless there are good reasons
-                logging.info("%s -- finish -- next rec: %s", procname, state.nextup.trackname)
                 await queue_safely(state.spotify, state.token, state)
                 
                 # unset this when we detect a track change
