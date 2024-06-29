@@ -126,6 +126,7 @@ async def index():
     user_spotifyid = session.get('spotifyid', None)
     
     nextup = await getnext()
+    
     # what's happening y'all
     web_data = WebData(
         history=await getrecents(limit=20),
@@ -135,7 +136,7 @@ async def index():
         )
     
     # go ahead and return if this isn't an active user
-    if user_spotifyid is None:
+    if user_spotifyid is None or user_spotifyid == '':
         # get outta here kid ya bother me
         return await render_template('index.html', w=web_data.to_dict())
     
@@ -205,8 +206,10 @@ async def spotify_authorization():
     logging.debug("auth_url: %s", auth.url)
     
     nextup=await getnext()
+    w = WebData()
         
-    return await render_template('auth.html', 
+    return await render_template('auth.html',
+                                 w=w,
                                  trackname=nextup.trackname,
                                  spoturl=auth.url)
 
@@ -401,7 +404,10 @@ async def web_track(track_id):
     
     # get the details we need to show
     user_spotifyid = session.get('spotifyid', None)
-    user, _ = await getuser(cred, user_spotifyid) if user_spotifyid else None
+    if user_spotifyid is not None and user_spotifyid != '':
+        user, _ = await getuser(cred, user_spotifyid)
+    else:
+        user = User()
     
     track = await normalizetrack(track_id)
     
