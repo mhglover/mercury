@@ -136,6 +136,6 @@ async def rate_by_position(user, last_track, last_position, value=1):
     elif last_position <=80:
         value = -1
     
-    await rate(user, last_track, value)
+    await rate(user, last_track, value, downrate=True)
     logging.info("%s track change detected, position autorate %d%% %s %s",
                     __name__, last_position, value, last_track.trackname)
