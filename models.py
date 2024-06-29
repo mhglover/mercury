@@ -19,6 +19,16 @@ SKIP_THRESHOLD_PERCENTAGE = 80
 # pylint: disable=trailing-whitespace, trailing-newlines
 # pylint: disable=too-many-instance-attributes, missing-function-docstring
 
+class Option(Model):
+    """track application options in a database table"""
+    id = fields.IntField(primary_key=True)
+    option = str
+    option_value = str
+
+    def __str__(self):
+        return str(self.option)
+    
+    
 class User(Model):
     """track users"""
     id = fields.IntField(primary_key=True)
@@ -189,7 +199,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     track: Track = field(default_factory=Track)
     rating: Rating = field(default_factory=Rating)
     last_track: Track = field(default_factory=Track)
-    nextup: Track = field(default_factory=Track)
+    nextup: Recommendation = field(default_factory=Recommendation)
     
     displaytime: str = ""
     position: int = 0
