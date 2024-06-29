@@ -23,11 +23,11 @@ SKIP_THRESHOLD_PERCENTAGE = 80
 class Option(Model):
     """track application options in a database table"""
     id = fields.IntField(primary_key=True)
-    option = str
-    option_value = str
+    option_name = fields.TextField()
+    option_value = fields.TextField(null=True)
 
     def __str__(self):
-        return str(self.option)
+        return str(self.option_name)
     
     
 class User(Model):

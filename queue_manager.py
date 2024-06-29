@@ -2,7 +2,7 @@
 import logging
 import datetime
 import asyncio
-from models import Recommendation, Track
+from models import Recommendation, Track, Option
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
@@ -47,7 +47,12 @@ async def queue_manager(spotify, sleep=10):
             
             logging.debug("BLOCK STATE: %s", block)
             if len(block) == 0:
-                block = list(BLOCK)
+                block_makeup, _ = await Option.get_or_create(option_name="block_makeup")
+                if block_makeup.option_value is None:
+                    block_makeup.option_value = BLOCK
+                    await block_makeup.save()
+                
+                block = list(block_makeup.option_value)
                 playtype = block.pop(0)
             else:
                 playtype = block.pop(0)
