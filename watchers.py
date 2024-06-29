@@ -3,7 +3,6 @@ import os
 import logging
 import asyncio
 import datetime
-from pprint import pformat
 from models import User, WatcherState
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
