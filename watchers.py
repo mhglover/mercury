@@ -168,7 +168,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # if we're listening to the upcoming rec, it's time to remove it
             if state.next_is_now_playing():
-                state.nextup.delete()
+                await state.nextup.delete()
                 logging.info("%s removed track from Recommendations: %s", procname, state.n())
                 
                 # now get the real next queued track
