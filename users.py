@@ -112,7 +112,7 @@ async def getplayer(state):
 
     if state.user.status != "active":
         state.status = state.user.status
-        logging.info("%s player is not active, sleeping: %s", procname, state.user.status)
+        logging.debug("%s player is not active, sleeping: %s", procname, state.user.status)
         
     # is it not playing?
     if currently is None:
