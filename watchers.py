@@ -106,8 +106,8 @@ async def spotify_watcher(cred, spotify, user):
             await rate(state.user, state.track, value=value, downrate=True)
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
-        # has anybody set this rec to expire yet? no? I will.
-        if not state.nextup.expires_at:
+        # we're playing a rec! has anybody set this rec to expire yet? no? I will.
+        if state.nextup.track.id == state.track.id and state.nextup.expires_at is None:
             
             # set it for approximately our endzone, which we can calculate pretty closely
             await set_rec_expiration(state.nextup, state.remaining_ms)
