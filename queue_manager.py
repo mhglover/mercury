@@ -42,16 +42,16 @@ async def queue_manager(spotify, sleep=10):
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
             if len(activeusers) > 0:
-                
-                # get the next recommendation type from the current block
-                playtype = block.pop(0)
-                # when we empty a block, get the next block makeup from the database
+
+                # get the next block makeup from the database
                 if len(block) == 0:
                     block_makeup, _ = await ( Option.get_or_create(
                                                     option_name="block_makeup", 
                                                     defaults = { 
                                                         "option_value": BLOCK}))
                     block = block_makeup.option_value.split()
+                # get the next recommendation type from the current block
+                playtype = block.pop(0)
 
             else:
                 playtype = "spotrec"
@@ -107,18 +107,17 @@ async def getnext(get_all=False):
         return await Recommendation.first().order_by("id").prefetch_related("track")
 
 
-async def expire_queue():
+async def expire_queue() -> None:
     """remove old tracks from the upcoming queue"""
     now = datetime.datetime.now(datetime.timezone.utc)
     logging.debug("expire_queue removing old tracks")
     expired = await Recommendation.filter(expires_at__lte=now)
     for each in expired:
-        logging.info("expire_queue removing track: %s",
-                     each.trackname)
-        _ = await Recommendation.filter(id=each.id).delete()
+        logging.info("expire_queue removing track: %s %s", each.trackname, each.expires_at)
+        await each.delete()
 
 
-async def set_rec_expiration(recommendation, remaining_ms):
+async def set_rec_expiration(recommendation, remaining_ms) -> None:
     """set the timestamp for expiring a recommendation"""
     now = datetime.datetime.now(datetime.timezone.utc)
     expiration_interval = datetime.timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
