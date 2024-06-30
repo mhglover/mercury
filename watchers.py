@@ -72,13 +72,9 @@ async def spotify_watcher(cred, spotify, user):
     procname = f"watcher_{state.user.displayname}"
     logging.info("%s watcher starting", procname)
     
-    # set the watcherid for the spotwatcher process
     await state.set_watcher_name()
 
-    # Loop while alive
     while state.ttl > datetime.datetime.now(datetime.timezone.utc):
-
-        # see what the user's player is doing
         state.currently = await getplayer(state)
         
         # if anything else weird is happening, sleep for a minute and then loop
@@ -105,20 +101,19 @@ async def spotify_watcher(cred, spotify, user):
         # if the track hasn't changed but the savestate has, rate it love/like
         if not state.track_changed() and state.savestate_changed():
             state.rating.rating = value
-            state.rating.save()
+            await state.rating.save()
             state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
-        if state.history.id is None:
+        if state.history.track_id != state.track.id:
             # record a PlayHistory when we see a track for the first time
             state.history = await record(state)
             logging.info("%s recorded play history %s", procname, state.t())
             state.recorded = True
         
-        logging.debug("%s state.track.id [%s] ? [%s] state.nextup.track.id",
-                     procname, state.track.id, state.nextup.track.id)
-        logging.debug("%s nextup.expires_at: %s", 
-                     procname, naturaltime(state.nextup.expires_at))
+        logging.debug("%s state.track.id [%s] ? [%s] state.nextup.track.id (%s)",
+                     procname, state.track.id, 
+                     state.nextup.track.id, naturaltime(state.nextup.expires_at))
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
         if state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
             logging.info("%s recommendation started %s, no expiration", procname, state.t())
