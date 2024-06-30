@@ -145,9 +145,6 @@ async def index():
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_spotifyid)
     
-    #get the user's ratings for the recent history
-    web_data.ratings = await get_user_ratings(web_data.user, [x.track for x in web_data.history])
-    
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     
     # what's the player's current status?

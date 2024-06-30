@@ -20,11 +20,6 @@
 {% endif %}
 
 <h3>some recent recommendations were</h3>
-<table>
-    {% for id, track in w.ratings.items() %}
-    <tr><td><a href="/track/{{id}}" class="{{ track.color }}">{{ track.trackname }}</a></td></tr>
-    {% endfor %}
-</table>
 
 <table>
     {% for track in w.history %}
