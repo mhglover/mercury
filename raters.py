@@ -6,7 +6,7 @@ from tortoise.functions import Sum
 from humanize import naturaltime
 from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
-from helpers import truncate_middle, feelabout
+from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -51,16 +51,51 @@ async def rate(user, track,
             rating.rating = value
             await rating.save()
 
+    return rating
 
-async def record(user, track):
+
+async def get_rating(state, value=0):
+    """get a track's rating, create a new one if necessary"""
+    procname="get_rating"
+    state.track = await normalizetrack(state.track)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    logging.debug("%s get_or_creating a rating: %s %s", 
+                 procname, state.user.displayname, state.track.trackname)
+    
+    # fetch it or create it if it didn't already exist
+    rating, _ = await Rating.get_or_create(user_id=state.user.id,
+                                                track_id=state.track.id,
+                                                trackname=state.track.trackname,
+                                                defaults={
+                                                   "rating": value,
+                                                   "last_played": now
+                                                   }
+                                               )
+    return rating  
+
+async def record(state):
     """write a record to the play history table"""
-    logging.debug("recording play history %s %s",
-                  user.displayname, truncate_middle(track.trackname))
+    logging.debug("recording play history %s %s", state.user.displayname, state.t())
+    
+    if state.recorded:
+        logging.warning("state says recorded already, not re-recording")
+        return state.rating
+    
+    state.recorded = True
+    
     try:
-        insertedkey = await PlayHistory.create(track_id=track.id, trackname=track.trackname)
-        await insertedkey.save()
+        history = await PlayHistory.create(
+            track_id=state.track.id,
+            trackname=state.track.trackname,
+            user_id=state.user.id,
+            rating_id=state.rating.id
+        )
     except Exception as e:
         logging.error("record exception creating playhistory\n%s", e)
+        history = None  # Ensure history is defined even in case of an exception
+    
+    return history
 
 
 async def rate_history(spotify, user, token, value=1, limit=20):
@@ -141,7 +176,8 @@ async def get_recent_playhistory_with_ratings(user_id: int, limit=10):
     results = []
     for playhistory in recent_playhistory:
         rating = await Rating.filter(user_id=user_id, track_id=playhistory.track.id).first()
-        timestamp=playhistory.played_at.strftime("%m/%d/%Y, %H:%M:%S") + " - " + naturaltime(playhistory.played_at)
+        timestamp=(playhistory.played_at.strftime("%m/%d/%Y, %H:%M:%S") 
+                                                    +  " - " + naturaltime(playhistory.played_at))
         webtrack = WebTrack(
         
             trackname=playhistory.trackname,

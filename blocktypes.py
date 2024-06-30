@@ -31,12 +31,13 @@ async def popular_tracks(count=1, rating=0):
     returns either one or a list of rating objects
     """
     procname = "popular_tracks"
-    recent_tracks = await recently_rated_tracks(days=1)
-    recent_tids = [x.id for x in recent_tracks]
+    # recent_tracks = await recently_rated_tracks(days=1)
+    active_uids = [x.id for x in await getactiveusers()]
+    interval = datetime.datetime.now() - datetime.timedelta(days=5)
+    recent_tids = await (PlayHistory.filter(played_at__gte=interval)
+                                    .filter(user_id__in=active_uids)
+                                    .values_list("track_id", flat=True))
     
-    activeusers = await getactiveusers()
-    active_uids = [x.id for x in activeusers]
-
     logging.debug("%s pulled %s recently played tracks",
                  procname, len(recent_tids))
 

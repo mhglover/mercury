@@ -122,9 +122,10 @@ async def expire_queue() -> None:
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
     """set the timestamp for expiring a recommendation"""
     now = datetime.datetime.now(datetime.timezone.utc)
-    expiration_interval = datetime.timedelta(milliseconds=(remaining_ms - ENDZONE_THRESHOLD_MS))
+    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
     recommendation.expires_at = now + expiration_interval
     logging.info("set_rec_expiration - %s %s",
                  recommendation.trackname, naturaltime(recommendation.expires_at)
                  )
     await recommendation.save()
+    return recommendation.expires_at

@@ -3,10 +3,11 @@ import os
 import logging
 import asyncio
 import datetime
+from humanize import naturaltime
 from models import User, WatcherState
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
-from raters import rate, record, rate_by_position, get_track_ratings
+from raters import rate, record, rate_by_position, get_rating
 from spot_funcs import trackinfo, queue_safely
 from spot_funcs import is_saved
 
@@ -95,39 +96,49 @@ async def spotify_watcher(cred, spotify, user):
 
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
-        state.rating = await get_track_ratings(state.track, [state.user])
-        state.is_this_saved = await is_saved(state.spotify, state.token, state.track)
+        state.rating = await get_rating(state)
+        state.is_saved = await is_saved(state.spotify, state.token, state.track)
         
         # figure out the value for an autorate if we need it
-        value = 4 if state.is_this_saved else 1
+        value = 4 if state.is_saved else 1
 
         # if the track hasn't changed but the savestate has, rate it love/like
         if not state.track_changed() and state.savestate_changed():
-            await rate(state.user, state.track, value=value, downrate=True)
+            state.rating.rating = value
+            state.rating.save()
+            state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
+        if state.history.id is None:
+            # record a PlayHistory when we see a track for the first time
+            state.history = await record(state)
+            logging.info("%s recorded play history %s", procname, state.t())
+            state.recorded = True
+        
+        logging.debug("%s state.track.id [%s] ? [%s] state.nextup.track.id",
+                     procname, state.track.id, state.nextup.track.id)
+        logging.debug("%s nextup.expires_at: %s", 
+                     procname, naturaltime(state.nextup.expires_at))
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
-        if state.nextup.track.id == state.track.id and state.nextup.expires_at is None:
+        if state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
+            logging.info("%s recommendation started %s, no expiration", procname, state.t())
             
             # set it for approximately our endzone, which we can calculate pretty closely
-            await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.info("%s recommendation started, expiration set %s", procname, state.t())
-            
-            # record a PlayHistory when we set the expiration on a recommendation
-            await record(state.user, state.nextup.track)
-            logging.info("%s recorded play history %s", procname, state.t())
+            expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
+            logging.info("%s expiration set %s", procname, naturaltime(expiration))
             
         if state.track_changed():
             logging.info("%s -- track change -- %s%% %s ", 
-                            procname, state.last_position, state.last_track.trackname)
+                            procname, state.position_last_cycle, state.track_last_cycle.trackname)
             logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
             
             # if we didn't finish cleanly, rate tracks based on last known position
-            if not state.finished:
-                await rate_by_position(user, state.last_track, state.last_position, value=value)
+            if state.track_last_cycle.id is not None and not state.finished:
+                await rate_by_position(user, state.track_last_cycle, 
+                                       state.position_last_cycle, value=value)
             
-            # unset so we can handle the next track properly
-            state.finished = False
+            # unset some states so we can handle the next track properly
+            state.recorded = state.finished = state.just_rated = False
 
         if state.endzone: # welcome to the end zone
             
@@ -148,13 +159,13 @@ async def spotify_watcher(cred, spotify, user):
                 # queue up the next track unless there are good reasons
                 await queue_safely(state.spotify, state.token, state)
                 
-                # unset this when we detect a track change
+                # don't repeat this part of the loop until we detect a track change
                 state.finished = True
         
         # set values for next loop
-        state.last_track = state.track
-        state.last_position = state.position
-        state.was_saved = state.is_this_saved
+        state.track_last_cycle = state.track
+        state.position_last_cycle = state.position
+        state.was_saved_last_cycle = state.is_saved
         
         logging.info("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),

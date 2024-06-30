@@ -11,12 +11,12 @@ from tortoise import fields
 from tortoise.models import Model
 from helpers import feelabout, truncate_middle
 
-ENDZONE_THRESHOLD_MS = 30000
+ENDZONE_THRESHOLD_MS = 30000  # last thirty seconds of a track
 SKIP_THRESHOLD_PERCENTAGE = 80
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
-# pylint: disable=too-many-instance-attributes, missing-function-docstring
+# pylint: disable=too-many-instance-attributes, missing-function-docstring, consider-using-f-string
 
 class Option(Model):
     """track application options in a database table"""
@@ -95,6 +95,10 @@ class PlayHistory(Model):
     trackname = fields.TextField()
     track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
         "models.Track", related_name="histories")
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="histories")
+    rating: fields.ForeignKeyRelation[Rating] = fields.ForeignKeyField(
+        "models.Rating", related_name="histories")
 
     def __str__(self):
         return str(self.trackname)
@@ -195,24 +199,27 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     spotify: tk.Spotify
     user: User = field(default_factory=User)
     token: tk.Token = None
+    status: str = "unknown"
+    sleep: int = 30
     currently: tk.model.CurrentlyPlaying = None
-    track: Track = field(default_factory=Track)
-    rating: Rating = field(default_factory=Rating)
-    last_track: Track = field(default_factory=Track)
     nextup: Recommendation = field(default_factory=Recommendation)
     
+    track: Track = field(default_factory=Track)
+    rating: Rating = field(default_factory=Rating)
+    history: PlayHistory = field(default_factory=PlayHistory)
     displaytime: str = ""
+    is_saved: str = None
     position: int = 0
-    last_position: int = 0
-    sleep: int = 30
-    status: str = "unknown"
-    
-    rated: str = None
-    is_this_saved: str = None
-    was_saved: str = None
+    just_rated: bool = False
     endzone: str = None
     finished: bool = False
     remaining_ms: int = 0
+    recorded: bool = False
+    
+    track_last_cycle: Track = field(default_factory=Track)
+    position_last_cycle: int = 0
+    was_saved_last_cycle: str = None
+
     
     def __post_init__(self):
         """timeout if they stop playing"""
@@ -253,29 +260,33 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         self.endzone = self.remaining_ms <= ENDZONE_THRESHOLD_MS
 
     def track_changed(self) -> bool:
-        return ( self.last_track and 
-                 self.last_track.spotifyid is not None and 
-                 self.last_track.spotifyid != self.track.spotifyid)
+        return not self.track_last_cycle.id == self.track.id
     
     def savestate_changed(self) -> bool:
-        return ( self.was_saved is not None and 
+        return ( self.was_saved_last_cycle is not None and 
                  not self.track_changed() and 
-                 self.was_saved != self.is_this_saved)
+                 self.was_saved_last_cycle != self.is_saved)
 
     def calculate_sleep_duration(self):
+        
+        min_sleep_duration = 1  # Minimum sleep duration in seconds
+
         if self.status == "active":
             if self.remaining_ms < ENDZONE_THRESHOLD_MS:
-                self.sleep = self.remaining_ms / 2 / 1000
+                sleep_duration = self.remaining_ms / 2 / 1000
             elif (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS:
-                self.sleep = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
+                sleep_duration = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
             else:
-                self.sleep = 30
+                sleep_duration = 30
         else:
-            self.sleep = 30
+            sleep_duration = 30
+
+        # Ensure the sleep duration is at least the minimum sleep duration
+        self.sleep = max(sleep_duration, min_sleep_duration)
 
     def was_skipped(self):
         # if the last position we saw was less than 80% through, consider it a skip
-        return self.last_position < SKIP_THRESHOLD_PERCENTAGE
+        return self.position_last_cycle < SKIP_THRESHOLD_PERCENTAGE
 
     def next_is_now_playing(self):
         result = (self.nextup and 
