@@ -1,12 +1,14 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none %}
 <h3>you are listening to</h3>
+
+{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none %}
 <h2><a href="/track/{{w.track.id}}" class="like">{{ w.track.trackname }}</a></h2>
-{% endif %}
 
 <h3>coming up next</h3>
+{% endif %}
+
 <h1><a href="/track/{{w.nextup.id}}" class="like">{{ w.nextup.trackname }}</a></h1>
 
 {% if w.users|length > 0 %}

@@ -181,20 +181,20 @@ async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
             continue
 
         rating = await Rating.filter(user_id=user_id, track_id=playhistory.track.id).first()
-        timestamp = (playhistory.played_at.strftime("%m/%d/%Y, %H:%M:%S") 
-                    + " - " + naturaltime(playhistory.played_at))
+        
         webtrack = WebTrack(
             trackname=playhistory.trackname,
             track_id=playhistory.track.id,
             color=feelabout(rating.rating if rating else None),
             rating=rating.rating if rating else None,
-            timestamp=timestamp
+            timestamp=naturaltime(playhistory.played_at)
         )
 
         results.append(webtrack)
         last_track_id = playhistory.track.id  # Update the last seen track_id
 
     return results
+
 
 async def rate_by_position(user, last_track, last_position, value=1):
     """set the rating for a track based on the last position when we last saw it"""
