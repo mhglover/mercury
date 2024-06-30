@@ -27,11 +27,9 @@
 </table>
 
 <table>
-    {% if w.ratings | length == 0 %}
     {% for track in w.history %}
-    <tr><td>{{ track}}</td></tr>
+    <tr><td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td><td>{{ track.timestamp }}</td></tr>
     {% endfor %}
-    {% endif %}
 </table>
 
 

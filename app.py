@@ -5,16 +5,20 @@ import logging
 import os
 import asyncio
 import pickle
+from typing import List
 import tekore as tk
 from dotenv import load_dotenv
+from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, WebData
+from models import User, WebData, WebTrack
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
-from raters import rate_history, rate_saved, get_track_ratings, get_user_ratings
+from raters import rate_history, rate_saved, get_track_ratings
+from raters import get_user_ratings, get_recent_playhistory_with_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack
+from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -108,7 +112,7 @@ async def before_serving():
         nextup = await getnext(get_all=True)
         for track in nextup:
             logging.info("upcoming recommendation: [%s] %s (%s)", 
-                         track.reason, track.trackname, track.expires_at)
+                         track.reason, track.trackname, naturaltime(track.expires_at))
         
         logging.debug("%s ready", procname)
 
@@ -130,7 +134,6 @@ async def index():
     
     # what's happening y'all
     web_data = WebData(
-        history=await getrecents(limit=20),
         nextup=nextup,
         users=await getactivewebusers(nextup.track),
         ratings=[]
@@ -146,6 +149,8 @@ async def index():
     
     #get the user's ratings for the recent history
     web_data.ratings = await get_user_ratings(web_data.user, [x.track for x in web_data.history])
+    
+    web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     
     # what's the player's current status?
     with spotify.token_as(token):

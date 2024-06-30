@@ -3,12 +3,14 @@
 import logging
 import datetime
 from tortoise.functions import Sum
-from models import Rating, PlayHistory
+from humanize import naturaltime
+from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
-from helpers import truncate_middle
+from helpers import truncate_middle, feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
+# pylint: disable=missing-function-docstring
 
 async def rate(user, track,
                value=1, 
@@ -128,6 +130,28 @@ async def get_user_ratings(user, tracks):
     
     return ratings
 
+
+# Query for the most recent play history records and include the rating for each track for a user
+async def get_recent_playhistory_with_ratings(user_id: int, limit=10):
+    recent_playhistory = await (PlayHistory.all()
+                                .order_by('-played_at')
+                                .limit(limit)
+                                .prefetch_related('track'))
+    
+    results = []
+    for playhistory in recent_playhistory:
+        rating = await Rating.filter(user_id=user_id, track_id=playhistory.track.id).first()
+        timestamp=playhistory.played_at.strftime("%m/%d/%Y, %H:%M:%S") + " - " + naturaltime(playhistory.played_at)
+        webtrack = WebTrack(
+        
+            trackname=playhistory.trackname,
+            track_id=playhistory.track.id,
+            color=feelabout(rating.rating if rating else None),
+            rating=rating.rating if rating else None,
+            timestamp=timestamp)
+        results.append(webtrack)
+    
+    return results
 
 async def rate_by_position(user, last_track, last_position, value=1):
     """set the rating for a track based on the last position when we last saw it"""

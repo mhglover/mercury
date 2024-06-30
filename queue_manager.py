@@ -2,10 +2,12 @@
 import logging
 import datetime
 import asyncio
+from humanize import naturaltime
 from models import Recommendation, Track, Option
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
+
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -120,6 +122,9 @@ async def expire_queue() -> None:
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
     """set the timestamp for expiring a recommendation"""
     now = datetime.datetime.now(datetime.timezone.utc)
-    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
+    expiration_interval = datetime.timedelta(milliseconds=(remaining_ms - ENDZONE_THRESHOLD_MS))
     recommendation.expires_at = now + expiration_interval
+    logging.info("set_rec_expiration - %s %s",
+                 recommendation.trackname, naturaltime(recommendation.expires_at)
+                 )
     await recommendation.save()

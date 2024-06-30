@@ -121,6 +121,7 @@ class WebTrack():
     track_id: int
     color: str
     rating: int
+    timestamp: str = ""
 
 
 @dataclass
@@ -139,7 +140,7 @@ class WebData():
     """data model for passing state to web template"""
     track: Track = field(default_factory=Track)
     tracks: List[WebTrack] = field(default_factory=list)
-    history: List[PlayHistory] = field(default_factory=list)
+    history: List[Rating] = field(default_factory=list)
     user: User = field(default_factory=User)
     users: List[WebUser] = field(default_factory=list)
     ratings: List[Rating] = field(default_factory=list)
@@ -164,7 +165,7 @@ class WebData():
                                                datetime.datetime.now(datetime.timezone.utc) 
                                                - rating.last_played)
                                            } for rating in self.ratings},
-            "history": list(set(x.trackname for x in self.history)),
+            "history": self.history,
             "users": {user.user_id: { "displayname": user.displayname,
                                       "user_id": user.user_id,
                                       "color": user.color,
