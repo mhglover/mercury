@@ -187,7 +187,7 @@ async def get_recent_playhistory_with_ratings(user_id: int, limit=10):
             timestamp=timestamp)
         results.append(webtrack)
     
-    return results
+    return results.reverse()
 
 async def rate_by_position(user, last_track, last_position, value=1):
     """set the rating for a track based on the last position when we last saw it"""

@@ -5,20 +5,18 @@ import logging
 import os
 import asyncio
 import pickle
-from typing import List
 import tekore as tk
 from dotenv import load_dotenv
 from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, WebData, WebTrack
+from models import User, WebData
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings
 from raters import get_user_ratings, get_recent_playhistory_with_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack
-from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
