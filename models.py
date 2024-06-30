@@ -196,8 +196,8 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     """hold the state of a spotify watcher"""
     
     cred: tk.Credentials
-    user: User = field(default_factory=User)
     spotify: tk.Spotify
+    user: User = field(default_factory=User)
     token: tk.Token = None
     status: str = "unknown"
     sleep: int = 30
