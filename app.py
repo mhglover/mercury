@@ -15,8 +15,8 @@ from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings
-from raters import get_user_ratings, get_recent_playhistory_with_ratings
-from spot_funcs import trackinfo, getrecents, normalizetrack
+from raters import get_recent_playhistory_with_ratings
+from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
@@ -128,12 +128,12 @@ async def index():
     # check whether this is a known user or they need to login
     user_spotifyid = session.get('spotifyid', None)
     
-    nextup = await getnext()
+    nextup = await getnext(webtrack=True)
     
     # what's happening y'all
     web_data = WebData(
         nextup=nextup,
-        users=await getactivewebusers(nextup.track),
+        users=await getactivewebusers(nextup.track_id),
         ratings=[]
         )
     
@@ -144,6 +144,7 @@ async def index():
     
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_spotifyid)
+    web_data.nextup = await getnext(webtrack=True, user=web_data.user)
     
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     
@@ -154,7 +155,8 @@ async def index():
     # set some return values
     if currently is not None:
         web_data.refresh = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
-        web_data.track = await trackinfo(spotify, currently.item.id)
+        track = await trackinfo(spotify, currently.item.id)
+        web_data.track = await get_webtrack(track, web_data.user)
         
         # web_data.rating = await get_current_rating(
             # web_data.track, activeusers=web_data.activeusers)
@@ -206,7 +208,7 @@ async def spotify_authorization():
     logging.debug("auths: %s", auths)
     logging.debug("auth_url: %s", auth.url)
     
-    nextup=await getnext()
+    nextup=await getnext(webtrack=True)
     w = WebData()
         
     return await render_template('auth.html',
@@ -289,7 +291,7 @@ async def dashboard():
     data = WebData(
         history=await getrecents(),
         users = await getactiveusers(),
-        nextup = await getnext(),
+        nextup = await getnext(webtrack=True, user=user),
         ratings=[]
         )
 
@@ -412,7 +414,7 @@ async def web_track(track_id):
     
     track = await normalizetrack(track_id)
     
-    nextup = await getnext()
+    nextup = await getnext(webtrack=True, user=user)
     
     ratings = await get_track_ratings(track)
     

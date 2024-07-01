@@ -121,10 +121,10 @@ class Recommendation(Model):
 @dataclass
 class WebTrack():
     """data model for passing track data to a web template"""
-    trackname: str
-    track_id: int
-    color: str
-    rating: int
+    trackname: str = ""
+    track_id: int = 0
+    color: str = ""
+    rating: int = 0
     timestamp: str = ""
 
 
@@ -142,13 +142,13 @@ class WebUser():
 @dataclass
 class WebData():
     """data model for passing state to web template"""
-    track: Track = field(default_factory=Track)
+    track: WebTrack = field(default_factory=WebTrack)
     tracks: List[WebTrack] = field(default_factory=list)
     history: List[WebTrack] = field(default_factory=list)
     user: User = field(default_factory=User)
     users: List[WebUser] = field(default_factory=list)
     ratings: List[Rating] = field(default_factory=list)
-    nextup: Recommendation = field(default_factory=Recommendation)
+    nextup: WebTrack = field(default_factory=WebTrack)
     
     redirect_url: str = None
     refresh: int = 60
@@ -177,16 +177,9 @@ class WebData():
                                       "track_id": user.track_id,
                                       "trackname": user.trackname
                                       } for user in self.users},
-            "nextup": {
-                "id": self.nextup.track.id or None,
-                "trackname": self.nextup.trackname
-            },
+            "nextup": self.nextup,
             "refresh": self.refresh,
-            "track": {
-                "id": self.track.id,
-                "trackname": self.track.trackname,
-                "spotifyid": self.track.spotifyid
-            }
+            "track": self.track,
             
         }
 

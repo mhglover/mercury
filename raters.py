@@ -185,7 +185,7 @@ async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
         webtrack = WebTrack(
             trackname=playhistory.trackname,
             track_id=playhistory.track.id,
-            color=feelabout(rating.rating if rating else None),
+            color=feelabout(rating.rating),
             rating=rating.rating if rating else None,
             timestamp=naturaltime(playhistory.played_at)
         )

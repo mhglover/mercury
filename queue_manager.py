@@ -3,10 +3,11 @@ import logging
 import datetime
 import asyncio
 from humanize import naturaltime
-from models import Recommendation, Track, Option
+from models import Recommendation, Track, Option, WebTrack, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
+from raters import feelabout
 
 
 # pylint: disable=broad-exception-caught
@@ -97,16 +98,33 @@ async def gettrack(track_id):
     return await Track.get(id=track_id)
 
 
-async def getnext(get_all=False):
+async def getnext(get_all=False, webtrack=False, user=None):
     """get the next track's details from the queue and database
     
     returns: recommendation object with track prefetched
     """
     logging.debug("pulling queue from db")
     if get_all:
-        return await Recommendation.all().order_by("id").prefetch_related("track")
-    else:
-        return await Recommendation.first().order_by("id").prefetch_related("track")
+        rec = await Recommendation.all().order_by("id").prefetch_related("track")
+        return rec
+    
+    rec =  await Recommendation.first().order_by("id").prefetch_related("track")
+    
+    if webtrack:
+        if user is not None:
+            rating = await Rating.get_or_none(track_id=rec.track_id,
+                                        user_id=user.id).values_list('rating', flat=True)
+        else:
+            rating = None
+        
+        track = WebTrack( trackname=rec.trackname,
+                          track_id=rec.track.id,
+                          color=feelabout(rating),
+                          rating=rating
+                        )
+        return track
+    
+    return rec
 
 
 async def expire_queue() -> None:

@@ -71,8 +71,10 @@ async def getactivewebusers(track):
     """
     activeusers = await getactiveusers()
     logging.debug("activeusers: %s", activeusers)
-    
-    track = await Track.filter(id=track.id).prefetch_related("ratings").get()
+    if isinstance(track, int):
+        track = await Track.filter(id=track).prefetch_related("ratings").get()
+    else:
+        track = await Track.filter(id=track.id).prefetch_related("ratings").get()
     
     # dict comprehension to create a ratings map
     user_ratings = {rating.user_id: rating.rating for rating in track.ratings}

@@ -1,8 +1,8 @@
 """spotify support functions"""
 
 import logging
-from models import Track, PlayHistory, SpotifyID
-from pprint import pformat
+from models import Track, PlayHistory, SpotifyID, WebTrack, Rating
+from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace
@@ -75,6 +75,19 @@ async def trackinfo(spotify_object, check_spotifyid):
             track = trackinfo(spotify_object, spotify_details.linked_from.id)
 
     return track
+
+
+async def get_webtrack(track, user=None):
+    """accept a track object and return a webtrack"""
+    if user is not None:
+        rating = await (Rating.get_or_none(track_id=track.id, user_id=user.id)
+                        .values_list("rating", flat=True))
+    
+    wt = WebTrack(trackname=track.trackname,
+                  track_id=track.id,
+                  color=feelabout(rating),
+                  rating=rating)
+    return wt
 
 
 async def validatetrack(spotify, track):
