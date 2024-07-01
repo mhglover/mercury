@@ -21,7 +21,7 @@ async def rate(user, track,
     
     track = await normalizetrack(track)
     
-    logging.debug("%s writing a rating: %s %s %s", 
+    logging.info("%s writing a rating: %s %s %s", 
                  procname, user.displayname, track.trackname, value)
 
     # fetch it or create it if it didn't already exist
@@ -60,7 +60,7 @@ async def get_rating(state, value=0):
     state.track = await normalizetrack(state.track)
     now = datetime.datetime.now(datetime.timezone.utc)
     
-    logging.debug("%s get_or_creating a rating: %s %s", 
+    logging.info("%s get_or_creating a rating: %s %s", 
                  procname, state.user.displayname, state.track.trackname)
     
     # fetch it or create it if it didn't already exist

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, WebData
+from models import User, WebData, PlayHistory
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
@@ -414,6 +414,7 @@ async def web_track(track_id):
         user = User()
     
     track = await normalizetrack(track_id)
+    webtrack = await get_webtrack(track, user=user)
     
     nextup = await getnext(webtrack=True, user=user)
     
@@ -422,14 +423,16 @@ async def web_track(track_id):
     # what's happening y'all
     w = WebData(
         user = user,
-        track = await normalizetrack(track_id),
-        history = await getrecents(limit=20),
+        track = webtrack,
         ratings = ratings,
         nextup = nextup,
         refresh = 0
         )
     
-    return await render_template('track.html', w=w.to_dict())
+    ph = await PlayHistory.filter(track_id=track.id).order_by('-played_at').prefetch_related("user")
+    history = [f"{naturaltime(x.played_at)} by {x.user.displayname}" for x in ph] 
+    
+    return await render_template('track.html', history=history, w=w.to_dict())
 
 
 @app.route('/track/<track_id>/rate/<value>')
@@ -447,9 +450,10 @@ async def rate_track(track_id, value):
     
     logging.info("writing a rating for %s - %s - %s", user.displayname, value, track.trackname)
     
-    await rate(user, track, value)
+    await rate(user, track, value, downrate=True)
     
-    return redirect("/")
+    return redirect("/track/" + track_id)
+
 
 async def main():
     """kick it"""

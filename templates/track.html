@@ -15,4 +15,16 @@
   </table>
 {% endif %}
 
+
+{% if history|length > 0 %}
+  <h3>times this was played</h3>
+  <table>
+    {% for each in history %}
+      <tr>
+        <td>{{each}}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
 {% endblock %}
