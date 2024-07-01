@@ -42,13 +42,13 @@ async def rate(user, track,
         await rating.save()
         
         # don't automatically downrate
-        if rating.rating > value and downrate is False:
+        if int(rating.rating) > int(value) and downrate is False:
             logging.info("%s won't auto-downrate %s from %s to %s for user %s", 
                          procname, track.trackname, rating.rating, value, user.displayname)
         else:
             logging.debug("%s writing a rating: %s %s %s",
                           procname, user.displayname, track.trackname, value)
-            rating.rating = value
+            rating.rating = int(value)
             await rating.save()
 
     return rating
@@ -73,6 +73,7 @@ async def get_rating(state, value=0):
                                                    }
                                                )
     return rating  
+
 
 async def record(state):
     """write a record to the play history table"""

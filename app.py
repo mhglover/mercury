@@ -14,7 +14,7 @@ from models import User, WebData
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
-from raters import rate_history, rate_saved, get_track_ratings
+from raters import rate_history, rate_saved, get_track_ratings, rate
 from raters import get_recent_playhistory_with_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
 
@@ -431,6 +431,25 @@ async def web_track(track_id):
     
     return await render_template('track.html', w=w.to_dict())
 
+
+@app.route('/track/<track_id>/rate/<value>')
+async def rate_track(track_id, value):
+    """set a rating for a user/track"""
+    user_spotifyid = session.get('spotifyid', None)
+    if user_spotifyid is None or user_spotifyid == '':
+        return redirect("/")
+    
+    user, _ = await getuser(cred, user_spotifyid)
+    track = await normalizetrack(track_id)
+    
+    if int(value) > 4 or int(value) < -4:
+        return redirect("/")
+    
+    logging.info("writing a rating for %s - %s - %s", user.displayname, value, track.trackname)
+    
+    await rate(user, track, value)
+    
+    return redirect("/")
 
 async def main():
     """kick it"""
