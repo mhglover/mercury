@@ -37,7 +37,8 @@ async def popular_tracks(count=1, rating=0):
     
     # recent_tracks = await recently_rated_tracks(days=1)
     active_uids = [x.id for x in await getactiveusers()]
-    interval = datetime.datetime.now() - datetime.timedelta(days=int(track_repeat_timeout))
+    interval = datetime.datetime.now() - datetime.timedelta(
+                                            days=int(track_repeat_timeout.option_value))
     recent_tids = await (PlayHistory.filter(played_at__gte=interval)
                                     .filter(user_id__in=active_uids)
                                     .values_list("track_id", flat=True))
