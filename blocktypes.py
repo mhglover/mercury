@@ -4,7 +4,7 @@ import logging
 from tortoise.functions import Sum
 from tortoise.expressions import Subquery
 from tortoise.contrib.postgres.functions import Random
-from models import Rating, PlayHistory, Track
+from models import Rating, PlayHistory, Track, Option
 from users import getactiveusers
 from spot_funcs import trackinfo
 
@@ -31,9 +31,13 @@ async def popular_tracks(count=1, rating=0):
     returns either one or a list of rating objects
     """
     procname = "popular_tracks"
+    track_repeat_timeout, _ = await Option.get_or_create(
+                                                    option_name="track_repeat_timeout", 
+                                                    defaults = { "option_value": 5 })
+    
     # recent_tracks = await recently_rated_tracks(days=1)
     active_uids = [x.id for x in await getactiveusers()]
-    interval = datetime.datetime.now() - datetime.timedelta(days=5)
+    interval = datetime.datetime.now() - datetime.timedelta(days=track_repeat_timeout)
     recent_tids = await (PlayHistory.filter(played_at__gte=interval)
                                     .filter(user_id__in=active_uids)
                                     .values_list("track_id", flat=True))
