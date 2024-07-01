@@ -84,7 +84,8 @@ async def getactivewebusers(track):
         WebUser(
             displayname=user.displayname,
             user_id=user.id,
-            rating=feelabout(user_ratings.get(user.id)),
+            color=feelabout(user_ratings.get(user.id)),
+            rating=user_ratings.get(user.id),
             track_id=track.id,
             trackname=track.trackname
         )
