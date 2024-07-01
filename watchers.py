@@ -162,7 +162,7 @@ async def spotify_watcher(cred, spotify, user):
         state.position_last_cycle = state.position
         state.was_saved_last_cycle = state.is_saved
         
-        logging.info("%s sleeping %0.2ds - %s %s %d%%",
+        logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),
                         state.displaytime, state.position)
         await asyncio.sleep(state.sleep)
