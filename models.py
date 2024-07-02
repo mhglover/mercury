@@ -36,7 +36,7 @@ class User(Model):
     token = fields.BinaryField()
     last_active = fields.DatetimeField(auto_now=True)
     status = fields.TextField()
-    watcherid = fields.TextField()
+    watcherid = fields.TextField(null=True)
     role = fields.TextField(default="user")
     
     ratings: fields.ReverseRelation["Rating"]
