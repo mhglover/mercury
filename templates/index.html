@@ -26,7 +26,11 @@
 <table>
     {% for track in w.history %}
     {% if track.trackname != w.track.trackname and track.trackname != w.nextup.trackname %}
-    <tr><td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td><td>{{ track.timestamp }}</td></tr>
+    <tr>
+        <td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td>
+        <td>{% for u in track.listeners %} {{ u }} {% endfor %}</td>
+        <td class="timestamp">{{ track.timestamp }}</td>
+    </tr>
     {% endif %}
     {% endfor %}
 </table>

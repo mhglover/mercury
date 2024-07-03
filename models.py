@@ -126,6 +126,7 @@ class WebTrack():
     color: str = ""
     rating: int = 0
     timestamp: str = ""
+    listeners: list = field(default_factory=list)
 
 
 @dataclass

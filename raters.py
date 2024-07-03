@@ -3,14 +3,36 @@
 import logging
 import datetime
 from tortoise.functions import Sum
+from tortoise.transactions import in_transaction
 from humanize import naturaltime
-from models import Rating, PlayHistory, WebTrack
+from models import Rating, PlayHistory, WebTrack, User
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
 
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
 # pylint: disable=missing-function-docstring
+
+
+PLAYHSTORY = """
+        SELECT 
+                p.track_id,
+                t.trackname,
+                MAX(p.played_at) as played_at,
+                array_agg(distinct u.displayname) as listeners
+            FROM 
+                playhistory p
+            JOIN 
+                public.user u ON p.user_id = u.id
+            JOIN
+                track t ON p.track_id = t.id
+            GROUP BY 
+                p.track_id, t.trackname
+            ORDER BY 
+                MAX(p.played_at) DESC
+            LIMIT 20
+"""
+
 
 async def rate(user, track,
                value=1, 
@@ -60,7 +82,7 @@ async def get_rating(state, value=0):
     state.track = await normalizetrack(state.track)
     now = datetime.datetime.now(datetime.timezone.utc)
     
-    logging.info("%s get_or_creating a rating: %s %s", 
+    logging.debug("%s get_or_creating a rating: %s %s", 
                  procname, state.user.displayname, state.track.trackname)
     
     # fetch it or create it if it didn't already exist
@@ -169,30 +191,26 @@ async def get_user_ratings(user, tracks):
 
 async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
     """Query for the most recent play history records and include the ratings for a user"""
-    recent_playhistory = await (PlayHistory.all()
-                                .order_by('-played_at')
-                                .limit(limit)
-                                .prefetch_related('track'))
-    
+
     results = []
-    last_track_id = None
+    # Main query to get recent play history with user displaynames
+    async with in_transaction() as connection:
+        _, recent_playhistory = await connection.execute_query(PLAYHSTORY)
 
     for playhistory in recent_playhistory:
-        if playhistory.track.id == last_track_id:
-            continue
 
-        rating = await Rating.filter(user_id=user_id, track_id=playhistory.track.id).first()
+        rating = await Rating.filter(user_id=user_id, track_id=playhistory['track_id']).first()
         
         webtrack = WebTrack(
-            trackname=playhistory.trackname,
-            track_id=playhistory.track.id,
+            trackname=playhistory['trackname'],
+            track_id=playhistory['track_id'],
             color=feelabout(rating.rating if rating else None),
             rating=rating.rating if rating else None,
-            timestamp=naturaltime(playhistory.played_at)
+            timestamp=naturaltime(playhistory['played_at']),
+            listeners=playhistory['listeners']
         )
 
         results.append(webtrack)
-        last_track_id = playhistory.track.id  # Update the last seen track_id
 
     return results
 

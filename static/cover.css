@@ -58,3 +58,5 @@ a.shrug   { color: #f5e798; text-decoration: none;}
 a.unrated { color: #ffe033; text-decoration: none;}
 a.dislike { color: #d07794; text-decoration: none;}
 a.hate    { color: #ea3223; text-decoration: none;}
+
+td.timestamp { width: 8em;}
