@@ -418,7 +418,7 @@ async def web_track(track_id):
     track = await normalizetrack(track_id)
     webtrack = await get_webtrack(track, user=user)
     
-    nextup = await getnext(webtrack=True, user=user)
+    # nextup = await getnext(webtrack=True, user=user)
     
     ratings = await get_track_ratings(track)
     
@@ -427,7 +427,7 @@ async def web_track(track_id):
         user = user,
         track = webtrack,
         ratings = ratings,
-        nextup = nextup,
+        # nextup = nextup,
         refresh = 0
         )
     

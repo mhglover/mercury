@@ -173,7 +173,7 @@ async def get_track_ratings(track, users=None):
                             .filter(user_id__in=[x.id for x in users])
                             .prefetch_related("user"))
     
-    return await (Rating.filter(id=track.id)
+    return await (Rating.filter(track_id=track.id)
                         .prefetch_related("user"))
 
 

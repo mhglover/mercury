@@ -161,7 +161,7 @@ class WebData():
             "user": {"id": self.user.id,
                      "displayname": self.user.displayname,
                      "spotifyid": self.user.spotifyid},
-            "ratings": {rating.track_id: { "color": feelabout(rating.rating),
+            "ratings": [{ "color": feelabout(rating.rating),
                                            "trackname": rating.trackname,
                                            "rating": rating.rating,
                                            "displayname": rating.user.displayname,
@@ -169,7 +169,7 @@ class WebData():
                                            "last_played": humanize.naturaltime(
                                                datetime.datetime.now(datetime.timezone.utc) 
                                                - rating.last_played)
-                                           } for rating in self.ratings},
+                                           } for rating in self.ratings],
             "history": self.history,
             "users": {user.user_id: { "displayname": user.displayname,
                                       "user_id": user.user_id,

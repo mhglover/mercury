@@ -6,10 +6,10 @@
 {% if w.ratings|length > 0 %}
   <h3>people who have rated this</h3>
   <table>
-    {% for id, rating in w.ratings.items() %}
+    {% for rating in w.ratings %}
       <tr>
         <td> <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> </td>
-        <td> {{rating.last_played}} </td>
+        <td> {% if rating.last_played != "54 years ago" %} {{rating.last_played}} {% endif %}</td>
       </tr>
     {% endfor %}
   </table>
