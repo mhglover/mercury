@@ -92,8 +92,11 @@ async def spotify_watcher(cred, spotify, user):
 
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
-        state.rating = await get_rating(state)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
+        
+        # testing - only check rating when track changes
+        if state.track_changed():
+            state.rating = await get_rating(state)
         
         # figure out the value for an autorate if we need it
         value = 4 if state.is_saved else 1
