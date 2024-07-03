@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, WebData, PlayHistory
+from models import User, WebData, PlayHistory, WebUser
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
@@ -126,7 +126,7 @@ async def index():
     """show the now playing page"""
     
     # check whether this is a known user or they need to login
-    user_spotifyid = session.get('spotifyid', None)
+    user_id = session.get('user_id', None)
     
     nextup = await getnext(webtrack=True)
     
@@ -137,12 +137,13 @@ async def index():
         )
     
     # go ahead and return if this isn't an active user
-    if user_spotifyid is None or user_spotifyid == '':
+    if user_id is None or user_id == '':
+        web_data.history = await get_recent_playhistory_with_ratings(2)
         # get outta here kid ya bother me
         return await render_template('index.html', w=web_data.to_dict())
     
     # okay, we got a live one - get user details
-    web_data.user, token = await getuser(cred, user_spotifyid)
+    web_data.user, token = await getuser(cred, user_id)
     web_data.nextup = await getnext(webtrack=True, user=web_data.user)
     
     if web_data.nextup:
@@ -177,17 +178,17 @@ async def logout():
     """set a user as inactive and forget cookies"""
     
     # check for the session credentials and unset them
-    spotifyid = session.get('spotifyid', None)
-    session['spotifyid'] = ""
+    user_id = session.get('user_id', None)
+    session['user_id'] = ""
     
-    if spotifyid is not None:
-        user = await User.get(spotifyid=spotifyid)
+    if user_id:
+        user = await User.get(id=user_id)
         user.status = "inactive"
         await user.save()
     
     return redirect("/")
-    
-    
+
+
 @app.route('/auth', methods=['GET'])
 async def spotify_authorization():
     """explain what's going on and redirect to spotify for authorization"""
@@ -250,7 +251,7 @@ async def spotify_callback():
             return redirect("/")
 
     spotifyid = spotify_user.id
-    session['spotifyid'] = spotifyid
+
     p = pickle.dumps(token)
 
     logging.info("%s get_or_create user record for %s", procname, spotifyid)
@@ -272,8 +273,9 @@ async def spotify_callback():
         await user.save()
         
         logging.info("%s pulling ratings to populate user", procname)
-        asyncio.create_task(pullratings(spotifyid), name=f"pullratings_{spotifyid}")
+        asyncio.create_task(pullratings(user.id), name=f"pullratings_{spotifyid}")
     
+    session['user_id'] = user.id
     logging.info("%s redirecting %s back to /", procname, spotifyid)
     return redirect("/")
 
@@ -282,11 +284,12 @@ async def spotify_callback():
 async def dashboard():
     """show what's happening"""
     
-    spotifyid = session.get('spotifyid', None)
-    if spotifyid is None:
+    user_id = session.get('user_id', None)
+    if not user_id:
         return redirect("/")
     
-    user = await getuser(cred, spotifyid)
+    user, _ = await getuser(cred, user_id)
+    
     if user.role != "admin":
         return redirect("/")
 
@@ -314,14 +317,16 @@ async def dashboard():
 
 
 @app.route('/pullratings', methods=['GET'])
-async def pullratings(spotifyid=None):
+async def pullratings(user_id=None):
     """load up a bunch of ratings for a user"""
-    if 'spotifyid' in session:
-        spotifyid = session['spotifyid']
-    else:
-        return redirect("/auth")
-
-    user, token = await getuser(cred, spotifyid)
+    
+    if not user_id:
+        user_id = session.get('user_id', None)
+    
+    if not user_id:
+        return redirect("/")
+    
+    user, token = await getuser(cred, user_id)
 
     with spotify.token_as(token):
 
@@ -336,21 +341,36 @@ async def pullratings(spotifyid=None):
         return redirect("/")
 
 
-@app.route('/user', methods=['POST'])
-async def user_update():
+@app.route('/user/<target_id>', methods=['GET', 'POST'])
+async def web_user(target_id):
     """allow user profile updates"""
-    procname = "user_update"
+    procname = "web_user"
     
-    logging.info("%s updating user record", procname)
+    user_id = session.get('user_id', None)
     
-    if 'spotifyid' not in session:
-        logging.info("%s no spotify id in session", procname)
+    if not user_id:
+        logging.info("%s no user_id in session", procname)
         return redirect("/", 303)
     
+    user, _ = await getuser(cred, user_id)
+    target = await User.get_or_none(id=target_id)
+    
+    if not target:
+        return redirect("/")
+    
+    u = WebUser(
+        displayname=target.displayname,
+        user_id=target.id
+    )
+    w = WebData(user=user)
+    
+    if request.method == "GET":
+        return await render_template("user.html", w=w, u=u)
+    
     if request.method == "POST":
+        logging.info("%s updating user record", procname)
         logging.info("%s fetching user %s", 
-                     procname, session['spotifyid'])
-        user, _ = await getuser(cred, session['spotifyid'])
+                     procname, user.id)
         
         form = await request.form
         displayname = form['displayname']
@@ -361,47 +381,53 @@ async def user_update():
                          procname, displayname)
             user.displayname = displayname
             await user.save()
-            
+        
+        return redirect(request.referrer)
+    
     return redirect("/")
 
 
-@app.route('/user/impersonate/<userid>', methods=['GET'])
-async def user_impersonate(userid):
+@app.route('/user/impersonate/<target_id>', methods=['GET'])
+async def user_impersonate(target_id):
     """act as somebody else"""
     procname = "user_impersonate"
     
-    if 'spotifyid' not in session:
+    user_id = session.get('user_id', None)
+    if not user_id:
         return redirect("/")
     
-    # whoami
-    spotifyid = session['spotifyid']
-    user = await getuser(cred, spotifyid)
+    user, _ = await getuser(cred, user_id)
     
     if "admin" not in user.role:
         return redirect("/")
     
-    logging.warning("%s user impersonation: %s", procname, userid)
-    session['spotifyid'] = userid
+    logging.warning("%s admin user %s impersonation: %s", procname, target_id)
+    session['user_id'] = target_id
     
     return redirect("/")
 
 
-@app.route('/follow/<targetid>')
-async def follow(targetid=None):
+@app.route('/follow/<target_id>')
+async def follow(target_id):
     """listen with a friend"""
     procname = "follow"
-    if 'spotifyid' in session:
-        if session['spotifyid'] == targetid:
-            logging.warning("%s user %s tried to follow itself",
-                            procname, targetid)
-        else:
-            user, _ = await getuser(cred, session['spotifyid'])
-            user.status = "following:" + targetid
-            
-            logging.info("%s set user %s status: %s", 
-                         procname, session['spotifyid'], user.status)
-            await user.save()
-    return redirect("/")
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect(request.referrer)
+    
+    user, _ = await getuser(cred, user_id)
+    
+    if session['user_id'] == target_id:
+        logging.warning("%s user %s tried to follow itself", procname, user_id)
+        return redirect(request.referrer)
+
+    user.status = "following"
+    user.watcherid = target_id
+    await user.save()
+    
+    logging.info("%s updated user %s - status: %s - watcherid: %s", 
+                         procname, user_id, user.status, user.watcherid)
+    return redirect(request.referrer)
 
 
 @app.route('/track/<track_id>')
@@ -409,11 +435,11 @@ async def web_track(track_id):
     """display/edit track details"""
     
     # get the details we need to show
-    user_spotifyid = session.get('spotifyid', None)
-    if user_spotifyid is not None and user_spotifyid != '':
-        user, _ = await getuser(cred, user_spotifyid)
-    else:
-        user = User()
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect("/")
+    
+    user, _ = await getuser(cred, user_id)
     
     track = await normalizetrack(track_id)
     webtrack = await get_webtrack(track, user=user)
@@ -440,11 +466,11 @@ async def web_track(track_id):
 @app.route('/track/<track_id>/rate/<value>')
 async def rate_track(track_id, value):
     """set a rating for a user/track"""
-    user_spotifyid = session.get('spotifyid', None)
-    if user_spotifyid is None or user_spotifyid == '':
+    user_id = session.get('user_id', None)
+    if not user_id:
         return redirect("/")
     
-    user, _ = await getuser(cred, user_spotifyid)
+    user, _ = await getuser(cred, user_id)
     track = await normalizetrack(track_id)
     
     if int(value) > 4 or int(value) < -4:

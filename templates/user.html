@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>
+  {{ u.displayname }}
+</h1>
+
+{% if u.user_id != w.user.id %}
+
+  <p><a href="/follow/{{u.user_id}}">I'm listening along with this user's player</a></p>
+
+  {% if w.user.role == 'admin' %}
+  <p><a href="/impersonate/{{u.user_id}}">impersonate this user</a></p>
+  {% endif %}
+
+  {% endif %}
+
+{% if w.user.user_id == u.user_id %}
+<p>>set your displayname:</p>
+<form method="post" action="/user/{{u.user_id}}">
+  <input type="text" value="{{u.displayname}}">
+</form>
+{% endif %}
+
+{% endblock %}
