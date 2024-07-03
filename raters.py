@@ -167,8 +167,8 @@ async def get_user_ratings(user, tracks):
     return ratings
 
 
-# Query for the most recent play history records and include the rating for each track for a user
 async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
+    """Query for the most recent play history records and include the ratings for a user"""
     recent_playhistory = await (PlayHistory.all()
                                 .order_by('-played_at')
                                 .limit(limit)
@@ -186,7 +186,7 @@ async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
         webtrack = WebTrack(
             trackname=playhistory.trackname,
             track_id=playhistory.track.id,
-            color=feelabout(rating.rating),
+            color=feelabout(rating.rating if rating else None),
             rating=rating.rating if rating else None,
             timestamp=naturaltime(playhistory.played_at)
         )
