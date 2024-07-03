@@ -110,7 +110,7 @@ async def getnext(get_all=False, webtrack=False, user=None):
     
     rec =  await Recommendation.first().order_by("id").prefetch_related("track")
     
-    if webtrack:
+    if rec and webtrack:
         if user is not None:
             rating = await Rating.get_or_none(track_id=rec.track_id,
                                         user_id=user.id).values_list('rating', flat=True)
