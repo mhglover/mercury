@@ -220,6 +220,12 @@ async def queue_safely(spotify, token, state):
         logging.warning("%s no Recommendations, nothing to queue", procname)
         return False
     
+    # don't queue songs this user hates
+    rating = await Rating.get_or_none(user_id=state.user.id, track_id=state.nextup.track.id)
+    if rating and rating < -1:
+        logging.warning("%s user has a negative rating (%s), won't sent rec to player: %s", 
+                        procname, rating, state.nextup.track.trackname)
+    
     # don't queue the track we're currently playing, dingus
     if state.track.id == state.nextup.track.id:
         logging.warning("%s track is playing now, won't send again, removing rec: %s",
