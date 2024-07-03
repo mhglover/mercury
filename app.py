@@ -454,7 +454,8 @@ async def rate_track(track_id, value):
     
     await rate(user, track, value, downrate=True)
     
-    return redirect("/track/" + track_id)
+    # return redirect("/track/" + track_id)
+    return redirect(request.referrer)
 
 
 async def main():

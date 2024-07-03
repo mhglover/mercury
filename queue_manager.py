@@ -116,8 +116,11 @@ async def getnext(get_all=False, webtrack=False, user=None):
             rating = await Rating.get_or_none(track_id=rec.track_id,
                                         user_id=user.id).values_list('rating', flat=True)
         else:
-            rating = None
-        
+            rating = 0
+            
+        if rating is None:
+            rating = 0
+
         track = WebTrack( trackname=rec.trackname,
                           track_id=rec.track.id,
                           color=feelabout(rating),
