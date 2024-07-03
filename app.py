@@ -133,7 +133,6 @@ async def index():
     # what's happening y'all
     web_data = WebData(
         nextup=nextup,
-        users=await getactivewebusers(nextup.track_id),
         ratings=[]
         )
     
@@ -145,6 +144,9 @@ async def index():
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_spotifyid)
     web_data.nextup = await getnext(webtrack=True, user=web_data.user)
+    
+    if web_data.nextup:
+        web_data.users = await getactivewebusers(web_data.nextup.track_id)
     
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     

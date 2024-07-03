@@ -1,6 +1,7 @@
 """spotify support functions"""
 
 import logging
+from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating
 from helpers import feelabout
 

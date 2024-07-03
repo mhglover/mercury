@@ -13,6 +13,7 @@ from raters import feelabout
 # pylint: disable=broad-exception-caught
 # pylint: disable=trailing-whitespace, trailing-newlines
 
+QUEUE_SIZE = 4
 BLOCK = "fresh popular popular spotrec"
 ENDZONE_THRESHOLD_MS = 30000
 
@@ -33,14 +34,14 @@ async def queue_manager(spotify, sleep=10):
         recommendations = await Recommendation.all()
 
         # too much, baby, trim that back
-        while len(recommendations) > 2:
+        while len(recommendations) > QUEUE_SIZE:
             newest = recommendations.pop()
             logging.info("%s queue is too large, removing latest trackid %s",
                          procname, newest)
             await Recommendation.filter(id=newest.id).delete()
 
         # oh honey, fix you a plate
-        while len(recommendations) < 2:
+        while len(recommendations) < QUEUE_SIZE:
             logging.debug("%s queue is too small, adding a track", procname)
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
