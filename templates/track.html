@@ -1,14 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<h1>{{ w.track.trackname }}</h1>
+<h1><a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater">-</a>
+  {{ w.track.trackname }}
+  <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater">+</a>
+</h1>
 
 {% if w.ratings|length > 0 %}
   <h3>people who have rated this</h3>
   <table>
     {% for rating in w.ratings %}
       <tr>
-        <td> <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> </td>
+        <td> 
+          <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> </td>
         <td> {% if rating.last_played != "54 years ago" %} {{rating.last_played}} {% endif %}</td>
       </tr>
     {% endfor %}

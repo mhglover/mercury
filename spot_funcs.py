@@ -87,7 +87,7 @@ async def get_webtrack(track, user=None):
     wt = WebTrack(trackname=track.trackname,
                   track_id=track.id,
                   color=feelabout(rating),
-                  rating=rating)
+                  rating=rating if rating else 0)
     return wt
 
 
