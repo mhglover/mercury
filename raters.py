@@ -97,7 +97,7 @@ async def get_rating(state, value=0):
     return rating  
 
 
-async def record(state):
+async def record(state, user_id=None):
     """write a record to the play history table"""
     logging.debug("recording play history %s %s", state.user.displayname, state.t())
     
@@ -107,11 +107,14 @@ async def record(state):
     
     state.recorded = True
     
+    if not user_id:
+        user_id = state.user.id
+    
     try:
         history = await PlayHistory.create(
             track_id=state.track.id,
             trackname=state.track.trackname,
-            user_id=state.user.id,
+            user_id=user_id,
             rating_id=state.rating.id
         )
     except Exception as e:
