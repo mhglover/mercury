@@ -15,10 +15,10 @@
 
   {% endif %}
 
-{% if w.user.user_id == u.user_id %}
-<p>>set your displayname:</p>
+{% if w.user.id == u.user_id %}
+<p>set your displayname:</p>
 <form method="post" action="/user/{{u.user_id}}">
-  <input type="text" value="{{u.displayname}}">
+  <input type="text" name="displayname" value="{{u.displayname}}">
 </form>
 {% endif %}
 
