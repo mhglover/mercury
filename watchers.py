@@ -118,6 +118,11 @@ async def spotify_watcher(cred, spotify, user):
             state.history = await record(state)
             logging.info("%s recorded play history %s", procname, state.t())
             state.recorded = True
+            
+            # record for followers too
+            followers = User.get_or_none(watcherid=user.id)
+            for f in followers:
+                await record(state, user_id=f.id)
         
         
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
