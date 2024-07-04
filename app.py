@@ -435,6 +435,24 @@ async def web_user(target_id):
     return redirect("/")
 
 
+@app.route('/user/<user_id>/nuke')
+async def nuke_me(user_id):
+    """delete all records associated with a user"""
+    procname = "nuke_me"
+    user_id = session.get('user_id', None)
+    
+    if not user_id:
+        logging.info("%s no user_id in session", procname)
+        return redirect(request.referrer)
+    
+    user, _ = await getuser(cred, user_id)
+    
+    logging.warning("%s nuking user %s", procname, user.displayname)
+    PlayHistory.filter(user_id=user.id).delete()
+    Rating.filter(user_id=user.id).delete()
+    user.delete()
+
+
 @app.route('/user/<target_id>/impersonate', methods=['GET'])
 async def user_impersonate(target_id):
     """act as somebody else"""
