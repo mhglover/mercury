@@ -102,7 +102,13 @@ async def gettrack(track_id):
 async def getnext(get_all=False, webtrack=False, user=None):
     """get the next track's details from the queue and database
     
-    returns: recommendation object with track prefetched
+    get_all: bool - return all recs rather than the next one
+    
+    webtrack: bool - return as a WebTrack object rather than a Recommendation
+    
+    user: add a user's rating to the WebTrack (only applies when webtrack=True)
+    
+    returns: Recommendation (prefetched track) or WebTrack
     """
     logging.debug("pulling queue from db")
     if get_all:

@@ -73,15 +73,21 @@ async def spotify_watcher(cred, spotify, user):
     logging.info("%s watcher starting", procname)
     
     await state.set_watcher_name()
+    state.sleep = 0
 
-    while state.ttl > datetime.datetime.now(datetime.timezone.utc):
+    while (state.ttl > datetime.datetime.now(datetime.timezone.utc) and
+           state.user.status == 'active'):
+
+        await asyncio.sleep(state.sleep)
         state.currently = await getplayer(state)
+        state.user, state.token = await getuser(cred, user)
         
         # if anything else weird is happening, sleep for a minute and then loop
         if state.status != "active":
-            state.status = state.user.status
-            logging.info("%s player is not active, sleeping: %s", procname, state.user.status)
-            await asyncio.sleep(60)
+            state.sleep = 60
+            logging.info("%s player: %s - user: %s - ttl: %s - sleep %ss",
+                         procname, state.status, state.user.status,
+                         naturaltime(state.ttl), state.sleep)
             continue
 
         # refresh the ttl, token, do some math, etc
@@ -168,9 +174,9 @@ async def spotify_watcher(cred, spotify, user):
         logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),
                         state.displaytime, state.position)
-        await asyncio.sleep(state.sleep)
+        
 
     # ttl expired, clean up before exit
     await state.cleanup()
-    logging.info("%s exiting", procname)
+    logging.info("%s exiting, user status: %s", procname, state.user.status)
     return procname

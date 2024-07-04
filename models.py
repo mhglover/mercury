@@ -160,7 +160,8 @@ class WebData():
         return {
             "user": {"id": self.user.id,
                      "displayname": self.user.displayname,
-                     "spotifyid": self.user.spotifyid},
+                     "spotifyid": self.user.spotifyid,
+                     "status": self.user.status},
             "ratings": [{ "color": feelabout(rating.rating),
                                            "trackname": rating.trackname,
                                            "rating": rating.rating,

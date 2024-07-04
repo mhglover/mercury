@@ -18,19 +18,22 @@ async def getuser(cred, user):
     returns: user object, spotify token
     """
     
-    # if it's a string, it'll be a user's spotifyid, so fetch the User
+    # if it's a string it's proabably a user_id
     if isinstance(user, str):
+        userstring = str(user)
         try:
-            user = await User.get(spotifyid=user)
+            user = await User.get_or_none(id=userstring)
         except Exception as e:
-            logging.error("getuser exception 1 fetching user\n%s", e)
-    
-    # if it's an int, it'll be a User record id, so fetch the User
-    elif isinstance(user, int):
+            logging.error("getuser exception trying to query User for user_id %s\n%s",
+                          userstring, e)
+
+    # if not, it's probably a spotify id
+    if not user:
         try:
-            user = await User.get(id=user)
+            user = await User.get_or_none(spotifyid=userstring)
         except Exception as e:
-            logging.error("getuser exception 2 fetching user\n%s", e)
+            logging.error("getuser exception trying to query User for spotifyid %s\n%s",
+                                userstring, e)
     
     # if it's not a User by now, it's broken.
     if not isinstance(user, User):
@@ -38,6 +41,7 @@ async def getuser(cred, user):
         user = None
         token = None
     else:
+        user = await User.get_or_none(id=user.id)
         # pull the latest saved token
         token = pickle.loads(user.token)
         
@@ -111,36 +115,27 @@ async def getplayer(state):
             state.status = "unknown"
             logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
             return
-
-    if state.user.status != "active":
-        state.status = state.user.status
-        logging.debug("%s player is not active, sleeping: %s", procname, state.user.status)
         
     # is it not playing?
     if currently is None:
-        state.user.status = "not playing"
         state.status = "not playing"
         logging.debug("%s not currently playing", procname)
 
     # not playing but not paused?  weird state
     elif currently.currently_playing_type == "unknown":
-        state.user.status = "not playing"
         state.status = "not playing"
         logging.debug("%s not currently playing", procname)
         raise ValueError(f"currently_playing_type says 'unknown'\n{currently}")
 
     # paused
     elif currently.is_playing is False:
-        state.user.status = "paused"
         state.status = "paused"
         logging.debug("%s is paused", procname)
     
     # must be active then
     else:
         state.status = "active"
-        state.user.status = "active"
         logging.debug("%s is active", procname)
     
-    await state.user.save()
     return currently
         

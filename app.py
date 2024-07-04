@@ -165,12 +165,60 @@ async def index():
         # web_data.rating = await get_current_rating(
             # web_data.track, activeusers=web_data.activeusers)
 
+    if web_data.user.status == "active":
         # see if we need to launch a task for this user
         await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
+
+
+@app.route('/tunein')
+async def tunein():
+    """if necessary, remotely start the player and start a spot_watcher"""
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect(request.referrer)
+    
+    user, token = await getuser(cred, user_id)
+    with spotify.token_as(token):
+        currently = await spotify.playback_currently_playing()
+    
+    nextup = await getnext()
+    user.status = "active"
+    logging.info("user tuning in - %s", user.displayname)
+    await user.save()
+    
+    if (nextup and currently and currently.is_playing is False):
+        with spotify.token_as(token):
+            logging.info("playback_start_tracks - %s - %s",
+                         user.displayname, nextup.track.trackname)
+            try:
+                await spotify.playback_start_tracks([nextup.track.spotifyid])
+            except tk.NotFound as e:
+                logging.error(
+                    "web_listen - no active player for user %s, can't send track to player\n%s",
+                    user.displayname, e)
+    
+    await watchman(taskset, cred, spotify, spotify_watcher, user)
+
+    return redirect(request.referrer)
+
+
+@app.route('/tuneout')
+async def tuneout():
+    """stop spotwatcher, go inactive"""
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect(request.referrer)
+    
+    user, _ = await getuser(cred, user_id)
+    user.status = "inactive"
+    await user.save()
+    logging.info("user tuning out - %s - %s", user.displayname, user.status)
+
+    return redirect(request.referrer)
 
 
 @app.route('/logout', methods=['GET'])
@@ -387,7 +435,7 @@ async def web_user(target_id):
     return redirect("/")
 
 
-@app.route('/user/impersonate/<target_id>', methods=['GET'])
+@app.route('/user/<target_id>/impersonate', methods=['GET'])
 async def user_impersonate(target_id):
     """act as somebody else"""
     procname = "user_impersonate"
@@ -401,13 +449,13 @@ async def user_impersonate(target_id):
     if "admin" not in user.role:
         return redirect("/")
     
-    logging.warning("%s admin user %s impersonation: %s", procname, target_id)
+    logging.warning("%s admin user %s impersonation: %s", procname, user.displayname, target_id)
     session['user_id'] = target_id
     
     return redirect("/")
 
 
-@app.route('/follow/<target_id>')
+@app.route('/user/<target_id>/follow')
 async def follow(target_id):
     """listen with a friend"""
     procname = "follow"

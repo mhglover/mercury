@@ -20,27 +20,34 @@
     <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater">+</a>
 </h1>
 
-{% if w.users|length > 0 %}
-<h3>actively vibing</h3>
+{% if w.user.status == "inactive" %}
+<p><a href="/tunein">tune in</a></p>
+{% else %}
+<p><a href="/tuneout">tune out</a></p>
+{% endif %}
 
-<table>
+
+{% if w.users|length > 0 %}
+    <h3>actively vibing</h3>
+
+    <table>
         {% for id, user in w.users.items() %}
         <tr><td><a href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a></td></tr>
         {% endfor %}
-</table>
+    </table>
 {% endif %}
 
 <h3>some recent tracks were</h3>
 
 <table>
     {% for track in w.history %}
-    {% if track.trackname != w.track.trackname and track.trackname != w.nextup.trackname %}
-    <tr>
-        <td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td>
-        <td>{% for u in track.listeners %} {{ u }} {% endfor %}</td>
-        <td class="timestamp">{{ track.timestamp }}</td>
-    </tr>
-    {% endif %}
+        {% if track.trackname != w.track.trackname and track.trackname != w.nextup.trackname %}
+        <tr>
+            <td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td>
+            <td>{% for u in track.listeners %} {{ u }} {% endfor %}</td>
+            <td class="timestamp">{{ track.timestamp }}</td>
+        </tr>
+        {% endif %}
     {% endfor %}
 </table>
 
