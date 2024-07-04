@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" %}
+{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
 <h3>you are listening to</h3>
 <h2>
     <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater">-</a>
@@ -22,7 +22,7 @@
 
 {% if w.user.status == "inactive" %}
 <p><a href="/tunein">tune in</a></p>
-{% else %}
+{% elif w.user.status == "active" or w.user.status == "following" %}
 <p><a href="/tuneout">tune out</a></p>
 {% endif %}
 
