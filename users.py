@@ -110,7 +110,7 @@ async def getactivewebusers(track):
 async def getplayer(state):
     """check the current player stat and update user status"""
     # move into models.WatcherState?
-    procname = __name__
+    procname = "getplayer"
     logging.debug("%s checking currently playing", procname)
     with state.spotify.token_as(state.token):
         try:
@@ -121,7 +121,7 @@ async def getplayer(state):
             return
         except Exception as e:
             state.status = "unknown"
-            logging.error("%s exception in spotify.playback_currently_playing\n%s",procname, e)
+            logging.error("%s exception in spotify.playback_currently_playing\n%s", procname, e)
             return
         
     # is it not playing?
