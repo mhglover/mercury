@@ -125,6 +125,7 @@ class WebTrack():
     track_id: int = 0
     color: str = ""
     rating: int = 0
+    comment: str = ""
     timestamp: str = ""
     listeners: list = field(default_factory=list)
 
@@ -157,20 +158,20 @@ class WebData():
 
     def to_dict(self):
         """Convert to dict with custom serialization"""
+        now = datetime.datetime.now(datetime.timezone.utc)
         return {
             "user": {"id": self.user.id,
                      "displayname": self.user.displayname,
                      "spotifyid": self.user.spotifyid,
                      "status": self.user.status},
             "ratings": [{ "color": feelabout(rating.rating),
-                                           "trackname": rating.trackname,
-                                           "rating": rating.rating,
-                                           "displayname": rating.user.displayname,
-                                           "userid": rating.user.id,
-                                           "last_played": humanize.naturaltime(
-                                               datetime.datetime.now(datetime.timezone.utc) 
-                                               - rating.last_played)
-                                           } for rating in self.ratings],
+                          "trackname": rating.trackname,
+                          "rating": rating.rating,
+                          "displayname": rating.user.displayname,
+                          "comment": rating.comment,
+                          "userid": rating.user.id,
+                          "last_played": humanize.naturaltime(now - rating.last_played)
+                        } for rating in self.ratings],
             "history": self.history,
             "users": {user.user_id: { "displayname": user.displayname,
                                       "user_id": user.user_id,

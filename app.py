@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
-from models import User, WebData, PlayHistory, WebUser
+from models import User, WebData, PlayHistory, WebUser, Rating
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
@@ -478,7 +478,7 @@ async def follow(target_id):
     return redirect(request.referrer)
 
 
-@app.route('/track/<track_id>')
+@app.route('/track/<track_id>', methods=['GET', 'POST'])
 async def web_track(track_id):
     """display/edit track details"""
     
@@ -490,6 +490,21 @@ async def web_track(track_id):
     user, _ = await getuser(cred, user_id)
     
     track = await normalizetrack(track_id)
+    
+    if request.method == "POST":
+        now = datetime.datetime.now(datetime.timezone.utc)
+        rating, _ = await Rating.get_or_create(user_id=user.id,
+                                                track_id=track.id,
+                                                trackname=track.trackname,
+                                                defaults={
+                                                   "rating": 0,
+                                                   "last_played": now
+                                                   }
+                                               )
+        form = await request.form
+        rating.comment = form['comment']
+        await rating.save()
+    
     webtrack = await get_webtrack(track, user=user)
     
     # nextup = await getnext(webtrack=True, user=user)

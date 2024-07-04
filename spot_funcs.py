@@ -81,13 +81,13 @@ async def trackinfo(spotify_object, check_spotifyid):
 async def get_webtrack(track, user=None):
     """accept a track object and return a webtrack"""
     if user is not None:
-        rating = await (Rating.get_or_none(track_id=track.id, user_id=user.id)
-                        .values_list("rating", flat=True))
+        rating = await (Rating.get_or_none(track_id=track.id, user_id=user.id))
     
     wt = WebTrack(trackname=track.trackname,
                   track_id=track.id,
+                  comment=rating.comment if rating else "",
                   color=feelabout(rating),
-                  rating=rating if rating else 0)
+                  rating=rating.rating if rating else 0)
     return wt
 
 

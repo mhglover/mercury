@@ -6,13 +6,19 @@
   <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater">+</a>
 </h1>
 
+<p>comment on this track:</p>
+<form method="post" action="/track/{{w.track.track_id}}">
+  <input type="text" name="comment" value="{{w.track.comment}}">
+</form>
+
+
 {% if w.ratings|length > 0 %}
   <h3>people who have rated this</h3>
   <table>
     {% for rating in w.ratings %}
       <tr>
         <td> 
-          <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> </td>
+          <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> -  {{rating.comment}}</td>
         <td> {% if rating.last_played != "54 years ago" %} {{rating.last_played}} {% endif %}</td>
       </tr>
     {% endfor %}
