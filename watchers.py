@@ -163,7 +163,7 @@ async def spotify_watcher(cred, spotify, user):
                 logging.info("%s finishing track %s (%s)", procname, state.t(), value)
                 
                 # rate a 1 for followers
-                followers = User.get_or_none(watcherid=user.id)
+                followers = await User.get_or_none(watcherid=user.id)
                 if followers:
                     for f in followers:
                         await rate(f, state.track, value=1)
