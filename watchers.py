@@ -73,7 +73,6 @@ async def spotify_watcher(cred, spotify, user):
     logging.info("%s watcher starting", procname)
     
     await state.set_watcher_name()
-    state.sleep = 0
 
     while (state.ttl > datetime.datetime.now(datetime.timezone.utc) and
            state.user.status == 'active'):
@@ -120,9 +119,7 @@ async def spotify_watcher(cred, spotify, user):
             logging.info("%s recorded play history %s", procname, state.t())
             state.recorded = True
         
-        # logging.debug("%s state.track.id [%s] ? [%s] state.nextup.track.id (%s)",
-                    #  procname, state.track.id, 
-                    #  state.nextup.track.id, naturaltime(state.nextup.expires_at))
+        
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
         if state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
             logging.info("%s recommendation started %s, no expiration", procname, state.t())

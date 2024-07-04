@@ -195,7 +195,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     user: User = field(default_factory=User)
     token: tk.Token = None
     status: str = "unknown"
-    sleep: int = 30
+    sleep: int = 0
     currently: tk.model.CurrentlyPlaying = None
     nextup: Recommendation = field(default_factory=Recommendation)
     
