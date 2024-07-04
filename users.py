@@ -18,6 +18,14 @@ async def getuser(cred, user):
     returns: user object, spotify token
     """
     
+    if isinstance(user, int):
+        userint = int(user)
+        try:
+            user = await User.get_or_none(id=user)
+        except Exception as e:
+            logging.error("getuser exception trying to query User for integer user_id %s\n%s",
+                          userint, e)
+    
     # if it's a string it's proabably a user_id
     if isinstance(user, str):
         userstring = str(user)
