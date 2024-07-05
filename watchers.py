@@ -120,7 +120,7 @@ async def spotify_watcher(cred, spotify, user):
             state.recorded = True
             
             # record for followers too
-            followers = await User.get_or_none(watcherid=user.id)
+            followers = await User.filter(watcherid=user.id)
             if followers:
                 for f in followers:
                     await record(state, user_id=f.id)
@@ -163,10 +163,12 @@ async def spotify_watcher(cred, spotify, user):
                 logging.info("%s finishing track %s (%s)", procname, state.t(), value)
                 
                 # rate a 1 for followers
-                followers = await User.get_or_none(watcherid=user.id)
-                if followers:
-                    for f in followers:
-                        await rate(f, state.track, value=1)
+                followers = await User.filter(watcherid=user.id)
+                # if len(followers) > 1:
+                for f in followers:
+                    await rate(f, state.track, value=1)
+                # elif len(followers) == 1:
+                #     await rate(followers, state.track, value=1)
                 
                 # queue up the next track unless there are good reasons
                 await queue_safely(state.spotify, state.token, state)
