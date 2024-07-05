@@ -301,5 +301,10 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         self.user.watcherid = ""
         self.user.status = "inactive"
         await self.user.save()
-
+        
+        followers = await User.filter(watcherid=self.user.id)
+        for f in followers:
+            f.watcherid = ""
+            f.status = "inactive"
+            await f.save()
 
