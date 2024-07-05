@@ -20,13 +20,6 @@
     <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater">+</a>
 </h1>
 
-{% if w.user.status == "inactive" %}
-<p><a href="/tunein">tune in</a></p>
-{% elif w.user.status == "active" or w.user.status == "following" %}
-<p><a href="/tuneout">tune out</a></p>
-{% endif %}
-
-
 {% if w.users|length > 0 %}
     <h3>actively vibing</h3>
 

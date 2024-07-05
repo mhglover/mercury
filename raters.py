@@ -5,7 +5,7 @@ import datetime
 from tortoise.functions import Sum
 from tortoise.transactions import in_transaction
 from humanize import naturaltime
-from models import Rating, PlayHistory, WebTrack, User
+from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
 
