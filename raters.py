@@ -192,7 +192,7 @@ async def get_user_ratings(user, tracks):
     return ratings
 
 
-async def get_recent_playhistory_with_ratings(user_id: int, limit=20):
+async def get_recent_playhistory_with_ratings(user_id: int):
     """Query for the most recent play history records and include the ratings for a user"""
 
     results = []
