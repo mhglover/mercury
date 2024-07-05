@@ -21,10 +21,16 @@
   <input type="text" name="displayname" value="{{u.displayname}}">
 </form>
 
-<b>DANGER</b>
-<p>This will delete your account, all your ratings,
+<br><br><br><br><br><br><br><br><br>
+<hr>
+<p>Delete your Mercury Radio account and all 
+  associated records.  This won't affect 
+  your Spotify account.</p>
+<h3>DANGER</h3>
+<p>This will delete your Mercury Radio user record, all your track ratings,
 and all your play histories.  It is not recoverable.
-It will not ask for confirmation.  It will just destroy you.</p>
+It will not ask for confirmation.  It will just destroy.</p>
+<br>
 <a href="/user/{{ u.user_id }}/nuke">nuke me</a>
 
 {% endif %}

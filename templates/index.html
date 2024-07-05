@@ -1,16 +1,15 @@
 {% extends 'base.html' %}
 {% block content %}
 
-{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
 <h3>you are listening to</h3>
+
+{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
 <h2>
     <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater">-</a>
     <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
     <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater">+</a>
-
 </h2>
 
-{% else %}
 <h3>coming up next</h3>
 {% endif %}
 
@@ -21,12 +20,15 @@
 </h1>
 
 {% if w.users|length > 0 %}
-    <h3>actively vibing</h3>
-
+    <h3>with</h3>
     <table>
-        {% for id, user in w.users.items() %}
-        <tr><td><a href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a></td></tr>
-        {% endfor %}
+        <tr>
+            {% for id, user in w.users.items() %}
+                <td>
+                    <a href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a>
+                </td>
+            {% endfor %}
+        </tr>
     </table>
 {% endif %}
 
