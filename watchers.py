@@ -118,12 +118,6 @@ async def spotify_watcher(cred, spotify, user):
             state.history = await record(state)
             logging.info("%s recorded play history %s", procname, state.t())
             state.recorded = True
-            
-            # record for followers too
-            followers = await User.filter(watcherid=user.id)
-            if followers:
-                for f in followers:
-                    await record(state, user_id=f.id)
         
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
         if state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
@@ -164,11 +158,8 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # rate a 1 for followers
                 followers = await User.filter(watcherid=user.id)
-                # if len(followers) > 1:
                 for f in followers:
                     await rate(f, state.track, value=1)
-                # elif len(followers) == 1:
-                #     await rate(followers, state.track, value=1)
                 
                 # queue up the next track unless there are good reasons
                 await queue_safely(state.spotify, state.token, state)
