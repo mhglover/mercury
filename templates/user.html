@@ -5,11 +5,9 @@
   {{ u.displayname }}
 </h1>
 
-{% if u.user_id != w.user.id %}
-
+{% if u.user_id != w.user.id and w.user.role == 'admin' %}
   <p><a href="/user/{{u.user_id}}/follow">I'm listening along with this user's player</a></p>
-
-  {% if w.user.role == 'admin' %}
+  <br>
   <p><a href="/user/{{u.user_id}}/impersonate">impersonate this user</a></p>
   {% endif %}
 
