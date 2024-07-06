@@ -3,6 +3,7 @@
 
 import datetime
 import logging
+from humanize import naturaltime
 from dataclasses import dataclass, field
 from typing import List
 import humanize
@@ -233,15 +234,16 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
         await self.user.save()
 
     async def refresh(self):
-        logging.debug("updating ttl, last_active and status: %s", self.ttl)
         self.refresh_token()
         self.ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
-        self.user.last_active = datetime.datetime.now(datetime.timezone.utc)
         self.position = int((self.currently.progress_ms/self.currently.item.duration_ms) * 100)
         self.remaining_ms = self.currently.item.duration_ms - self.currently.progress_ms
         self.displaytime = "{:}:{:02}".format(*divmod(self.remaining_ms // 1000, 60)) 
         self.calculate_sleep_duration()
         self.update_endzone_status()
+        logging.debug("updating ttl, last_active and status: %s", naturaltime(self.ttl))
+        self.user.last_active = datetime.datetime.now(datetime.timezone.utc)
+        await self.user.save()
         
 
     def t(self):
