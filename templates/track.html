@@ -18,7 +18,12 @@
     {% for rating in w.ratings %}
       <tr>
         <td> 
-          <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a> -  {{rating.comment}}</td>
+          <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a>
+        </td>
+        <td>
+          {% if rating.comment != None %} {{rating.comment}} {% endif %}
+        </td>
+
         <td> {% if rating.last_played != "54 years ago" %} {{rating.last_played}} {% endif %}</td>
       </tr>
     {% endfor %}
