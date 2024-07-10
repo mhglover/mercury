@@ -10,7 +10,6 @@
         <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
     </span>
     <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
-    
 </h2>
 
 <h3>coming up next</h3>
@@ -22,8 +21,7 @@
     <span class="mx-2 text-center flex-grow-1 text-wrap">
         <a href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
     </span>
-    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>
-    
+    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>    
 </h1>
 
 {% if w.users|length > 0 %}
