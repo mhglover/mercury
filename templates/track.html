@@ -14,32 +14,24 @@
 
 {% if w.ratings|length > 0 %}
   <h3>people who have rated this</h3>
-  <table>
+  <ul>
     {% for rating in w.ratings %}
-      <tr>
-        <td> 
+        <li> 
           <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a>
-        </td>
-        <td>
-          {% if rating.comment != None %} {{rating.comment}} {% endif %}
-        </td>
-
-        <td> {% if rating.last_played != "54 years ago" %} {{rating.last_played}} {% endif %}</td>
-      </tr>
+          {% if rating.comment != None %} - {{rating.comment}} {% endif %}
+          {% if rating.last_played != "54 years ago" %} - {{rating.last_played}} {% endif %}</li>
     {% endfor %}
-  </table>
+  </ul>
 {% endif %}
 
 
 {% if history|length > 0 %}
   <h3>times this was played</h3>
-  <table>
+  <ul>
     {% for each in history %}
-      <tr>
-        <td>{{each}}</td>
-      </tr>
+        <li>{{each}}</li>
     {% endfor %}
-  </table>
+  </ul>
 {% endif %}
 
 {% endblock %}

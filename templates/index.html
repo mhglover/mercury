@@ -4,47 +4,48 @@
 <h3>you are listening to</h3>
 
 {% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
-<h2>
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater">-</a>
-    <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater">+</a>
+<h2 class="d-flex justify-content-between align-items-center">
+    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
+    <span class="mx-2 text-center flex-grow-1 text-wrap">
+        <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
+    </span>
+    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
+    
 </h2>
 
 <h3>coming up next</h3>
 {% endif %}
 
-<h1>
-    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating - 1}}" class="rater">-</a>
-    <a href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
-    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater">+</a>
+
+<h1 class="d-flex justify-content-between align-items-center">
+    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
+    <span class="mx-2 text-center flex-grow-1 text-wrap">
+        <a href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
+    </span>
+    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>
+    
 </h1>
 
 {% if w.users|length > 0 %}
     <h3>with</h3>
-    <table>
-        <tr>
+    <ul>
             {% for id, user in w.users.items() %}
-                <td>
+                <li>
                     <a href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a>
-                </td>
+                </li>
             {% endfor %}
-        </tr>
-    </table>
+            </ul>
 {% endif %}
 
 <h3>some recent tracks were</h3>
 
-<table>
+<ul>
     {% for track in w.history %}
         {% if track.trackname != w.track.trackname and track.trackname != w.nextup.trackname %}
-        <tr>
-            <td><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></td>
-            <td>{% for u in track.listeners %} {{ u }} {% endfor %}</td>
-            <td class="timestamp">{{ track.timestamp }}</td>
-        </tr>
+            <li><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></li>
         {% endif %}
     {% endfor %}
-</table>
+</ul>
 
 
 {% endblock %}
