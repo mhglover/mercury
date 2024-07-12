@@ -131,7 +131,11 @@ async def rate_history(spotify, user, token, value=1, limit=20):
         # rp = await spotify.all_items()
     for each in rp.items:
         track = await trackinfo(spotify, each.track.id)
-        await rate(user, track, value=value, last_played=each.played_at)
+        rating = await Rating.get_or_none(track_id=track.id, user_id=user.id)
+        if rating:
+            logging.info("won't re-rate a history item that has already been rated")
+        else:
+            await rate(user, track, value=value, last_played=each.played_at)
 
 
 async def rate_saved(spotify, user, token, value=4,
