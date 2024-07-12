@@ -202,6 +202,10 @@ async def tunein():
                     user.displayname, e)
     
     await watchman(taskset, cred, spotify, spotify_watcher, user)
+    
+    # check the user's recent history for unrated tracks
+    await rate_history(spotify, user, token, limit=50)
+
 
     return redirect(request.referrer)
 
