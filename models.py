@@ -3,7 +3,7 @@
 
 from datetime import timezone as tz, datetime as dt, timedelta
 import logging
-from humanize import uuid
+import uuid
 from dataclasses import dataclass, field
 from typing import List
 from humanize import naturaltime
@@ -307,3 +307,31 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
             f.status = "inactive"
             await f.save()
 
+    
+class Lock(Model):
+    lock_name = fields.CharField(max_length=255, pk=True)
+    acquired_at = fields.DatetimeField(auto_now_add=True)
+    instance_id = INSTANCE_ID
+
+    class Meta:
+        table_name = "locks"
+    
+    @classmethod
+    async def attempt_acquire_lock(cls, lock_name: str) -> bool:
+        try:
+            # Create a new lock record
+            await cls.create(lock_name=lock_name, instance_id=INSTANCE_ID)
+            return True
+        except exceptions.IntegrityError:
+            # If lock already exists, return False
+            return False
+
+    @classmethod
+    async def release_lock(cls, lock_name: str) -> None:
+        # Delete the lock record
+        await cls.filter(lock_name=lock_name, instance_id=INSTANCE_ID).delete()
+    
+    @classmethod
+    async def release_all_locks(cls):
+        # Delete ALL the lock records muhahahaha
+        await cls.filter().delete()

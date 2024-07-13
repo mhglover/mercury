@@ -26,6 +26,7 @@ load_dotenv()  # take environment variables from .env
 app = Quart(__name__)
 app.config.from_prefixed_env()
 app.secret_key = os.getenv("QUART_SECRET_KEY", default="1234567890")
+app.instance_id = str(uuid.uuid4())
 
 conf = tk.config_from_environment()
 cred = tk.Credentials(*conf)

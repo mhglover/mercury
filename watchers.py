@@ -2,7 +2,7 @@
 import os
 import logging
 import asyncio
-import datetime
+from datetime import timezone as tz, datetime as dt, timedelta
 from humanize import naturaltime
 from models import User, WatcherState
 from users import getuser, getplayer
@@ -62,6 +62,11 @@ async def spotify_watcher(cred, spotify, user):
     
     procname = f"watcher_{state.user.displayname}"
     logging.info("%s watcher starting", procname)
+    
+    if not await Lock.attempt_acquire_lock(procname):
+        logging.warning("another server is already watching user %s, not starting", 
+                        user.displayname)
+        return
     
     await state.set_watcher_name()
 
@@ -169,6 +174,7 @@ async def spotify_watcher(cred, spotify, user):
         
 
     # ttl expired, clean up before exit
+    await Lock.release_lock(procname)
     await state.cleanup()
     logging.info("%s exiting, user status: %s", procname, state.user.status)
     return procname

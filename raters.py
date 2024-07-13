@@ -1,7 +1,7 @@
 """functions for rating tracks"""
 
 import logging
-import datetime
+from datetime import timezone as tz, datetime as dt
 from tortoise.functions import Sum
 from tortoise.transactions import in_transaction
 from humanize import naturaltime
@@ -30,7 +30,7 @@ PLAYHISTORY = """
 
 async def rate(user, track,
                value=1, 
-               last_played=datetime.datetime.now(datetime.timezone.utc),
+               last_played=dt.now(tz.utc),
                downrate=False):
     """rate a track, don't downrate unless forced"""
     procname="rate"
@@ -74,7 +74,7 @@ async def get_rating(state, value=0):
     """get a track's rating, create a new one if necessary"""
     procname="get_rating"
     state.track = await normalizetrack(state.track)
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = dt.now(tz.utc)
     
     logging.debug("%s get_or_creating a rating: %s %s", 
                  procname, state.user.displayname, state.track.trackname)
@@ -133,7 +133,7 @@ async def rate_history(spotify, user, token, value=1, limit=20):
 
 
 async def rate_saved(spotify, user, token, value=4,
-                     last_played=datetime.datetime(1970, 1, 1)):
+                     last_played=dt(1970, 1, 1)):
     """pull user's saved tracks and write ratings for them"""
     with spotify.token_as(token):
         pages = await spotify.saved_tracks()
@@ -196,7 +196,7 @@ async def get_recent_playhistory_with_ratings(user_id: int):
     results = []
     # Main query to get recent play history with user displaynames
     async with in_transaction() as connection:
-        _, recent_playhistory = await connection.execute_query(PLAYHSTORY)
+        _, recent_playhistory = await connection.execute_query(PLAYHISTORY)
 
     for playhistory in recent_playhistory:
 
