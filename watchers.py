@@ -26,10 +26,7 @@ async def user_reaper():
         interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=idle)
         # actives = await User.filter(last_active__gte=interval).exclude(status="inactive")
         expired  = await User.filter(last_active__lte=interval).exclude(status="inactive")
-        # for user in actives:
-        #     interval = datetime.datetime.now(datetime.timezone.utc) - user.last_active
-        #     logging.info("%s active user %s last active %s ago",
-        #                 procname, user.spotifyid, interval)
+        
         for user in expired:
             logging.info("%s marking user as inactive after %s minutes idle: %s",
                         procname, idle, user.spotifyid)
@@ -99,7 +96,7 @@ async def spotify_watcher(cred, spotify, user):
         state.track = await trackinfo(spotify, state.currently.item.id)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         
-        # testing - only check rating when track changes
+        # if the track has changed, get the rating
         if state.track_changed():
             state.rating = await get_rating(state)
         

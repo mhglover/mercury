@@ -5,11 +5,13 @@ import logging
 import os
 import asyncio
 import pickle
+
 import tekore as tk
 from dotenv import load_dotenv
 from humanize import naturaltime
-from quart import Quart, request, redirect, render_template, session
+from quart import Quart, request, redirect, render_template, session, websocket
 from tortoise.contrib.quart import register_tortoise
+
 from models import User, WebData, PlayHistory, WebUser, Rating
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
@@ -33,10 +35,13 @@ cred = tk.Credentials(*conf)
 token_spotify = tk.request_client_token(*conf[:2])
 spotify = tk.Spotify(token_spotify, asynchronous=True)
 
+# Global storage for asyncio tasks
 taskset = set()
+
+# Global used for passing authorization objects between the /auth and /spotify/callback routes
 auths = {}
 
-# region - logging
+# region: logging configuration
 logging.basicConfig(
     level=logging.INFO,
     # format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
@@ -56,28 +61,36 @@ hypercorn_access = logging.getLogger("hypercorn.access")
 hypercorn_access.disabled = True
 
 quart_logger = logging.getLogger('quart.app')
-# quart_logger.basicConfig(
-#     level=logging.INFO,
-#     format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
-#     # format='%(asctime)s %(levelname)s %(message)s',
-#     datefmt="%Y-%m-%d %H:%M:%S"
-#     )
+
 #endregion
 
-# set up the async database connection
-# as a part of Quart so it's easy
+
 register_tortoise(
+    # set up the async database connection as a part of Quart so it's easy
     app,
     db_url=os.environ['DATABASE_URL'],
     modules={"models": ["models"]},
     generate_schemas=False,
 )
 
-# if we need them, start some
-# background tasks for users and queues
+
+# region: app setup
 @app.before_serving
 async def before_serving():
-    """pre"""
+    """
+    This function is called before serving requests. 
+    It performs several tasks based on the environment variables.
+
+    Tasks:
+    - If "queue_manager" is in the `RUN_TASKS` environment variable it creates a queue manager task.
+    - If "spotify_watcher" is in the `RUN_TASKS` env var, it performs the following steps:
+        - Updates the `watcherid` field of all users to an empty string.
+        - Launches a user_reaper task.
+        - Pulls active users for spotify watchers.
+        - Calls the `watchman` function for each active user.
+        - Retrieves upcoming recommendations and logs them.
+    
+    """
     procname="before_serving"
 
     # check to see which tasks we're supposed to be running on this instance
@@ -119,7 +132,7 @@ async def before_serving():
 def before_request():
     """save cookies even if you close your browser"""
     session.permanent = True
-
+# endregion
 
 @app.route('/', methods=['GET'])
 async def index():
@@ -352,18 +365,6 @@ async def dashboard():
         nextup = await getnext(webtrack=True, user=user),
         ratings=[]
         )
-
-    # ratings = [x for x in Rating.select()]
-
-    # queued = [await trackinfo(trackid) for trackid in queue]
-    # try:
-    #     dbqueue = await Recommendation.all().values_list('trackid', flat=True)
-    # except Exception as e: # pylint: disable=W0718
-    #     logging.error("dashboard database queue retrieval exception: %s", e)
-
-    # tracknames = await Track.filter(trackid__in=dbqueue).values_list('trackname', flat=True)
-
-    # tasknames = [x.get_name() for x in asyncio.all_tasks() if "Task-" not in x.get_name()]
     
     return await render_template('dashboard.html', w=data)
 

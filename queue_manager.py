@@ -9,10 +9,6 @@ from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
 from spot_funcs import validatetrack
 from raters import feelabout
 
-
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
-
 QUEUE_SIZE = 4
 BLOCK = "fresh popular popular spotrec"
 ENDZONE_THRESHOLD_MS = 30000

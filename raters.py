@@ -9,12 +9,7 @@ from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
 
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
-# pylint: disable=missing-function-docstring
-
-
-PLAYHSTORY = """
+PLAYHISTORY = """
         SELECT 
                 p.track_id,
                 t.trackname,
@@ -32,7 +27,6 @@ PLAYHSTORY = """
                 MAX(p.played_at) DESC
             LIMIT 20
 """
-
 
 async def rate(user, track,
                value=1, 

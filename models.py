@@ -3,7 +3,7 @@
 
 import datetime
 import logging
-from humanize import naturaltime
+from humanize import uuid
 from dataclasses import dataclass, field
 from typing import List
 import humanize
@@ -14,10 +14,7 @@ from helpers import feelabout, truncate_middle
 
 ENDZONE_THRESHOLD_MS = 30000  # last thirty seconds of a track
 SKIP_THRESHOLD_PERCENTAGE = 80
-
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
-# pylint: disable=too-many-instance-attributes, missing-function-docstring, consider-using-f-string
+INSTANCE_ID = str(uuid.uuid4())
 
 class Option(Model):
     """track application options in a database table"""

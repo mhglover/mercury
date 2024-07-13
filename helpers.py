@@ -23,7 +23,7 @@ def truncate_middle(s, n=30):
     n_2 = (n - 3) // 2
     # whatever's left
     n_1 = n - n_2 - 3
-    return '{0}...{1}'.format(s[:n_1], s[-n_2:]) # pylint: disable=consider-using-f-string
+    return '{0}...{1}'.format(s[:n_1], s[-n_2:]) 
 
 
 def feelabout(value: int):
