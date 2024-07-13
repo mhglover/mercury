@@ -1,0 +1,31 @@
+[MASTER]
+# Add <directories> to the black-list. They should be base names, not paths.
+ignore=CVS
+
+[MESSAGES CONTROL]
+# Disable the message, report, category or checker with the given id(s).
+disable=broad-exception-caught,
+        trailing-whitespace,
+        trailing-newlines,
+        too-many-instance-attributes,
+        missing-function-docstring,
+        missing-class-docstring,
+        consider-using-f-string
+
+[REPORTS]
+# Set the output format. Available formats: text, parseable, colorized, msvs (visual studio) and html
+output-format=text
+
+# Tells whether to display a full report or only the messages
+reports=no
+
+# Python code to execute, usually for sys.path manipulation such as pygtk.require().
+#init-hook=
+
+[LOGGING]
+# Logging modules to check that the string format arguments are in logging function parameter format
+logging-modules=logging
+
+[TYPECHECK]
+# List of members which are set dynamically and missed by pylint inference system, and so shouldn't trigger E1101 when accessed. Python regular expressions are accepted.
+generated-members=REQUEST,acl_users,aq_parent

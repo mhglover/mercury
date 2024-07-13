@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """mercury radio database models"""
 
-import datetime
+from datetime import timezone as tz, datetime as dt, timedelta
 import logging
 from humanize import uuid
 from dataclasses import dataclass, field
 from typing import List
-import humanize
+from humanize import naturaltime
 import tekore as tk
 from tortoise import fields
 from tortoise.models import Model
@@ -156,7 +156,7 @@ class WebData():
 
     def to_dict(self):
         """Convert to dict with custom serialization"""
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = dt.now(tz.utc)
         return {
             "user": {"id": self.user.id,
                      "displayname": self.user.displayname,
@@ -168,7 +168,7 @@ class WebData():
                           "displayname": rating.user.displayname,
                           "comment": rating.comment,
                           "userid": rating.user.id,
-                          "last_played": humanize.naturaltime(now - rating.last_played)
+                          "last_played": naturaltime(now - rating.last_played)
                         } for rating in self.ratings],
             "history": self.history,
             "users": {user.user_id: { "displayname": user.displayname,
@@ -217,8 +217,8 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     
     def __post_init__(self):
         """timeout if they stop playing"""
-        now = datetime.datetime.now(datetime.timezone.utc)
-        self.ttl = now + datetime.timedelta(minutes=20)
+        now = dt.now(tz.utc)
+        self.ttl = now + timedelta(minutes=20)
                 # set the watcherid for the spotwatcher process
     
     def refresh_token(self):
@@ -227,19 +227,19 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
     
     async def set_watcher_name(self):
         self.user.watcherid = (f"watcher_{self.user.spotifyid}_" 
-                                + f"{datetime.datetime.now(datetime.timezone.utc)}")
+                                + f"{dt.now(tz.utc)}")
         await self.user.save()
 
     async def refresh(self):
         self.refresh_token()
-        self.ttl = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)
+        self.ttl = dt.now(tz.utc) + timedelta(minutes=20)
         self.position = int((self.currently.progress_ms/self.currently.item.duration_ms) * 100)
         self.remaining_ms = self.currently.item.duration_ms - self.currently.progress_ms
         self.displaytime = "{:}:{:02}".format(*divmod(self.remaining_ms // 1000, 60)) 
         self.calculate_sleep_duration()
         self.update_endzone_status()
         logging.debug("updating ttl, last_active and status: %s", naturaltime(self.ttl))
-        self.user.last_active = datetime.datetime.now(datetime.timezone.utc)
+        self.user.last_active = dt.now(tz.utc)
         await self.user.save()
         
 

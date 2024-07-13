@@ -5,11 +5,6 @@ import tekore as tk
 from helpers import feelabout
 from models import Track, User, WebUser
 
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
-
-# used by feelabout()
-
 async def getuser(cred, user):
     """fetch user details
     cred - spotify credentials object

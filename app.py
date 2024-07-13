@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """mercury radio"""
-import datetime
+from datetime import timezone as tz, datetime as dt
+import uuid
 import logging
 import os
 import asyncio
@@ -19,9 +20,6 @@ from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings, rate
 from raters import get_recent_playhistory_with_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
-
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
 
 load_dotenv()  # take environment variables from .env
 
@@ -105,9 +103,6 @@ async def before_serving():
 
     if "spotify_watcher" in run_tasks:
         
-        if os.getenv("NOOVERTAKE") is not True:
-            logging.info("%s overtaking any existing watcher tasks", 
-                        procname)    
             await User.select_for_update().exclude(watcherid='').update(watcherid='')
 
         logging.debug("%s launching a user_reaper task", procname)
@@ -320,17 +315,16 @@ async def spotify_callback():
     p = pickle.dumps(token)
 
     logging.info("%s get_or_create user record for %s", procname, spotifyid)
-    n = datetime.datetime.now(datetime.timezone.utc)
     user, created = await User.get_or_create(spotifyid=spotifyid,
                                              defaults={
                                                  "token": p,
-                                                 "last_active": n,
+                                                 "last_active": dt.now(tz.utc),
                                                  "displayname": spotify_user.display_name,
                                                  "status": "active"
                                              })
     if created is False:
         logging.info('%s found user %s', procname, spotifyid)
-        user.last_active = datetime.datetime.now
+        user.last_active = dt.now(tz.utc)
         user.status = "active"
         await user.save()
     else:
@@ -515,7 +509,7 @@ async def web_track(track_id):
     track = await normalizetrack(track_id)
     
     if request.method == "POST":
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = dt.now(tz.utc)
         rating, _ = await Rating.get_or_create(user_id=user.id,
                                                 track_id=track.id,
                                                 trackname=track.trackname,

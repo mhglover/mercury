@@ -1,5 +1,5 @@
 """functions for pulling tracks for recommendations"""
-import datetime
+from datetime import timezone as tz, datetime as dt, timedelta
 import logging
 from tortoise.functions import Sum
 from tortoise.expressions import Subquery
@@ -14,7 +14,7 @@ from spot_funcs import trackinfo
 
 async def recently_rated_tracks(days=7):
     """fetch tracks that have been rated in the last few days"""
-    interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+    interval = dt.now(tz.utc) - timedelta(days=days)
     ratings = await Rating.filter(last_played__gte=interval).prefetch_related("track")
     tracks = [x.track for x in ratings]
     return tracks
@@ -34,7 +34,7 @@ async def popular_tracks(count=1, rating=0):
     
     # recent_tracks = await recently_rated_tracks(days=1)
     active_uids = [x.id for x in await getactiveusers()]
-    interval = datetime.datetime.now() - datetime.timedelta(
+    interval = dt.now() - timedelta(
                                             days=int(track_repeat_timeout.option_value))
     recent_tids = await (PlayHistory.filter(played_at__gte=interval)
                                     .filter(user_id__in=active_uids)

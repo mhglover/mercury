@@ -8,13 +8,7 @@ from models import User, WatcherState
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_rating
-from spot_funcs import trackinfo, queue_safely
-from spot_funcs import is_saved
-
-
-# pylint: disable=broad-exception-caught
-# pylint: disable=trailing-whitespace, trailing-newlines
-# pylint: disable=consider-using-f-string
+from socket_funcs import send_webdata
 
 async def user_reaper():
     """check the database every 5 minutes and remove inactive users"""
@@ -23,7 +17,7 @@ async def user_reaper():
     idle = 20
     while True:
         logging.debug("%s checking for inactive users every %s seconds", procname, sleep)
-        interval = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=idle)
+        interval = dt.now(tz.utc) - timedelta(minutes=idle)
         # actives = await User.filter(last_active__gte=interval).exclude(status="inactive")
         expired  = await User.filter(last_active__lte=interval).exclude(status="inactive")
         
@@ -71,7 +65,7 @@ async def spotify_watcher(cred, spotify, user):
     
     await state.set_watcher_name()
 
-    while (state.ttl > datetime.datetime.now(datetime.timezone.utc) and
+    while (state.ttl > dt.now() and
            state.user.status == 'active'):
 
         await asyncio.sleep(state.sleep)

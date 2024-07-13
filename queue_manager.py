@@ -1,6 +1,6 @@
 """the queue"""
 import logging
-import datetime
+from datetime import timezone as tz, datetime as dt, timedelta
 import asyncio
 from humanize import naturaltime
 from models import Recommendation, Track, Option, WebTrack, Rating
@@ -135,7 +135,7 @@ async def getnext(get_all=False, webtrack=False, user=None):
 
 async def expire_queue() -> None:
     """remove old tracks from the upcoming queue"""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = dt.now(tz.utc)
     logging.debug("expire_queue removing old tracks")
     expired = await Recommendation.filter(expires_at__lte=now)
     for each in expired:
@@ -145,8 +145,8 @@ async def expire_queue() -> None:
 
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
     """set the timestamp for expiring a recommendation"""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    expiration_interval = datetime.timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
+    now = dt.now(tz.utc)
+    expiration_interval = timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
     recommendation.expires_at = now + expiration_interval
     logging.info("set_rec_expiration - %s %s",
                  recommendation.trackname, naturaltime(recommendation.expires_at)
