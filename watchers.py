@@ -4,10 +4,11 @@ import logging
 import asyncio
 from datetime import timezone as tz, datetime as dt, timedelta
 from humanize import naturaltime
-from models import User, WatcherState
+from models import User, WatcherState, WebData, Lock
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_rating
+from spot_funcs import trackinfo, queue_safely, is_saved
 from socket_funcs import send_webdata
 
 async def user_reaper():
@@ -70,12 +71,16 @@ async def spotify_watcher(cred, spotify, user):
     
     await state.set_watcher_name()
 
+    webdata = WebData(user=state.user)
     while (state.ttl > dt.now() and
            state.user.status == 'active'):
 
         await asyncio.sleep(state.sleep)
         state.currently = await getplayer(state)
-        state.user, state.token = await getuser(cred, user)
+        webdata = state.currently.webdata
+        
+        #do we really need to pull the user again?
+        # state.user, state.token = await getuser(cred, user)
         
         # if anything else weird is happening, sleep for a minute and then loop
         if state.status != "active":
@@ -90,9 +95,11 @@ async def spotify_watcher(cred, spotify, user):
         
         # pull details for the next track in the queue
         state.nextup = await getnext()
-
+        webdata.nextup = state.nextup
+        
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
+        webdata.track = state.track
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         
         # if the track has changed, get the rating
@@ -167,6 +174,9 @@ async def spotify_watcher(cred, spotify, user):
         state.track_last_cycle = state.track
         state.position_last_cycle = state.position
         state.was_saved_last_cycle = state.is_saved
+        
+        # update the user's webpage
+        await send_webdata(webdata)
         
         logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),

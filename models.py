@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import List
 from humanize import naturaltime
 import tekore as tk
-from tortoise import fields
 from tortoise.models import Model
+from tortoise import fields, exceptions
 from helpers import feelabout, truncate_middle
 
 ENDZONE_THRESHOLD_MS = 30000  # last thirty seconds of a track
@@ -36,8 +36,9 @@ class User(Model):
     status = fields.TextField()
     watcherid = fields.TextField(null=True)
     role = fields.TextField(default="user")
-    
-    ratings: fields.ReverseRelation["Rating"]
+    ratings: fields.ReverseRelation["Rating"] = []
+    websocket = None
+
 
     def __str__(self):
         return str(self.spotifyid)
@@ -120,12 +121,26 @@ class Recommendation(Model):
 class WebTrack():
     """data model for passing track data to a web template"""
     trackname: str = ""
+    template_id: str = ""
     track_id: int = 0
     color: str = ""
     rating: int = 0
     comment: str = ""
     timestamp: str = ""
     listeners: list = field(default_factory=list)
+
+    def to_dict(self):
+        """Convert to dict with custom serialization"""
+        return {
+            "trackname": self.trackname,
+            "template_id": f"track_{self.track_id}",
+            "track_id": self.track_id,
+            "color": self.color,
+            "rating": self.rating,
+            "comment": self.comment,
+            "timestamp": self.timestamp,
+            "listeners": self.listeners
+        }
 
 
 @dataclass
@@ -178,15 +193,15 @@ class WebData():
                                       "track_id": user.track_id,
                                       "trackname": user.trackname
                                       } for user in self.users},
-            "nextup": self.nextup,
+            "nextup": self.nextup.to_dict(),
             "refresh": self.refresh,
-            "track": self.track,
+            "track": (self.track.to_dict()),
             
         }
 
 
 @dataclass
-class WatcherState(): # pylint: disable=too-many-instance-attributes
+class WatcherState():
     """hold the state of a spotify watcher"""
     
     cred: tk.Credentials
@@ -307,7 +322,7 @@ class WatcherState(): # pylint: disable=too-many-instance-attributes
             f.status = "inactive"
             await f.save()
 
-    
+
 class Lock(Model):
     lock_name = fields.CharField(max_length=255, pk=True)
     acquired_at = fields.DatetimeField(auto_now_add=True)
@@ -335,3 +350,4 @@ class Lock(Model):
     async def release_all_locks(cls):
         # Delete ALL the lock records muhahahaha
         await cls.filter().delete()
+    

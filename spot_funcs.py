@@ -76,11 +76,15 @@ async def trackinfo(spotify_object, check_spotifyid):
 
 async def get_webtrack(track, user=None):
     """accept a track object and return a webtrack"""
+    
+    track = await normalizetrack(track)
+    
     if user is not None:
         rating = await (Rating.get_or_none(track_id=track.id, user_id=user.id))
     
     wt = WebTrack(trackname=track.trackname,
                   track_id=track.id,
+                  template_id=f"track_{track.id}",
                   comment=rating.comment if rating else "",
                   color=feelabout(rating.rating if rating else 0),
                   rating=rating.rating if rating else 0)
@@ -259,22 +263,20 @@ async def normalizetrack(track):
     """figure out where a track is and return it"""
     
     if isinstance(track, str):
-        # this is a stupid way to test this 
-        if len(track) < 7:
-            logging.debug("normalizetrack this is a short string, fetching Track record: %s", track)
-            track = await Track.get(id=track)
-        else:
-            logging.debug("normalizetrack this is a short string, fetching Track record: %s", track)
-            track = await Track.get(spotifyid=track)
+        id_type = "id" if len(track) < 7 else "spotifyid"
+        logging.debug("normalizetrack fetching Track record by %s: %s", id_type, track)
+        track = await Track.get(**{id_type: track})
     
-    elif isinstance(track, Track):
+    if isinstance(track, Track):
         logging.debug("normalizetrack this is a Track object: [%s] %s", track.id, track.trackname)
         if track.id is None and track.spotifyid is not None:
-            s = str(track.spotifyid)            
-            track = await Track.get(spotifyid=s)
+            track = await Track.get(spotifyid=track.spotifyid)
+
     else:
         logging.error("normalizetrack this isn't a string or a track object: %s", type(track))
         logging.error(pformat(track))
+
+    logging.debug("normalizetrack normalized track: [%s] %s", track.id, track)
     
     return track
 

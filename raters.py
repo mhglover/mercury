@@ -10,22 +10,22 @@ from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
 
 PLAYHISTORY = """
-        SELECT 
-                p.track_id,
-                t.trackname,
-                MAX(p.played_at) as played_at,
-                array_agg(distinct u.displayname) as listeners
-            FROM 
-                playhistory p
-            JOIN 
-                public.user u ON p.user_id = u.id
-            JOIN
-                track t ON p.track_id = t.id
-            GROUP BY 
-                p.track_id, t.trackname
-            ORDER BY 
-                MAX(p.played_at) DESC
-            LIMIT 20
+    SELECT 
+        p.track_id,
+        t.trackname,
+        MAX(p.played_at) as played_at,
+        array_agg(distinct u.displayname) as listeners
+    FROM 
+        playhistory p
+    JOIN 
+        public.user u ON p.user_id = u.id
+    JOIN
+        track t ON p.track_id = t.id
+    GROUP BY 
+        p.track_id, t.trackname
+    ORDER BY 
+        MAX(p.played_at) DESC
+    LIMIT 20
 """
 
 async def rate(user, track,

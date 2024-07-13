@@ -3,8 +3,48 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
     
-    {% if w.refresh != 0 %} <meta http-equiv="refresh" content="{{ w.refresh }}"> {% endif %}
+    <script type="text/javascript">
+      document.addEventListener('DOMContentLoaded', (event) => {
+          // Create a new WebSocket.
+          var socket = new WebSocket(`ws://${window.location.host}/ws`);
+
+          // Connection opened
+          socket.addEventListener('open', function (event) {
+              console.log('WebSocket connected');
+          });
+
+          // Listen for messages
+          socket.addEventListener('message', function (event) {
+            var dataList = JSON.parse(event.data); // Assuming the server sends a list of JSON objects
+            dataList.forEach(data => {
+                var element = document.getElementById(data.id);
+                if (element) {
+                    Object.keys(data).forEach(key => {
+                        if (key !== 'id') { // Skip 'id' since it's used to select the element
+                            if (key === 'value') {
+                                // For 'value', update the element's value or innerText
+                                if (element.value !== undefined) {
+                                    element.value = data[key];
+                                } else {
+                                    element.innerText = data[key];
+                                }
+                            } else {
+                                // For other attributes, use setAttribute
+                                element.setAttribute(key, data[key]);
+                            }
+                            console.log(`Updating element id: ${data.id} with ${key}: ${data[key]}`);
+                        }
+                    });
+                } else {
+                    console.warn("Element not found: " + data.id);
+                }
+            });
+        });
+      });
+    </script>
     
     <title>Mercury Radio</title>
 

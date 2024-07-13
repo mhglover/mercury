@@ -19,6 +19,7 @@ from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings, rate
 from raters import get_recent_playhistory_with_ratings
+from socket_funcs import active_websockets, send_webdata
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
 
 load_dotenv()  # take environment variables from .env
@@ -104,7 +105,7 @@ async def before_serving():
 
     if "spotify_watcher" in run_tasks:
         
-            await User.select_for_update().exclude(watcherid='').update(watcherid='')
+        await User.select_for_update().exclude(watcherid='').update(watcherid='')
 
         logging.debug("%s launching a user_reaper task", procname)
         reaper_task = asyncio.create_task(user_reaper(), name="user_reaper")
@@ -181,6 +182,48 @@ async def index():
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
+
+
+@app.websocket('/ws')
+async def ws():
+    user_id = session.get('user_id', None)
+    
+    if not user_id:
+        logging.error("no user_id in session, won't connect websocket")
+        return redirect("/")
+    
+    # Store the WebSocket connection
+    active_websockets[user_id] = websocket
+    logging.info("websocket stored for user: %s", user_id)
+    
+    user, token = await getuser(cred, user_id)
+    logging.info("user %s connecting to websocket", user.displayname)
+
+    try:
+        while True:
+            nextup = await getnext(webtrack=True, user=user)
+            wd = WebData(user=user, nextup=nextup)
+            
+            with spotify.token_as(token):
+                currently_playing = await spotify.playback_currently_playing()
+            
+            if currently_playing and currently_playing.item:
+                wd.track = await get_webtrack(currently_playing.item.id, user)
+
+            try:
+                await send_webdata(wd)
+            
+            except Exception as e:
+                logging.error("WebSocket Error: %s %s", user.displayname, e, exc_info=True)    
+                break
+            await asyncio.sleep(30)
+            
+    except asyncio.CancelledError:
+        logging.info("Websocket task was cancelled. Cleaning up... %s", user.displayname)
+    
+    finally:
+        # Remove the WebSocket connection when done
+        del active_websockets[user_id]
 
 
 @app.route('/tunein')

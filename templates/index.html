@@ -3,13 +3,15 @@
 
 <h3>you are listening to</h3>
 
+{{w.track.template_id}}
+
 {% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
 <h2 class="d-flex justify-content-between align-items-center">
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
+    <a id="currently_uprate" href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
     <span class="mx-2 text-center flex-grow-1 text-wrap">
-        <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
+        <a id="currently" href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
     </span>
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
+    <a id="currently_downrate" href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
 </h2>
 
 <h3>coming up next</h3>
@@ -17,11 +19,11 @@
 
 
 <h1 class="d-flex justify-content-between align-items-center">
-    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
+    <a id= "nextup_uprate" href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
     <span class="mx-2 text-center flex-grow-1 text-wrap">
-        <a href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
+        <a id="nextup" href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
     </span>
-    <a href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>    
+    <a id="nextup_downrate" href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>    
 </h1>
 
 {% if w.users|length > 0 %}
@@ -29,7 +31,7 @@
     <ul>
             {% for id, user in w.users.items() %}
                 <li>
-                    <a href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a>
+                    <a id="user_{{user.user_id}}" href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a>
                 </li>
             {% endfor %}
             </ul>
