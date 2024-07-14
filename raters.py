@@ -86,10 +86,7 @@ async def quickrate(user, message):
     html_id = message['quickrate']['html_id']
     change = message['quickrate']['change']
     
-    rating = await Rating.get(track_id=track_id, user_id=user.id)    
-    if not rating:
-        logging.error("No rating found for track_id %s and user %s", track_id, user.displayname)
-        return
+    rating = await get_rating(user, track_id)
     
     value = rating.rating + change
     if value < -4 or value > 4:
