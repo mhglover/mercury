@@ -4,6 +4,16 @@ import asyncio
 import logging
 from helpers import feelabout
 
+# Assuming active_websockets is a dictionary mapping user IDs to WebSocket connection objects
+# Initialize a dictionary for user message queues
+user_message_queues = {}
+
+def get_user_queue(user_id):
+    if user_id not in user_message_queues:
+        user_message_queues[user_id] = asyncio.Queue()
+    return user_message_queues[user_id]
+
+
 active_websockets = {}
 
 async def default_message_processor(user, message):
@@ -42,19 +52,32 @@ async def send_webdata(w):
         logging.error("no livesocket not found for user: %s", w.user.displayname)
 
 
-async def send_update(userid: int, element_id: str, attribute_type: str, value: str):
-    socket = active_websockets[userid]
-    logging.info("sending update to user: %s, %s=%s", userid, attribute_type, value)
+async def send_update(user_id: int, element_id: str, attribute_type: str, updated_value: str):
+    """send an update to the user's websocket
     
-    try:
-        data = {"update": [
-            {
+    arguments: 
+        user_id: int - the user's id
+        element_id: str - the id of the element to update
+        attribute_type: str - the attribute to update
+        updated_value: str - the new value for the attribute
+        
+        no return value
+    """
+
+    logging.info("send_update - user: %s, element: %s, attribute: %s, value: %s",
+                    user_id, element_id, attribute_type, updated_value)
+    
+    data = {"update": [{ 
                 "id": element_id, 
-                attribute_type: value
-            }
-        ]}
-    except Exception as e:
-        logging.error("error creating data for send_update: %s", e)
-        return
+                attribute_type: updated_value
+            }]}
+    try:
+        user_queue = get_user_queue(user_id)
+        await user_queue.put(json.dumps(data))
     
-    await socket.send(json.dumps(data))    
+    except RuntimeError as e:
+        logging.error("send_update - RuntimeError sending update to user: %s", e)
+    
+    except Exception as e:
+        logging.error("send_update - error sending update to user: %s", e)
+
