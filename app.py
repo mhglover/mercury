@@ -75,7 +75,8 @@ register_tortoise(
     app,
     db_url=os.environ['DATABASE_URL'],
     modules={"models": ["models"]},
-    generate_schemas=False,
+    # get the value of the `GENERATE_SCHEMAS` environment variable
+    generate_schemas=bool(os.environ.get('GENERATE_SCHEMAS', default="False"))
 )
 
 
