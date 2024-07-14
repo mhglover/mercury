@@ -1,30 +1,16 @@
 {% extends 'base.html' %}
+{% import '_macros.html' as macros %}
 {% block content %}
 
-<h3>you are listening to</h3>
+<section aria-labelledby="current-track-section">
+    <h3 id="current-track-section">playing</h3>
+    {{ macros.render_track(w.track, "currently") }}
+</section>    
 
-{{w.track.template_id}}
-
-{% if w.track.trackname != w.nextup.trackname and w.track.trackname is not none and w.track.trackname != "" and w.track.track_id != 0 %}
-<h2 class="d-flex justify-content-between align-items-center">
-    <a id="currently_uprate" href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
-    <span class="mx-2 text-center flex-grow-1 text-wrap">
-        <a id="currently" href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
-    </span>
-    <a id="currently_downrate" href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
-</h2>
-
-<h3>coming up next</h3>
-{% endif %}
-
-
-<h1 class="d-flex justify-content-between align-items-center">
-    <a id= "nextup_uprate" href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
-    <span class="mx-2 text-center flex-grow-1 text-wrap">
-        <a id="nextup" href="/track/{{w.nextup.track_id}}" class="{{w.nextup.color}}">{{ w.nextup.trackname }}</a>
-    </span>
-    <a id="nextup_downrate" href="/track/{{w.nextup.track_id}}/rate/{{w.nextup.rating + 1}}" class="rater love display-4 display-md-1">+</a>    
-</h1>
+<section aria-labelledby="upcoming-track-section">
+    <h3 id="upcoming-track-section">next</h3>
+    {{ macros.render_track(w.nextup, "nextup") }}
+</section>
 
 {% if w.users|length > 0 %}
     <h3>with</h3>

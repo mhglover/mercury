@@ -8,6 +8,7 @@ from humanize import naturaltime
 from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
+from socket_funcs import send_update
 
 PLAYHISTORY = """
     SELECT 
@@ -68,6 +69,48 @@ async def rate(user, track,
             await rating.save()
 
     return rating
+
+
+async def quickrate(user, message):
+    """
+    Quick rate a track based on a message and a user object.
+    """
+    try:
+        # Parse the incoming message
+        if 'quickrate' not in message:
+            logging.error("no quickrate tasks in this message: %s", message)
+            return
+        
+        for data in message['quickrate']:
+            track_id = data.get('track_id')
+            change = data.get('change')
+            html_id = data.get('html_id')
+        
+        # Find the rating for the track and user
+        rating = await Rating.get(track_id=track_id, user_id=user.id)
+        if not rating:
+            logging.error("No rating found for track_id %s and user %s", track_id, user.displayname)
+            return
+        
+        # Determine the rating value based on the change
+        value = rating.rating + change
+        
+        if value < -4 or value > 4:
+            logging.error("Invalid rating value %s for track %s by user %s", value, 
+                          rating.trackname, user.displayname)
+            return
+        
+        rating.rating = value
+        rating.last_played = dt.now(tz.utc)
+        await rating.save()
+        
+        logging.debug("Quick rate successful for track %s by user %s", 
+                        rating.trackname, user.displayname)
+        
+        await send_update(user.id, html_id, 'class', "rater " + feelabout(value))
+        
+    except Exception as e:
+        logging.error("Error processing quickrate: %s", str(e))
 
 
 async def get_rating(state, value=0):

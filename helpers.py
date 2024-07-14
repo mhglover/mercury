@@ -1,17 +1,6 @@
 # helpers.py
 """assistive functions"""
 
-USER_RATINGS_TO_FEELINGS = {
-    None:   "unrated",
-    -2:     "hate",
-    -1:     "dislike",
-     0:     "shrug",
-     1:     "like",
-     2:     "love",
-     3:     "love",
-     4:     "love"
-}
-
 def truncate_middle(s, n=30):
     """shorten long names"""
     if len(s) <= n:
@@ -26,6 +15,23 @@ def truncate_middle(s, n=30):
     return '{0}...{1}'.format(s[:n_1], s[-n_2:]) 
 
 
-def feelabout(value: int):
-    """return a text string based on value"""
-    return USER_RATINGS_TO_FEELINGS.get(value)
+def feelabout(value: int = 0) -> str:
+    """Return a text string based on value."""
+    if not value:
+        value = 0
+
+    if -4 <= value <= -2:
+        feeling = "hate"
+    elif value == -1:
+        feeling = "dislike"
+    elif value == 0:
+        feeling = "shrug"
+    elif value == 1:
+        feeling = "like"
+    elif 2 <= value <= 4:
+        feeling = "love"
+    else:
+        feeling = "unrated"
+    
+    return feeling
+

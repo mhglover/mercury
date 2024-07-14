@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """mercury radio"""
+import asyncio
 from datetime import timezone as tz, datetime as dt
-import uuid
 import logging
 import os
-import asyncio
 import pickle
+import uuid
 
 import tekore as tk
 from dotenv import load_dotenv
@@ -13,13 +13,13 @@ from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session, websocket
 from tortoise.contrib.quart import register_tortoise
 
-from models import User, WebData, PlayHistory, WebUser, Rating
+from models import User, WebData, PlayHistory, WebUser, Rating, Lock
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings, rate
-from raters import get_recent_playhistory_with_ratings
-from socket_funcs import active_websockets, send_webdata
+from raters import get_recent_playhistory_with_ratings, quickrate
+from socket_funcs import handle_websocket
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
 
 load_dotenv()  # take environment variables from .env
@@ -142,6 +142,7 @@ def before_request():
     session.permanent = True
 # endregion
 
+
 @app.route('/', methods=['GET'])
 async def index():
     """show the now playing page"""
@@ -182,7 +183,7 @@ async def index():
         track = await trackinfo(spotify, currently.item.id)
         web_data.track = await get_webtrack(track, web_data.user)
         try:
-        web_data.users = await getactivewebusers(track)
+            web_data.users = await getactivewebusers(track)
         except Exception as e:
             logging.error("index - getactivewebusers\n%s", e)
         
@@ -206,38 +207,11 @@ async def ws():
         logging.error("no user_id in session, won't connect websocket")
         return redirect("/")
     
-    # Store the WebSocket connection
-    active_websockets[user_id] = websocket
-    logging.info("websocket stored for user: %s", user_id)
-    
-    user, token = await getuser(cred, user_id)
-    logging.info("user %s connecting to websocket", user.displayname)
+    user, _ = await getuser(cred, user_id)
 
-    try:
-        while True:
-            nextup = await getnext(webtrack=True, user=user)
-            wd = WebData(user=user, nextup=nextup)
-            
-            with spotify.token_as(token):
-                currently_playing = await spotify.playback_currently_playing()
-            
-            if currently_playing and currently_playing.item:
-                wd.track = await get_webtrack(currently_playing.item.id, user)
-
-            try:
-                await send_webdata(wd)
-            
-            except Exception as e:
-                logging.error("WebSocket Error: %s %s", user.displayname, e, exc_info=True)    
-                break
-            await asyncio.sleep(30)
-            
-    except asyncio.CancelledError:
-        logging.info("Websocket task was cancelled. Cleaning up... %s", user.displayname)
+    await handle_websocket(websocket, user, [quickrate])
     
-    finally:
-        # Remove the WebSocket connection when done
-        del active_websockets[user_id]
+
 
 
 @app.route('/tunein')

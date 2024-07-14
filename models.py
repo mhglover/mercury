@@ -326,17 +326,29 @@ class WatcherState():
 class Lock(Model):
     lock_name = fields.CharField(max_length=255, pk=True)
     acquired_at = fields.DatetimeField(auto_now_add=True)
-    instance_id = INSTANCE_ID
+    instance = fields.CharField(max_length=255, default=INSTANCE_ID)
 
     class Meta:
         table_name = "locks"
     
     @classmethod
     async def attempt_acquire_lock(cls, lock_name: str) -> bool:
+        """create a lock record if it doesn't exist, update if it's from this instance"""
         try:
-            # Create a new lock record
-            await cls.create(lock_name=lock_name, instance_id=INSTANCE_ID)
-            return True
+            # if the lock exists from another instance, return False
+            lock = await cls.get_or_none(lock_name=lock_name)
+            # if the lock doesn't exist, create it and return True
+            if lock is None:
+                await cls.create(lock_name=lock_name, instance=INSTANCE_ID)
+                return True
+            # if a lock from this instance already exists, update the timestamp and return True
+            if lock.instance == INSTANCE_ID:
+                lock.acquired_at = dt.now(tz.utc)
+                await lock.save()
+                return True
+            
+            return False
+            
         except exceptions.IntegrityError:
             # If lock already exists, return False
             return False
@@ -344,7 +356,7 @@ class Lock(Model):
     @classmethod
     async def release_lock(cls, lock_name: str) -> None:
         # Delete the lock record
-        await cls.filter(lock_name=lock_name, instance_id=INSTANCE_ID).delete()
+        await cls.filter(lock_name=lock_name, instance=INSTANCE_ID).delete()
     
     @classmethod
     async def release_all_locks(cls):

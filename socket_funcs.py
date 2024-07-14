@@ -1,31 +1,99 @@
 """functions for websocket manipulation"""
-import logging
 import json
-from pprint import pformat
+import asyncio
+import logging
 from helpers import feelabout
 
-
 active_websockets = {}
+
+async def default_message_processor(user, message):
+    # no-op, just log the message
+    message_data = json.loads(message)
+    logging.info("default_message_processor - no action for %s: %s", user.displayname, message_data)
+
+
+async def handle_websocket(websocket, user, message_processors=None, sleep=0.1):
+    # Store the WebSocket connection
+    active_websockets[user.id] = websocket
+    logging.info("new websocket connection stored for user: %s", user.displayname)
+    if not message_processors:
+        message_processors = [default_message_processor]
+
+    while True:
+        try:
+            message = await websocket.receive()
+            logging.debug("Message received from %s: %s", user.displayname, message)
+        except Exception as e:
+            logging.error("WebSocket Error: %s %s", user.displayname, e, exc_info=True)    
+            break
+        except asyncio.CancelledError:
+            logging.info("Websocket task was cancelled. Cleaning up... %s", user.displayname)
+            break
+        
+        message_data = json.loads(message)
+        
+        for processor, _ in message_data.items():
+            # if callable(processor) and inspect.isfunction(processor):
+            logging.info("handle_websocket - message_processor found for %s: %s", 
+                         user.displayname, processor)
+            # Convert the processor name to a function object
+            processor_func = globals().get(processor)
+            
+            if processor_func and callable(processor_func):
+                await processor_func(user, message, websocket=websocket)
+            else:
+                logging.error("handle_websocket - no message_processor found for %s: %s", 
+                             user.displayname, str(processor))
+            # else:
+            #     logging.error("handle_websocket - no message_processor found for %s: %s", 
+            #              user.displayname, str(processor))
+                
+        await asyncio.sleep(sleep)
+    
+    # Remove the WebSocket connection when done
+    del active_websockets[user.id]
 
 
 async def send_webdata(w):
     """send the webdata to the websocket"""
     logging.info("sending webdata to user: %s", w.user.displayname)
-    logging.debug("sending webdata to websocket: %s\n%s", 
-                 w.user.displayname, pformat(w.to_dict())) 
+    # logging.debug("sending webdata to websocket: %s\n%s", 
+    #              w.user.displayname, pformat(w.to_dict())) 
     
-    r = w.track.rating
+    r = w.ratings[0].rating
     n = w.nextup.rating
     u = f"/track/{w.nextup.track_id}/rate/"
     
-    data = [
+    data = {"update": [
         {"id": "currently_playing", "value": w.track.trackname, "class": feelabout(r)},
         {"id": "currently_downrate", "href": u + str(r-1)},
         {"id": "currently_uprate", "href": u + str(r+1)},
         {"id": "nextup", "value": w.nextup.trackname, "class": feelabout(n)},
         {"id": "nextup_downrate", "href": u + str(n+1)},
         {"id": "nextup_uprate", "href":  u + str(n+1)}
-    ]
+    ]}
     
     socket = active_websockets.get(w.user.id)
-    await socket.send(json.dumps(data))
+    #is socket still active
+    if socket:
+        await socket.send(json.dumps(data))
+    else:
+        logging.error("no livesocket not found for user: %s", w.user.displayname)
+
+
+async def send_update(userid: int, element_id: str, attribute_type: str, value: str):
+    socket = active_websockets[userid]
+    logging.info("sending update to user: %s, %s=%s", userid, attribute_type, value)
+    
+    try:
+        data = {"update": [
+            {
+                "id": element_id, 
+                attribute_type: value
+            }
+        ]}
+    except Exception as e:
+        logging.error("error creating data for send_update: %s", e)
+        return
+    
+    await socket.send(json.dumps(data))    
