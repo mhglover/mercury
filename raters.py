@@ -1,5 +1,6 @@
 """functions for rating tracks"""
 
+import json
 import logging
 from datetime import timezone as tz, datetime as dt
 from tortoise.functions import Sum
@@ -75,42 +76,37 @@ async def quickrate(user, message):
     """
     Quick rate a track based on a message and a user object.
     """
-    try:
-        # Parse the incoming message
-        if 'quickrate' not in message:
-            logging.error("no quickrate tasks in this message: %s", message)
-            return
-        
-        for data in message['quickrate']:
-            track_id = data.get('track_id')
-            change = data.get('change')
-            html_id = data.get('html_id')
-        
-        # Find the rating for the track and user
-        rating = await Rating.get(track_id=track_id, user_id=user.id)
-        if not rating:
-            logging.error("No rating found for track_id %s and user %s", track_id, user.displayname)
-            return
-        
-        # Determine the rating value based on the change
-        value = rating.rating + change
-        
-        if value < -4 or value > 4:
-            logging.error("Invalid rating value %s for track %s by user %s", value, 
+    message = json.loads(message)
+    
+    if 'quickrate' not in message:
+        logging.error("no quickrate tasks in this message: %s", message)
+        return
+    
+    track_id = message['quickrate']['track_id']
+    html_id = message['quickrate']['html_id']
+    change = message['quickrate']['change']
+    
+    rating = await Rating.get(track_id=track_id, user_id=user.id)    
+    if not rating:
+        logging.error("No rating found for track_id %s and user %s", track_id, user.displayname)
+        return
+    
+    value = rating.rating + change
+    if value < -4 or value > 4:
+        logging.error("Invalid rating value %s for track %s by user %s", value, 
                           rating.trackname, user.displayname)
-            return
-        
-        rating.rating = value
-        rating.last_played = dt.now(tz.utc)
-        await rating.save()
-        
-        logging.debug("Quick rate successful for track %s by user %s", 
+        return
+    
+    rating.rating = value
+    rating.last_played = dt.now(tz.utc)
+    await rating.save()    
+    logging.debug("Quick rate successful for track %s by user %s", 
                         rating.trackname, user.displayname)
         
+    try:
         await send_update(user.id, html_id, 'class', "rater " + feelabout(value))
-        
     except Exception as e:
-        logging.error("Error processing quickrate: %s", str(e))
+        logging.error("Error sending update to user %s: %s", user.displayname, e)
 
 
 async def get_rating(state, value=0):

@@ -19,8 +19,8 @@ from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings, rate
 from raters import get_recent_playhistory_with_ratings, quickrate
-from socket_funcs import handle_websocket
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
+from socket_handler import handle_websocket
 
 load_dotenv()  # take environment variables from .env
 
@@ -209,9 +209,7 @@ async def ws():
     
     user, _ = await getuser(cred, user_id)
 
-    await handle_websocket(websocket, user, [quickrate])
-    
-
+    await handle_websocket(websocket, user)
 
 
 @app.route('/tunein')
