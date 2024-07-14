@@ -28,6 +28,11 @@ app = Quart(__name__)
 app.config.from_prefixed_env()
 app.secret_key = os.getenv("QUART_SECRET_KEY", default="1234567890")
 app.instance_id = str(uuid.uuid4())
+app.config.update(
+    SESSION_COOKIE_SECURE=True,  # Ensure you also set Secure when setting SameSite=None
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',  # Can be 'Strict', 'Lax', or 'None'
+)
 
 conf = tk.config_from_environment()
 cred = tk.Credentials(*conf)
