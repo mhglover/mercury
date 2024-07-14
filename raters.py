@@ -106,22 +106,21 @@ async def quickrate(user, message):
         logging.error("Error sending update to user %s: %s", user.displayname, e)
 
 
-async def get_rating(state, value=0):
+async def get_rating(user, track_id) -> int:
     """get a track's rating, create a new one if necessary"""
     procname="get_rating"
-    state.track = await normalizetrack(state.track)
-    now = dt.now(tz.utc)
+
+    track = await normalizetrack(track_id)
     
-    logging.debug("%s get_or_creating a rating: %s %s", 
-                 procname, state.user.displayname, state.track.trackname)
+    logging.debug("%s get_or_creating a rating: %s %s", procname, user.displayname, track.trackname)
     
     # fetch it or create it if it didn't already exist
-    rating, _ = await Rating.get_or_create(user_id=state.user.id,
-                                                track_id=state.track.id,
-                                                trackname=state.track.trackname,
+    rating, _ = await Rating.get_or_create(user_id=user.id,
+                                                track_id=track.id,
+                                                trackname=track.trackname,
                                                 defaults={
-                                                   "rating": value,
-                                                   "last_played": now
+                                                   "rating": 0,
+                                                   "last_played": dt.now(tz.utc)
                                                    }
                                                )
     return rating  
