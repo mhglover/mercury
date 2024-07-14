@@ -95,7 +95,10 @@ async def spotify_watcher(cred, spotify, user):
         
         # pull details for the next track in the queue
         state.nextup = await getnext()
-        await send_update(state.user.id, "nextup", "value", state.nextup.track.trackname)
+        try:
+            await send_update(state.user.id, "nextup", "value", state.nextup.track.trackname)
+        except Exception as e:
+            logging.error("error sending nextup update: %s", e)
 
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
@@ -104,9 +107,12 @@ async def spotify_watcher(cred, spotify, user):
         
         # if the track has changed, get the rating
         if state.track_changed():
-            state.rating = await get_rating(state)
-            await send_update(state.user.id, "currently", "value", state.track.trackname)
-            await send_update(state.user.id, "currently", "class", feelabout(state.rating.rating)) 
+            state.rating = await get_rating(state.user, state.track.id)
+            try:
+                await send_update(state.user.id, "currently", "value", state.track.trackname)
+                await send_update(state.user.id, "currently", "class", feelabout(state.rating.rating)) 
+            except Exception as e:
+                logging.error("error sending currently update: %s", e)
         
         # figure out the value for an autorate if we need it
         value = 4 if state.is_saved else 1
@@ -177,7 +183,7 @@ async def spotify_watcher(cred, spotify, user):
         state.position_last_cycle = state.position
         state.was_saved_last_cycle = state.is_saved
         
-        logging.info("%s sleeping %0.2ds - %s %s %d%%",
+        logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),
                         state.displaytime, state.position)
         await asyncio.sleep(state.sleep)
