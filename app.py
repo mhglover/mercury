@@ -98,6 +98,11 @@ async def before_serving():
     
     """
     procname="before_serving"
+    
+    #if the ERASE_LOCKS env var is set, delete all locks
+    if os.getenv('ERASE_LOCKS', default=None) == "True":
+        logging.warning("%s erasing all locks", procname)
+        await Lock.all().delete()    
 
     # check to see which tasks we're supposed to be running on this instance
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
