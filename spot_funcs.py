@@ -262,6 +262,10 @@ async def queue_safely(spotify, token, state):
 async def normalizetrack(track):
     """figure out where a track is and return it"""
     
+    if isinstance(track, int):
+        logging.debug("normalizetrack fetching Track record by id: %s", track)
+        track = await Track.get(id=track)
+    
     if isinstance(track, str):
         id_type = "id" if len(track) < 7 else "spotifyid"
         logging.debug("normalizetrack fetching Track record by %s: %s", id_type, track)
