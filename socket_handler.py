@@ -4,6 +4,7 @@
 import asyncio
 import json
 import logging
+import time
 from raters import quickrate 
 from socket_funcs import (
     active_websockets,
@@ -42,17 +43,50 @@ async def listener_handler(websocket, user):
 
 async def sender_handler(websocket, user):
     """send messages from the user's queue to the websocket"""
+    loop = asyncio.get_running_loop()
+    
+    start_time = loop.time()  # Start timing
+    user_queue = get_user_queue(user.id)
+    end_time = loop.time()  # End timing
+    logging.info("sender_handler - got user queue in %s seconds", end_time - start_time)
+    
     while True:
-        user_queue = get_user_queue(user.id)
-        message = await user_queue.get()
-        logging.debug("sender_handler sending queued message to %s: %s", user.displayname, message)
+        if user_queue.empty():
+            logging.debug("sender_handler - queue is empty, sleeping for 1 second")
+            await asyncio.sleep(1)
+            continue
+        
+        logging.info("sender_handler - queue has %s items", user_queue.qsize())
         try:
+            # Use get_nowait() to avoid blocking
+            message = user_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            # Break or handle empty queue appropriately
+            logging.debug("sender_handler - really is empty, sleeping for 2 seconds")
+            await asyncio.sleep(2)  # Prevent tight loop when queue is empty
+            continue
+        
+        logging.info("sender_handler - queue has %s items", user_queue.qsize())
+        
+        logging.debug("sender_handler sending queued message to %s: %s", user.displayname, message)
+        
+        messages = [x for x in json.loads(message)['update']]
+        logging.info("sender_handler - sending %s messages to %s", len(messages), user.displayname)
+        for x in messages:
+            logging.debug("id: %s, attribute: %s, value: %s", x['id'], x['attribute'], x['value']) 
+        
+        try:
+            start_time = loop.time()
+            logging.info("sender_handler - sending message to %s", user.displayname)
             await websocket.send(message)
-            user_queue.task_done()
+            end_time = loop.time()
         except Exception as e:
-            logging.error("sender_handler error for user %s: %s", user.displayname, e)
+            logging.error("sender_handler error for user %s: %s", 
+                          user.displayname, e)
             break
-
+        
+        logging.info("sender_handler - sent message in %s seconds", 
+                     end_time - start_time)
 
 async def handle_websocket(websocket, user):
     # grab the user's message queue
@@ -90,6 +124,6 @@ async def handle_websocket(websocket, user):
         logging.error("handle_websocket error for user %s: %s", user.displayname, e)
     
     finally:
-        del active_websockets[user.id]
-        # del user_message_queues[user.id]
+        if user.id in active_websockets:
+            del active_websockets[user.id]
         logging.debug("handle_websocket websocket deleted: %s", user.displayname)

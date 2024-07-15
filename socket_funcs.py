@@ -55,9 +55,9 @@ async def queue_webuser_updates(user_id: int, updates: list):
     arguments: 
         user_id: int - the user's id
         updates: list - a list of dicts, each dict contains:
-            element_id: str - the id of the element to update
-            attribute_type: str - the attribute to update
-            updated_value: str - the new value for the attribute
+            id: str - the id of the element to update
+            attribute: str - the attribute to update
+            value: str - the new value for the attribute
         
         no return value
     """
@@ -67,20 +67,26 @@ async def queue_webuser_updates(user_id: int, updates: list):
         logging.error("queue_webuser_updates - no user_queue found for user: %s", user_id)
         return
 
-    for update in updates:
-        logging.debug("queue_webuser_updates - user: %s, element: %s, attribute: %s, value: %s",
-                      user_id, update["element_id"], update["attribute_type"], update["value"])
+    # check to be sure the updates are in the proper format
+    # it must have an 'updates' key, which is a list of dicts
+    if not isinstance(updates, dict):
+        logging.error("queue_webuser_updates - updates not a dict: %s", updates)
+        return
+    if not 'update' in updates:
+        logging.error("queue_webuser_updates - updates missing 'updates' key: %s", updates)
+        return
+    if not isinstance(updates['update'], list):
+        logging.error("queue_webuser_updates - updates['updates'] not a list: %s",
+                      updates['update'])
+        return
+    
+    try:
+        logging.debug("queue_webuser_updates - sending updates to user: %s", user_id)
+        await user_queue.put(json.dumps(updates))
         
-        data = {"update": [{ 
-                    "id": update["element_id"], 
-                    update["attribute_type"]: update["value"]
-                }]}
-        try:
-            await user_queue.put(json.dumps(data))
-        
-        except RuntimeError as e:
-            logging.error("queue_webuser_updates - RuntimeError sending update to user: %s", e)
-        
-        except Exception as e:
-            logging.error("queue_webuser_updates - error sending update to user: %s", e)
+    except RuntimeError as e:
+        logging.error("queue_webuser_updates - RuntimeError sending update to user: %s", e)
+    
+    except Exception as e:
+        logging.error("queue_webuser_updates - error sending update to user: %s", e)
 

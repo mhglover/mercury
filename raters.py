@@ -106,10 +106,15 @@ async def quickrate(user, message):
                         rating.trackname, user.displayname)
     try:
         # update the trackname's color to reflect the new rating
-        updates = [
-            {"element_id": html_id, "attribute_type": "class", 
-             "value": "track-name " + feelabout(value)}
-        ]
+        updates = {
+            "update": [
+            {
+                "id": html_id,
+                "attribute": "class",
+                "value": "track-name " + feelabout(value)
+            }
+            ]
+        }
         await queue_webuser_updates(user.id, updates)
     except Exception as e:
         logging.error("Error sending update to user %s: %s", user.displayname, e)

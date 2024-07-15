@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
     socket.addEventListener('message', function (event) {
         var message = JSON.parse(event.data); // Parse the entire message
 
+        // log the message to the console
+        console.log('received:', message);
+
         //hide a block
         // {"hide": "block-id"}
         if(message.hide) {
@@ -47,38 +50,45 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
 
         // update a block
-        // {"update": [{"id": "block-id", "href/class/value": "new-value"}]}
+        // {"update": [{"id": "block-id", attribute: "href/class/value/onclick", 'value': "new-value"}]}
         if (message.update) {
+            console.log('got an update:', message.update);
             var dataList = message.update; // Access the 'update' key for the list
-
+        
             dataList.forEach(data => {
+                console.log('got some data:', data);
                 var element = document.getElementById(data.id);
+
                 if (element) {
-                    Object.keys(data).forEach(key => {
-                        console.log('received update:', data.id, key, data[key]);
-                        // Skip 'id' since it's used to select the element
-                        if (key !== 'id') {
-                            if (key === 'value') {
-                                // For 'value', update the element's value or innerText
-                                if (element.value !== undefined) {
-                                    element.value = data[key];
-                                } else {
-                                    element.innerText = data[key];
-                                }
-                            } else if (key === 'onclick') {
-                                // For 'onclick', assign a new function to the element's onclick property
-                                // Ensure the function name exists in the global scope
-                                if (typeof window[data[key]] === 'function') {
-                                    element.onclick = window[data[key]];
-                                } else {
-                                    console.warn('Function not found for onclick:', data[key]);
-                                }
-                            } else {
-                                // For 'href' and 'class', update the element's attribute
-                                element.setAttribute(key, data[key]);
-                            }
+                    // Log received update for debugging
+                    console.log('found associated element for:', data.id);
+        
+/* example of html elements to manipulate
+    <a id="currently_downrate" class="rater hate" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', -1)" href="#" >-</a>
+    <a id="currently" class="track-name love" href="/track/{{ track.track_id }}">{{ track.trackname }}</a>
+    <a id="currently_uprate" class="rater love" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', 1)" href="#">+</a>    
+*/
+
+                    console.log('updating:', data.attribute, 'to', data.value);
+                    // Handle 'onclick' attribute by assigning a new function to the element's onclick property
+                    if (data.attribute === 'onclick') {
+                        console.log('setting onclick to:', data.value);
+                        element.setAttribute("onclick", data.value);
+                        
+                    } else if (data.attribute === 'value') {
+                        // For 'value', update the element's value or innerText
+                        if (element.value !== undefined) {
+                            element.value = data.value;
+                        } else {
+                            element.innerText = data.value;
                         }
-                    });
+                    } else if (data.attribute === 'href' || data.attribute === 'class') {
+                        // For 'href' and 'class', update the element's attribute
+                        element.setAttribute(data.attribute, data.value);
+                    } else {
+                        console.warn('Unsupported attribute:', data.attribute);
+                        console.warn('with value:', data.value);
+                    }
                 }
             });
         }

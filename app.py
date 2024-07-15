@@ -5,6 +5,7 @@ from datetime import timezone as tz, datetime as dt
 import logging
 import os
 import pickle
+import signal
 import uuid
 
 import tekore as tk
@@ -17,7 +18,7 @@ from models import User, WebData, PlayHistory, WebUser, Rating, Lock
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
-from raters import rate_history, rate_saved, get_track_ratings, rate
+from raters import rate_history, rate_saved, get_track_ratings
 from raters import get_recent_playhistory_with_ratings
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
 from socket_handler import handle_websocket

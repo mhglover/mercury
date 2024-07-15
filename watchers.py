@@ -105,37 +105,6 @@ async def spotify_watcher(cred, spotify, user):
         # if state.track_changed():
             
         state.rating = await get_rating(state.user, state.track.id)
-        feel = feelabout(state.rating.rating)
-        
-        try:
-            # update the current track details
-            updates = [
-                # trackname
-                {"element_id": "currently", "attribute_type": "value", 
-                    "value": state.track.trackname},
-                # trackname feelslike color
-                {"element_id": "currently", "attribute_type": "class", 
-                    "value": f"track-name {feel}"},
-                # trackname link to track id page
-                {"element_id": "currently", "attribute_type": "href", 
-                    "value": f"/track/{state.track.id}"},
-                # rateup button onclick track id
-                {"element_id": "currently_ratedown", "attribute_type": "onclick", 
-                    "value": f"quickrate('{state.track.id}', 'currently_ratedown', '-1')"},
-                # ratedown button onclick track id
-                {"element_id": "currently_rateup", "attribute_type": "onclick", 
-                    "value": f"quickrate('{state.track.id}', 'currently_rateup', '1')"}
-            ]
-        except Exception as e:
-            logging.error("% - error updating currently playing: %s", procname, e)
-            
-        try:
-            #update the user's currently playing trackname
-            logging.info("%s sending currently update: %s", procname, state.track.trackname)
-            await queue_webuser_updates(state.user.id, updates)
-        
-        except Exception as e:
-            logging.error("error sending currently update: %s", e)
         
         # figure out the value for an autorate if we need it
         value = 4 if state.is_saved else 1
@@ -162,6 +131,27 @@ async def spotify_watcher(cred, spotify, user):
             logging.info("%s expiration set %s", procname, naturaltime(expiration))
             
         if state.track_changed():
+            # pylint: disable=line-too-long
+            try:
+                # update the current track details
+                updates = { "update": [ 
+                    {"id": "currently", "attribute": "value", "value": state.track.trackname}, # trackname
+                    {"id": "currently", "attribute": "class", "value": f"track-name {feelabout(state.rating.rating)}"},  # trackname feelslike color
+                    {"id": "currently", "attribute": "href", "value": f"/track/{state.track.id}"},  # trackname link to track id page
+                    {"id": "currently_downrate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', -1)"}, # rateup button onclick track id
+                    {"id": "currently_uprate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', 1)"} # ratedown button onclick track id
+                ]}
+            except Exception as e:
+                logging.error("%s - error updating currently playing: %s", procname, e)
+                
+            try:
+                #update the user's currently playing trackname
+                logging.debug("%s sending currently update: %s", procname, updates)
+                await queue_webuser_updates(state.user.id, updates)
+            
+            except Exception as e:
+                logging.error("error sending currently update: %s", e)
+                
             logging.info("%s -- track change -- %s%% %s ", 
                             procname, state.position_last_cycle, state.track_last_cycle.trackname)
             logging.info("%s -- now playing -- %s", procname, state.track.trackname) 

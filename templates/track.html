@@ -10,6 +10,17 @@
     
 </h1>
 
+<section aria-labelledby="current-track-section">
+  <div class="track-info">
+    <h2 class="track-title">
+        <a id="{{w.track.track_id}}_downrate" class="rater hate" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', -1)" href="#" >-</a>
+        <a id="{{w.track.track_id}}"    class="track-name {{track.color }}" href="/track/{{ track.track_id }}">{{ track.trackname }}</a>
+        <a id="{{w.track.track_id}}_uprate" class="rater love" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', 1)" href="#">+</a>    
+    </h2>
+  </div>
+</section>
+
+
 <p>comment on this track:</p>
 <form method="post" action="/track/{{w.track.track_id}}">
   <input type="text" name="comment" value="{{w.track.comment}}">
