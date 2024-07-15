@@ -9,7 +9,7 @@ from humanize import naturaltime
 from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
-from socket_funcs import send_update
+from socket_funcs import queue_webuser_update
 
 PLAYHISTORY = """
     SELECT 
@@ -101,7 +101,7 @@ async def quickrate(user, message):
                         rating.trackname, user.displayname)
         
     try:
-        await send_update(user.id, html_id, 'class', "rater " + feelabout(value))
+        await queue_webuser_update(user.id, html_id, 'class', "rater " + feelabout(value))
     except Exception as e:
         logging.error("Error sending update to user %s: %s", user.displayname, e)
 

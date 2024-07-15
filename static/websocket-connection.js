@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         //hide a block
         // {"hide": "block-id"}
         if(message.hide) {
+            console.log('hide:', message.hide);
             var element = document.getElementById(message.hide);
             if (element) {
                 element.style.display = 'none';
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         //unhide a block
         // {"show": "block-id"}
         if (message.show) {
+            console.log('show:', message.show);
             var element = document.getElementById(message.id);
             if (element) {
                 element.style.display = 'block';
@@ -47,6 +49,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // update a block
         // {"update": [{"id": "block-id", "href/class/value": "new-value"}]}
         if (message.update) {
+            console.log('update:', message.update);
             var dataList = message.update; // Access the 'update' key for the list
 
             dataList.forEach(data => {

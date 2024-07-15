@@ -9,7 +9,7 @@ from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_rating
 from spot_funcs import trackinfo, queue_safely, is_saved
-from socket_funcs import send_update
+from socket_funcs import queue_webuser_update
 from helpers import feelabout
 
 async def user_reaper():
@@ -95,22 +95,31 @@ async def spotify_watcher(cred, spotify, user):
         
         # pull details for the next track in the queue
         state.nextup = await getnext()
-        try:
-            await send_update(state.user.id, "nextup", "value", state.nextup.track.trackname)
-        except Exception as e:
-            logging.error("error sending nextup update: %s", e)
 
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
+        
+        # send an update to the user's websocket for testing
+        try:
+
+            await queue_webuser_update(state.user.id, "currently", "value", 
+                              f"{state.track.trackname} {state.displaytime}")
+        except Exception as e:
+            logging.error("error sending currently update: %s", e)
         
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         
         # if the track has changed, get the rating
         if state.track_changed():
+            
             state.rating = await get_rating(state.user, state.track.id)
+            feel = feelabout(state.rating.rating)
+            
             try:
-                await send_update(state.user.id, "currently", "value", state.track.trackname)
-                await send_update(state.user.id, "currently", "class", feelabout(state.rating.rating)) 
+                await queue_webuser_update(state.user.id, "currently", "value", 
+                              f"{state.track.trackname} {state.displaytime}")
+                await queue_webuser_update(state.user.id, "currently", "class",
+                                  f"track-name {feel}") 
             except Exception as e:
                 logging.error("error sending currently update: %s", e)
         

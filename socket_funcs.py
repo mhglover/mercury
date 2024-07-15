@@ -9,10 +9,10 @@ from helpers import feelabout
 user_message_queues = {}
 
 def get_user_queue(user_id):
+    """get the user's message queue, create it if necessary"""
     if user_id not in user_message_queues:
         user_message_queues[user_id] = asyncio.Queue()
     return user_message_queues[user_id]
-
 
 active_websockets = {}
 
@@ -20,9 +20,6 @@ async def default_message_processor(user, message):
     # no-op, just log the message
     message_data = json.loads(message)
     logging.info("default_message_processor - no action for %s: %s", user.displayname, message_data)
-
-
-
 
 
 async def send_webdata(w):
@@ -52,8 +49,11 @@ async def send_webdata(w):
         logging.error("no livesocket not found for user: %s", w.user.displayname)
 
 
-async def send_update(user_id: int, element_id: str, attribute_type: str, updated_value: str):
-    """send an update to the user's websocket
+async def queue_webuser_update(user_id: int,
+                               element_id: str,
+                               attribute_type: str,
+                               updated_value: str):
+    """send an update to the user's queue, to be handled by handle_websocket
     
     arguments: 
         user_id: int - the user's id
@@ -63,8 +63,13 @@ async def send_update(user_id: int, element_id: str, attribute_type: str, update
         
         no return value
     """
+    
+    user_queue = get_user_queue(user_id)
+    if not user_queue:
+        logging.error("queue_webuser_update - no user_queue found for user: %s", user_id)
+        return
 
-    logging.info("send_update - user: %s, element: %s, attribute: %s, value: %s",
+    logging.debug("queue_webuser_update - user: %s, element: %s, attribute: %s, value: %s",
                     user_id, element_id, attribute_type, updated_value)
     
     data = {"update": [{ 
@@ -72,12 +77,11 @@ async def send_update(user_id: int, element_id: str, attribute_type: str, update
                 attribute_type: updated_value
             }]}
     try:
-        user_queue = get_user_queue(user_id)
         await user_queue.put(json.dumps(data))
     
     except RuntimeError as e:
-        logging.error("send_update - RuntimeError sending update to user: %s", e)
+        logging.error("queue_webuser_update - RuntimeError sending update to user: %s", e)
     
     except Exception as e:
-        logging.error("send_update - error sending update to user: %s", e)
+        logging.error("queue_webuser_update - error sending update to user: %s", e)
 
