@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // update a block
         // {"update": [{"id": "block-id", "href/class/value": "new-value"}]}
         if (message.update) {
-            console.log('update:', message.update);
             var dataList = message.update; // Access the 'update' key for the list
 
             dataList.forEach(data => {
@@ -57,7 +56,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 if (element) {
                     Object.keys(data).forEach(key => {
                         // Skip 'id' since it's used to select the element
-                        if (key !== 'id') { 
+                        if (key !== 'id') {
+                            console.log('update:', data.id, key, data[key]);
                             if (key === 'value') {
                                 // For 'value', update the element's value or innerText
                                 if (element.value !== undefined) {

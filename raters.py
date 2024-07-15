@@ -9,7 +9,7 @@ from humanize import naturaltime
 from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
-from socket_funcs import queue_webuser_update
+from socket_funcs import queue_webuser_updates
 
 PLAYHISTORY = """
     SELECT 
@@ -76,6 +76,7 @@ async def quickrate(user, message):
     """
     Quick rate a track based on a message and a user object.
     """
+    logging.info("quickrate %s %s", user.displayname, message)
     message = json.loads(message)
     
     if 'quickrate' not in message:
@@ -94,14 +95,22 @@ async def quickrate(user, message):
                           rating.trackname, user.displayname)
         return
     
+    logging.info("quickrate - %s from (%s) to (%s) for track: %s", 
+                    user.displayname, rating.rating, value, rating.trackname)
     rating.rating = value
     rating.last_played = dt.now(tz.utc)
-    await rating.save()    
+    await rating.save()
+    
+    
     logging.debug("Quick rate successful for track %s by user %s", 
                         rating.trackname, user.displayname)
-        
     try:
-        await queue_webuser_update(user.id, html_id, 'class', "rater " + feelabout(value))
+        # update the trackname's color to reflect the new rating
+        updates = [
+            {"element_id": html_id, "attribute_type": "class", 
+             "value": "track-name " + feelabout(value)}
+        ]
+        await queue_webuser_updates(user.id, updates)
     except Exception as e:
         logging.error("Error sending update to user %s: %s", user.displayname, e)
 

@@ -2,10 +2,9 @@
     {% if track.trackname and track.trackname not in ["", "track_0"] and track.track_id != 0 %}
         <div class="track-info">
             <h2 class="track-title">
-                <a href="#" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', -1)" class="rater hate">-</a>
-                <a id="{{html_id}}" href="/track/{{ track.track_id }}" class="track-name {{track.color }}">{{ track.trackname }}</a>
-                <a href="#" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', 1)" class="rater love">+</a>
-    
+                <a id="{{html_id}}_downrate" class="rater hate" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', -1)" href="#" >-</a>
+                <a id="{{html_id}}" class="track-name {{track.color }}" href="/track/{{ track.track_id }}">{{ track.trackname }}</a>
+                <a id="{{html_id}}_uprate" class="rater love" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', 1)" href="#">+</a>    
             </h2>
         </div>
     {% endif %}

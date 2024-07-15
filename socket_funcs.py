@@ -49,39 +49,38 @@ async def send_webdata(w):
         logging.error("no livesocket not found for user: %s", w.user.displayname)
 
 
-async def queue_webuser_update(user_id: int,
-                               element_id: str,
-                               attribute_type: str,
-                               updated_value: str):
-    """send an update to the user's queue, to be handled by handle_websocket
+async def queue_webuser_updates(user_id: int, updates: list):
+    """send multiple updates to the user's queue, to be handled by handle_websocket
     
     arguments: 
         user_id: int - the user's id
-        element_id: str - the id of the element to update
-        attribute_type: str - the attribute to update
-        updated_value: str - the new value for the attribute
+        updates: list - a list of dicts, each dict contains:
+            element_id: str - the id of the element to update
+            attribute_type: str - the attribute to update
+            updated_value: str - the new value for the attribute
         
         no return value
     """
     
     user_queue = get_user_queue(user_id)
     if not user_queue:
-        logging.error("queue_webuser_update - no user_queue found for user: %s", user_id)
+        logging.error("queue_webuser_updates - no user_queue found for user: %s", user_id)
         return
 
-    logging.debug("queue_webuser_update - user: %s, element: %s, attribute: %s, value: %s",
-                    user_id, element_id, attribute_type, updated_value)
-    
-    data = {"update": [{ 
-                "id": element_id, 
-                attribute_type: updated_value
-            }]}
-    try:
-        await user_queue.put(json.dumps(data))
-    
-    except RuntimeError as e:
-        logging.error("queue_webuser_update - RuntimeError sending update to user: %s", e)
-    
-    except Exception as e:
-        logging.error("queue_webuser_update - error sending update to user: %s", e)
+    for update in updates:
+        logging.debug("queue_webuser_updates - user: %s, element: %s, attribute: %s, value: %s",
+                      user_id, update["element_id"], update["attribute_type"], update["value"])
+        
+        data = {"update": [{ 
+                    "id": update["element_id"], 
+                    update["attribute_type"]: update["value"]
+                }]}
+        try:
+            await user_queue.put(json.dumps(data))
+        
+        except RuntimeError as e:
+            logging.error("queue_webuser_updates - RuntimeError sending update to user: %s", e)
+        
+        except Exception as e:
+            logging.error("queue_webuser_updates - error sending update to user: %s", e)
 

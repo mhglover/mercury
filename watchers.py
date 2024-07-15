@@ -9,7 +9,7 @@ from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_rating
 from spot_funcs import trackinfo, queue_safely, is_saved
-from socket_funcs import queue_webuser_update
+from socket_funcs import queue_webuser_updates
 from helpers import feelabout
 
 async def user_reaper():
@@ -60,21 +60,21 @@ async def watchman(taskset, cred, spotify, watcher, user):
 async def spotify_watcher(cred, spotify, user):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""    
     
-    state = WatcherState(cred=cred, user=user, spotify=spotify)
-    state.user, state.token = await getuser(cred, user)
-    
-    procname = f"watcher_{state.user.displayname}"
-    logging.info("%s watcher starting", procname)
-    
-    # if we can't get a lock, another server is already watching this user
+    # if we can't get a lock, another server or process is already watching this user
     try:
-        if not await Lock.attempt_acquire_lock(procname):
+        if not await Lock.attempt_acquire_lock(user.id):
             logging.warning("another server is already watching user %s, not starting", 
                             user.displayname)
             return
     except Exception as e:
         logging.error("lock error: %s", e)
         return
+    logging.info("%s watcher starting", user.displayname)
+    
+    state = WatcherState(cred=cred, user=user, spotify=spotify)
+    state.user, state.token = await getuser(cred, user)
+    
+    procname = f"watcher_{state.user.displayname}"
     
     await state.set_watcher_name()
 
@@ -99,29 +99,37 @@ async def spotify_watcher(cred, spotify, user):
         # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
         
-        # send an update to the user's websocket for testing
-        try:
-
-            await queue_webuser_update(state.user.id, "currently", "value", 
-                              f"{state.track.trackname} {state.displaytime}")
-        except Exception as e:
-            logging.error("error sending currently update: %s", e)
-        
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         
         # if the track has changed, get the rating
-        if state.track_changed():
+        # if state.track_changed():
             
-            state.rating = await get_rating(state.user, state.track.id)
-            feel = feelabout(state.rating.rating)
+        state.rating = await get_rating(state.user, state.track.id)
+        feel = feelabout(state.rating.rating)
+        
+        try:
+            updates = [
+            {"element_id": "currently", "attribute_type": 
+                "value", "value": state.track.trackname},
+            {"element_id": "currently", "attribute_type": "class", 
+                "value": f"track-name {feel}"},
+            {"element_id": "currently", "attribute_type": "href", 
+                "value": f"/track/{state.track.id}"},
+            {"element_id": "currently_ratedown", "attribute_type": "onclick", 
+                "value": f"quickrate('{state.track.id}', 'currently_ratedown', '-1')"},
+            {"element_id": "currently_rateup", "attribute_type": "onclick", 
+                "value": f"quickrate('{state.track.id}', 'currently_rateup', '1')"}
+            ]
+        except Exception as e:
+            logging.error("% - error updating currently playing: %s", procname, e)
             
-            try:
-                await queue_webuser_update(state.user.id, "currently", "value", 
-                              f"{state.track.trackname} {state.displaytime}")
-                await queue_webuser_update(state.user.id, "currently", "class",
-                                  f"track-name {feel}") 
-            except Exception as e:
-                logging.error("error sending currently update: %s", e)
+        try:
+            #update the user's currently playing trackname
+            logging.info("%s sending currently update: %s", procname, state.track.trackname)
+            await queue_webuser_updates(state.user.id, updates)
+        
+        except Exception as e:
+            logging.error("error sending currently update: %s", e)
         
         # figure out the value for an autorate if we need it
         value = 4 if state.is_saved else 1

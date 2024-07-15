@@ -341,12 +341,16 @@ class Lock(Model):
             if lock is None:
                 await cls.create(lock_name=lock_name, instance=INSTANCE_ID)
                 return True
+            
             # if a lock from this instance already exists, update the timestamp and return True
             if lock.instance == INSTANCE_ID:
-                lock.acquired_at = dt.now(tz.utc)
-                await lock.save()
-                return True
+                # lock.acquired_at = dt.now(tz.utc)
+                # await lock.save()
+                logging.warning("lock %s already exists from this instance", lock_name)
+                return False
             
+            logging.warning("lock %s already exists from another instance: %s",
+                            lock_name, lock.instance)
             return False
             
         except exceptions.IntegrityError:
