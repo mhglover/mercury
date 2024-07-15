@@ -108,17 +108,23 @@ async def spotify_watcher(cred, spotify, user):
         feel = feelabout(state.rating.rating)
         
         try:
+            # update the current track details
             updates = [
-            {"element_id": "currently", "attribute_type": 
-                "value", "value": state.track.trackname},
-            {"element_id": "currently", "attribute_type": "class", 
-                "value": f"track-name {feel}"},
-            {"element_id": "currently", "attribute_type": "href", 
-                "value": f"/track/{state.track.id}"},
-            {"element_id": "currently_ratedown", "attribute_type": "onclick", 
-                "value": f"quickrate('{state.track.id}', 'currently_ratedown', '-1')"},
-            {"element_id": "currently_rateup", "attribute_type": "onclick", 
-                "value": f"quickrate('{state.track.id}', 'currently_rateup', '1')"}
+                # trackname
+                {"element_id": "currently", "attribute_type": "value", 
+                    "value": state.track.trackname},
+                # trackname feelslike color
+                {"element_id": "currently", "attribute_type": "class", 
+                    "value": f"track-name {feel}"},
+                # trackname link to track id page
+                {"element_id": "currently", "attribute_type": "href", 
+                    "value": f"/track/{state.track.id}"},
+                # rateup button onclick track id
+                {"element_id": "currently_ratedown", "attribute_type": "onclick", 
+                    "value": f"quickrate('{state.track.id}', 'currently_ratedown', '-1')"},
+                # ratedown button onclick track id
+                {"element_id": "currently_rateup", "attribute_type": "onclick", 
+                    "value": f"quickrate('{state.track.id}', 'currently_rateup', '1')"}
             ]
         except Exception as e:
             logging.error("% - error updating currently playing: %s", procname, e)

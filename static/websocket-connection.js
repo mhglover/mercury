@@ -55,15 +55,23 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 var element = document.getElementById(data.id);
                 if (element) {
                     Object.keys(data).forEach(key => {
+                        console.log('received update:', data.id, key, data[key]);
                         // Skip 'id' since it's used to select the element
                         if (key !== 'id') {
-                            console.log('update:', data.id, key, data[key]);
                             if (key === 'value') {
                                 // For 'value', update the element's value or innerText
                                 if (element.value !== undefined) {
                                     element.value = data[key];
                                 } else {
                                     element.innerText = data[key];
+                                }
+                            } else if (key === 'onclick') {
+                                // For 'onclick', assign a new function to the element's onclick property
+                                // Ensure the function name exists in the global scope
+                                if (typeof window[data[key]] === 'function') {
+                                    element.onclick = window[data[key]];
+                                } else {
+                                    console.warn('Function not found for onclick:', data[key]);
                                 }
                             } else {
                                 // For 'href' and 'class', update the element's attribute
