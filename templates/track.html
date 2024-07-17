@@ -1,20 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<h1 class="d-flex justify-content-between align-items-center">
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating - 1}}" class="rater hate display-4 display-md-1">-</a>
-    <span class="mx-2 text-center flex-grow-1 text-wrap">
-        <a href="/track/{{w.track.track_id}}" class="{{w.track.color}}">{{ w.track.trackname }}</a>
-    </span>
-    <a href="/track/{{w.track.track_id}}/rate/{{w.track.rating + 1}}" class="rater love display-4 display-md-1">+</a>
-    
-</h1>
-
 <section aria-labelledby="current-track-section">
   <div class="track-info">
     <h2 class="track-title">
         <a id="{{w.track.track_id}}_downrate" class="rater hate" href="/track/{{w.track.track_id}}/rate/down" >-</a>
-        <a id="{{w.track.track_id}}"    class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}">{{ track.trackname }}</a>
+        <a id="{{w.track.track_id}}"    class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}">{{ w.track.trackname }}</a>
         <a id="{{w.track.track_id}}_uprate" class="rater love" href="/track/{{w.track.track_id}}/rate/up">+</a>    
     </h2>
   </div>

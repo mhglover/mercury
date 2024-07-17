@@ -5,7 +5,9 @@
     <meta name="description" content="Mercury Radio is a collaborative music player.">
     <meta name="author" content="Matthew Harris Glover">
     <meta name="generator" content="Jinja2">
-    <meta http-equiv="refresh" content="{{ w.refresh }}">
+    {% if w.refresh != None and w.refresh != 0 %}
+      <meta http-equiv="refresh" content="{{ w.refresh }}">
+    {% endif %}
 
     <meta name="viewport" content="width=device-width, initial-scale=1">
 

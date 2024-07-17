@@ -13,13 +13,14 @@ from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 
-from models import User, WebData, PlayHistory, WebUser, Rating, Lock
+from models import User, WebData, PlayHistory, WebUser, Rating, Lock, WebTrack
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings
 from raters import get_recent_playhistory_with_ratings, get_rating
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
+from helpers import feelabout
 
 load_dotenv()  # take environment variables from .env
 
@@ -426,6 +427,15 @@ async def web_user(target_id):
         user_id=target.id
     )
     w = WebData(user=user)
+    
+    # get all the user's ratings
+    ratings = await Rating.filter(user_id=target.id).order_by('trackname').prefetch_related("track")
+    
+    w.ratings = [WebTrack(trackname=r.trackname,
+                  track_id=r.track_id,
+                  comment=r.comment if r.rating else "",
+                  color=feelabout(r.rating),
+                  rating=r.rating) for r in ratings]
     
     if request.method == "GET":
         return await render_template("user.html", w=w, u=u)

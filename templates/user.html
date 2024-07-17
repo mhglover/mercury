@@ -17,12 +17,26 @@
   <input type="text" name="displayname" value="{{u.displayname}}">
 </form>
 
-<br><br><br><br><br><br><br><br><br>
+
+{% if w.ratings|length > 0 %}
+  <h3>ratings</h3>
+  <ul>
+    {% for rating in w.ratings %}
+        <li> 
+          <a href="/track/{{rating.track_id}}" class="{{ rating.color }}">{{ rating.trackname }}</a>
+          {% if rating.comment != None and rating.comment != "" %} - comment {{rating.comment}} {% endif %}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+
+<br>
 <hr>
+<h3>DANGER</h3>
 <p>Delete your Mercury Radio account and all 
   associated records.  This won't affect 
   your Spotify account.</p>
-<h3>DANGER</h3>
+
 <p>This will delete your Mercury Radio user record, all your track ratings,
 and all your play histories.  It is not recoverable.
 It will not ask for confirmation.  It will just destroy.</p>
