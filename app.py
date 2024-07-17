@@ -559,15 +559,15 @@ async def web_track(track_id):
     return await render_template('track.html', history=history, w=w.to_dict())
 
 
-@app.route('/track/<track_id>/rate/<rating>', methods=['GET'])
-async def web_rate_track(track_id, rating):
+@app.route('/track/<track_id>/rate/<action>', methods=['GET'])
+async def web_rate_track(track_id, action):
     """rate a track"""
     
     user_id = session.get('user_id', None)
     if not user_id:
         return redirect("/")
     
-    if rating not in ['up', 'down']:
+    if action not in ['up', 'down']:
         return redirect("/")
     
     user, _ = await getuser(cred, user_id)
@@ -576,7 +576,7 @@ async def web_rate_track(track_id, rating):
     
     rating = await get_rating(user, track.id)
 
-    rating.rating = int(rating) + 1 if rating == 'up' else int(rating) - 1
+    rating.rating = int(rating.rating) + 1 if action == 'up' else int(rating.rating) - 1
     await rating.save()
     
     return redirect(request.referrer)
