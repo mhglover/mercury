@@ -9,7 +9,7 @@ from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record, rate_by_position, get_rating
 from spot_funcs import trackinfo, queue_safely, is_saved
-from socket_funcs import queue_webuser_updates
+from socket_funcs import queue_webuser_updates, queue_to_user
 from helpers import feelabout
 
 async def user_reaper():
@@ -64,6 +64,7 @@ async def spotify_watcher(cred, spotify, user):
     
     state = WatcherState(cred=cred, user=user, spotify=spotify)
     state.user, state.token = await getuser(cred, user)
+    await Lock.release_all_user_locks(state.user.id)
     
     procname = f"watcher_{state.user.displayname}"
     
@@ -122,28 +123,34 @@ async def spotify_watcher(cred, spotify, user):
             logging.info("%s expiration set %s", procname, naturaltime(expiration))
             
         if state.track_changed():
+            # remove the lock we set for the user when we sent the last rec
+            await Lock.release_lock(state.user.id)
+            # send a message like this to trigger a page update:
+            # {"reload": true}
+            messages = {"reload": 'true'}
+            await queue_to_user(state.user, messages)
             # pylint: disable=line-too-long
-            try:
-                # update the current track details
-                updates = { "update": [ 
-                    {"id": "currently", "attribute": "value", "value": state.track.trackname}, # trackname
-                    {"id": "currently", "attribute": "class", "value": f"track-name {feelabout(state.rating.rating)}"},  # trackname feelslike color
-                    {"id": "currently", "attribute": "href", "value": f"/track/{state.track.id}"},  # trackname link to track id page
-                    {"id": "currently_downrate", "attribute": "href", "value": f"/track/{state.track.id}/rate/down"}, # ratedown button href
-                    {"id": "currently_downrate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', -1)"}, # ratedown button onclick track id
-                    {"id": "currently_uprate", "attribute": "href", "value": f"/track/{state.track.id}/rate/up"}, # rateup button href
-                    {"id": "currently_uprate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', 1)"} # rateup button onclick track id
-                ]}
-            except Exception as e:
-                logging.error("%s - error updating currently playing: %s", procname, e)
+            # try:
+            #     # update the current track details
+            #     updates = { "update": [ 
+            #         {"id": "currently", "attribute": "value", "value": state.track.trackname}, # trackname
+            #         {"id": "currently", "attribute": "class", "value": f"track-name {feelabout(state.rating.rating)}"},  # trackname feelslike color
+            #         {"id": "currently", "attribute": "href", "value": f"/track/{state.track.id}"},  # trackname link to track id page
+            #         {"id": "currently_downrate", "attribute": "href", "value": f"/track/{state.track.id}/rate/down"}, # ratedown button href
+            #         {"id": "currently_downrate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', -1)"}, # ratedown button onclick track id
+            #         {"id": "currently_uprate", "attribute": "href", "value": f"/track/{state.track.id}/rate/up"}, # rateup button href
+            #         {"id": "currently_uprate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', 1)"} # rateup button onclick track id
+            #     ]}
+            # except Exception as e:
+            #     logging.error("%s - error updating currently playing: %s", procname, e)
                 
-            try:
-                #update the user's currently playing trackname
-                logging.debug("%s sending currently update: %s", procname, updates)
-                await queue_webuser_updates(state.user.id, updates)
+            # try:
+            #     #update the user's currently playing trackname
+            #     logging.debug("%s sending currently update: %s", procname, updates)
+            #     await queue_webuser_updates(state.user.id, updates)
             
-            except Exception as e:
-                logging.error("error sending currently update: %s", e)
+            # except Exception as e:
+            #     logging.error("error sending currently update: %s", e)
                 
             logging.info("%s -- track change -- %s%% %s ", 
                             procname, state.position_last_cycle, state.track_last_cycle.trackname)
@@ -179,6 +186,7 @@ async def spotify_watcher(cred, spotify, user):
                     await rate(f, state.track, value=1)
                 
                 # queue up the next track unless there are good reasons
+                # this sets a lock anybody else from sending to the users queue
                 await queue_safely(state.spotify, state.token, state)
                 
                 # don't repeat this part of the loop until we detect a track change

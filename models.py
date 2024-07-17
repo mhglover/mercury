@@ -364,6 +364,11 @@ class Lock(Model):
         await cls.filter(lock_name=lock_name, instance=INSTANCE_ID).delete()
     
     @classmethod
+    async def release_all_user_locks(cls, user_id: str) -> None:
+        # Delete the lock record
+        await cls.filter(lock_name=user_id).delete()
+    
+    @classmethod
     async def release_all_locks(cls):
         # Delete ALL the lock records muhahahaha
         await cls.filter().delete()
