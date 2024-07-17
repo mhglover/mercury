@@ -344,11 +344,14 @@ class Lock(Model):
             
             # if a lock from this instance already exists, return True
             if lock.instance == INSTANCE_ID:
-                logging.warning("lock %s already exists from this instance", lock_name)
+                logging.warning(
+                    "attempt_acquire_lock - lock %s already exists from this instance: %s",
+                    lock_name, INSTANCE_ID)
                 return True
             
-            logging.warning("lock %s already exists from another instance: %s",
-                            lock_name, lock.instance)
+            logging.warning(
+                "attempt_acquire_lock - lock %s already exists from another instance: %s",
+                lock_name, lock.instance)
             return False
             
         except exceptions.IntegrityError:
