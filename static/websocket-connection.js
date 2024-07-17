@@ -13,7 +13,8 @@ function quickrate(track_id, html_id, change) {
 }
 
 // Create a new WebSocket.
-var socket = new WebSocket(`ws://${window.location.host}/ws`);
+var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+var socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
 document.addEventListener('DOMContentLoaded', (event) => {
 
