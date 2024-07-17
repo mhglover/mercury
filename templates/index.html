@@ -6,9 +6,9 @@
     <h3 id="current-track-section">playing</h3>
     <div class="track-info">
         <h2 class="track-title">
-            <a id="currently_downrate" class="rater hate" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', -1)" href="/track/{{w.track.track_id}}/rate/down" >-</a>
-            <a id="currently" class="track-name {{track.color }}" href="/track/{{ track.track_id }}">{{ track.trackname }}</a>
-            <a id="currently_uprate" class="rater love" onclick="quickrate('{{ track.track_id }}', '{{ html_id }}', 1)" href="/track/{{w.track.track_id}}/rate/up">+</a>    
+            <a id="currently_downrate" class="rater hate" onclick="quickrate('{{ w.track.track_id }}', 'currently', -1); return false;" href="/track/{{w.track.track_id}}/rate/down" >-</a>
+            <a id="currently" class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}">{{ w.track.trackname }}</a>
+            <a id="currently_uprate" class="rater love" onclick="quickrate('{{ w.track.track_id }}', 'currently', 1); return false;" href="/track/{{w.track.track_id}}/rate/up">+</a>    
         </h2>
     </div>
 </section>
