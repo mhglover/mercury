@@ -48,7 +48,7 @@ async def sender_handler(websocket, user):
     start_time = loop.time()  # Start timing
     user_queue = get_user_queue(user.id)
     end_time = loop.time()  # End timing
-    logging.info("sender_handler - got user queue in %s seconds", end_time - start_time)
+    logging.debug("sender_handler - got user queue in %s seconds", end_time - start_time)
     
     while True:
         if user_queue.empty():
@@ -56,7 +56,7 @@ async def sender_handler(websocket, user):
             await asyncio.sleep(1)
             continue
         
-        logging.info("sender_handler - queue has %s items", user_queue.qsize())
+        logging.debug("sender_handler - queue has %s items", user_queue.qsize())
         try:
             # Use get_nowait() to avoid blocking
             message = user_queue.get_nowait()
@@ -66,18 +66,18 @@ async def sender_handler(websocket, user):
             await asyncio.sleep(2)  # Prevent tight loop when queue is empty
             continue
         
-        logging.info("sender_handler - queue has %s items", user_queue.qsize())
+        logging.debug("sender_handler - queue has %s items", user_queue.qsize())
         
         logging.debug("sender_handler sending queued message to %s: %s", user.displayname, message)
         
         messages = [x for x in json.loads(message)['update']]
-        logging.info("sender_handler - sending %s messages to %s", len(messages), user.displayname)
+        logging.debug("sender_handler - sending %s messages to %s", len(messages), user.displayname)
         for x in messages:
             logging.debug("id: %s, attribute: %s, value: %s", x['id'], x['attribute'], x['value']) 
         
         try:
             start_time = loop.time()
-            logging.info("sender_handler - sending message to %s", user.displayname)
+            logging.debug("sender_handler - sending message to %s", user.displayname)
             await websocket.send(message)
             end_time = loop.time()
         except Exception as e:
@@ -85,7 +85,7 @@ async def sender_handler(websocket, user):
                           user.displayname, e)
             break
         
-        logging.info("sender_handler - sent message in %s seconds", 
+        logging.debug("sender_handler - sent message in %s seconds", 
                      end_time - start_time)
 
 async def handle_websocket(websocket, user):
