@@ -4,7 +4,6 @@ import pickle
 import tekore as tk
 from helpers import feelabout
 from models import Track, User, WebUser
-from socket_funcs import active_websockets
 
 
 async def getuser(cred, user):
@@ -61,7 +60,6 @@ async def getuser(cred, user):
             user.token = pickle.dumps(token)
             await user.save()
     
-    user.websocket = active_websockets.get(user.id)
     
     # return the user object and an unpickled token
     return user, token

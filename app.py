@@ -5,13 +5,12 @@ from datetime import timezone as tz, datetime as dt
 import logging
 import os
 import pickle
-import signal
 import uuid
 
 import tekore as tk
 from dotenv import load_dotenv
 from humanize import naturaltime
-from quart import Quart, request, redirect, render_template, session, websocket
+from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 
 from models import User, WebData, PlayHistory, WebUser, Rating, Lock
@@ -19,9 +18,8 @@ from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
 from raters import rate_history, rate_saved, get_track_ratings
-from raters import get_recent_playhistory_with_ratings
+from raters import get_recent_playhistory_with_ratings, get_rating
 from spot_funcs import trackinfo, getrecents, normalizetrack, get_webtrack
-from socket_handler import handle_websocket
 
 load_dotenv()  # take environment variables from .env
 
@@ -198,19 +196,6 @@ async def index():
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
-
-
-@app.websocket('/ws')
-async def ws():
-    user_id = session.get('user_id', None)
-    
-    if not user_id:
-        logging.error("no user_id in session, won't connect websocket")
-        return redirect("/")
-    
-    user, _ = await getuser(cred, user_id)
-
-    await handle_websocket(websocket, user)
 
 
 @app.route('/tunein')
@@ -572,6 +557,30 @@ async def web_track(track_id):
     history = [f"{x.user.displayname} - {naturaltime(x.played_at)}" for x in ph] 
     
     return await render_template('track.html', history=history, w=w.to_dict())
+
+
+@app.route('/track/<track_id>/rate/<rating>', methods=['GET'])
+async def web_rate_track(track_id, rating):
+    """rate a track"""
+    
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect("/")
+    
+    if rating not in ['up', 'down']:
+        return redirect("/")
+    
+    user, _ = await getuser(cred, user_id)
+    
+    track = await normalizetrack(track_id)
+    
+    rating = get_rating(user, track.id)
+
+    rating.rating = int(rating) + 1 if rating == 'up' else int(rating) - 1
+    await rating.save()
+    
+    return redirect(request.referrer)
+
 
 
 async def main():

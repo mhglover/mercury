@@ -1,6 +1,5 @@
 """functions for rating tracks"""
 
-import json
 import logging
 from datetime import timezone as tz, datetime as dt
 from tortoise.functions import Sum
@@ -9,7 +8,6 @@ from humanize import naturaltime
 from models import Rating, PlayHistory, WebTrack
 from spot_funcs import trackinfo, normalizetrack
 from helpers import feelabout
-from socket_funcs import queue_webuser_updates
 
 PLAYHISTORY = """
     SELECT 
@@ -70,54 +68,6 @@ async def rate(user, track,
             await rating.save()
 
     return rating
-
-
-async def quickrate(user, message):
-    """
-    Quick rate a track based on a message and a user object.
-    """
-    logging.info("quickrate %s %s", user.displayname, message)
-    message = json.loads(message)
-    
-    if 'quickrate' not in message:
-        logging.error("no quickrate tasks in this message: %s", message)
-        return
-    
-    track_id = message['quickrate']['track_id']
-    html_id = message['quickrate']['html_id']
-    change = message['quickrate']['change']
-    
-    rating = await get_rating(user, track_id)
-    
-    value = rating.rating + change
-    if value < -4 or value > 4:
-        logging.error("Invalid rating value %s for track %s by user %s", value, 
-                          rating.trackname, user.displayname)
-        return
-    
-    logging.info("quickrate - %s from (%s) to (%s) for track: %s", 
-                    user.displayname, rating.rating, value, rating.trackname)
-    rating.rating = value
-    rating.last_played = dt.now(tz.utc)
-    await rating.save()
-    
-    
-    logging.debug("Quick rate successful for track %s by user %s", 
-                        rating.trackname, user.displayname)
-    try:
-        # update the trackname's color to reflect the new rating
-        updates = {
-            "update": [
-            {
-                "id": html_id,
-                "attribute": "class",
-                "value": "track-name " + feelabout(value)
-            }
-            ]
-        }
-        await queue_webuser_updates(user.id, updates)
-    except Exception as e:
-        logging.error("Error sending update to user %s: %s", user.displayname, e)
 
 
 async def get_rating(user, track_id) -> int:
