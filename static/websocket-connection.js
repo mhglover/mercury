@@ -50,6 +50,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
             }
         }
 
+        // Trigger page reload
+        // {"reload": "true"}
+        if (message.reload) {
+            console.log('Reloading page');
+            window.location.reload();
+        }
+
         // update a block
         // {"update": [{"id": "block-id", attribute: "href/class/value/onclick", 'value': "new-value"}]}
         if (message.update) {

@@ -90,3 +90,19 @@ async def queue_webuser_updates(user_id: int, updates: list):
     except Exception as e:
         logging.error("queue_webuser_updates - error sending update to user: %s", e)
 
+
+async def queue_to_user(user, messages):
+    """ send a json string to the user's message queue"""
+    user_queue = get_user_queue(user.id)
+    if not user_queue:
+        logging.error("queue_to_user - no user_queue found for user: %s", user.displayname)
+        return
+    try:
+        logging.debug("queue_to_user - sending messages to user: %s", user.displayname)
+        await user_queue.put(json.dumps(messages))
+        
+    except RuntimeError as e:
+        logging.error("queue_to_user - RuntimeError sending update to user: %s", e)
+    
+    except Exception as e:
+        logging.error("queue_to_user - error sending update to user: %s", e)

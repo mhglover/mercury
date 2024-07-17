@@ -70,10 +70,10 @@ async def sender_handler(websocket, user):
         
         logging.debug("sender_handler sending queued message to %s: %s", user.displayname, message)
         
-        messages = [x for x in json.loads(message)['update']]
-        logging.debug("sender_handler - sending %s messages to %s", len(messages), user.displayname)
-        for x in messages:
-            logging.debug("id: %s, attribute: %s, value: %s", x['id'], x['attribute'], x['value']) 
+        # messages = [x for x in json.loads(message)['update']]
+        # logging.debug("sender_handler - sending %s messages to %s", len(messages), user.displayname)
+        # for x in messages:
+        #     logging.debug("id: %s, attribute: %s, value: %s", x['id'], x['attribute'], x['value']) 
         
         try:
             start_time = loop.time()
