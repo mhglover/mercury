@@ -129,8 +129,10 @@ async def spotify_watcher(cred, spotify, user):
                     {"id": "currently", "attribute": "value", "value": state.track.trackname}, # trackname
                     {"id": "currently", "attribute": "class", "value": f"track-name {feelabout(state.rating.rating)}"},  # trackname feelslike color
                     {"id": "currently", "attribute": "href", "value": f"/track/{state.track.id}"},  # trackname link to track id page
-                    {"id": "currently_downrate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', -1)"}, # rateup button onclick track id
-                    {"id": "currently_uprate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', 1)"} # ratedown button onclick track id
+                    {"id": "currently_downrate", "attribute": "href", "value": f"/track/{state.track.id}/rate/down"}, # ratedown button href
+                    {"id": "currently_downrate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', -1)"}, # ratedown button onclick track id
+                    {"id": "currently_uprate", "attribute": "href", "value": f"/track/{state.track.id}/rate/up"}, # rateup button href
+                    {"id": "currently_uprate", "attribute": "onclick", "value": f"quickrate('{state.track.id}', 'currently', 1)"} # rateup button onclick track id
                 ]}
             except Exception as e:
                 logging.error("%s - error updating currently playing: %s", procname, e)
