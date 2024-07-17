@@ -2,7 +2,7 @@
 
 import logging
 from pprint import pformat
-from models import Track, PlayHistory, SpotifyID, WebTrack, Rating
+from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock
 from helpers import feelabout
 
 
@@ -215,6 +215,17 @@ async def send_to_player(spotify, token, track: Track):
 async def queue_safely(spotify, token, state):
     """make sure this is a good rec before we queue it"""
     procname = "queue_safely"
+    
+    # make sure we have the lock before we do anything
+    # if we can't get a lock, another server or process is already watching this user
+    try:
+        if not await Lock.attempt_acquire_lock(state.user.id):
+            logging.warning("%s couldn't get queue lock for user %s, won't queue rec",
+                            procname, state.user.displayname)
+            return
+    except Exception as e:
+        logging.error("queue_safely - Exception checking lock for user %s: %s", state.user.id, e)
+        return
     
     if state.nextup is None:
         # don't send a none

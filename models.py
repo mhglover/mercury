@@ -342,12 +342,10 @@ class Lock(Model):
                 await cls.create(lock_name=lock_name, instance=INSTANCE_ID)
                 return True
             
-            # if a lock from this instance already exists, update the timestamp and return True
+            # if a lock from this instance already exists, return True
             if lock.instance == INSTANCE_ID:
-                # lock.acquired_at = dt.now(tz.utc)
-                # await lock.save()
                 logging.warning("lock %s already exists from this instance", lock_name)
-                return False
+                return True
             
             logging.warning("lock %s already exists from another instance: %s",
                             lock_name, lock.instance)

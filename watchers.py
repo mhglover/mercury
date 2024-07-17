@@ -60,15 +60,6 @@ async def watchman(taskset, cred, spotify, watcher, user):
 async def spotify_watcher(cred, spotify, user):
     """start a long-running task to monitor a user's spotify usage, rate and record plays"""    
     
-    # if we can't get a lock, another server or process is already watching this user
-    try:
-        if not await Lock.attempt_acquire_lock(user.id):
-            logging.warning("another server is already watching user %s, not starting", 
-                            user.displayname)
-            return
-    except Exception as e:
-        logging.error("lock error: %s", e)
-        return
     logging.info("%s watcher starting", user.displayname)
     
     state = WatcherState(cred=cred, user=user, spotify=spotify)
