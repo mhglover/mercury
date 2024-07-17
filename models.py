@@ -344,7 +344,7 @@ class Lock(Model):
             
             # if a lock from this instance already exists, return True
             if lock.instance == INSTANCE_ID:
-                logging.warning(
+                logging.debug(
                     "attempt_acquire_lock - lock %s already exists from this instance: %s",
                     lock_name, INSTANCE_ID)
                 return True
