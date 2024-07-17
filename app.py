@@ -574,7 +574,7 @@ async def web_rate_track(track_id, rating):
     
     track = await normalizetrack(track_id)
     
-    rating = get_rating(user, track.id)
+    rating = await get_rating(user, track.id)
 
     rating.rating = int(rating) + 1 if rating == 'up' else int(rating) - 1
     await rating.save()
