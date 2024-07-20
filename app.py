@@ -533,6 +533,7 @@ async def web_track(track_id):
     user, _ = await getuser(cred, user_id)
     
     track = await normalizetrack(track_id)
+    track = await trackinfo(spotify, track.spotifyid)
     
     if request.method == "POST":
         now = dt.now(tz.utc)

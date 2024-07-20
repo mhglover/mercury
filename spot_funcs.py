@@ -1,10 +1,13 @@
 """spotify support functions"""
 
 import logging
+from tortoise.exceptions import IntegrityError
 from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock
 from helpers import feelabout
 
+
+DURATION_VARIANCE_MS = 60000  # 60 seconds in milliseconds
 
 async def is_saved(spotify, token, track):
     """check whether a track has been saved to your Spotify saved songs"""
@@ -23,53 +26,79 @@ async def trackinfo(spotify_object, check_spotifyid):
     Returns:
         track object
     """
-    # Check if the Spotify ID already exists
+    # Check if the Spotify ID has already been added to the database
     spotify_id_entry = await SpotifyID.filter(spotifyid=check_spotifyid).first()
 
     if spotify_id_entry:
         # Fetch the associated track
         logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", check_spotifyid)
         track = await Track.get(id=spotify_id_entry.track_id)
+        
+        # Check if we have a similar track in the database, within a certain duration
+        min_duration = track.duration_ms - DURATION_VARIANCE_MS
+        max_duration = track.duration_ms + DURATION_VARIANCE_MS
+        similar_tracks = (await Track
+                            .filter(duration_ms__gte=min_duration, duration_ms__lte=max_duration)
+                            .filter(trackname=track.trackname)
+                            .order_by('id')
+                            .all())
+    
+        if len(similar_tracks) > 1:
+            track = similar_tracks[0]
+            logging.info("trackinfo - found similar tracks - %s", track.trackname)
+            await consolidate_tracks(similar_tracks)
+        
+        return track
+    
+    
+    logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
+    
+    # we don't have this version of this track in the db, fetch details from Spotify
+    spotify_details = await spotify_object.track(check_spotifyid)
+    
+    trackartist = " & ".join([artist.name for artist in spotify_details.artists])
+    trackname = f"{trackartist} - {spotify_details.name}"
+    
+    # does this spotify track actually point to another track? recurse
+    if spotify_details.linked_from is not None:
+        logging.warning("trackinfo - spotifyid [%s] is linked to [%s], recursively fetching track",
+                        check_spotifyid, spotify_details.linked_from.id)
+        track = trackinfo(spotify_object, spotify_details.linked_from.id)
+        return track
+    
+    # Check if we have a similar track in the database, within a certain duration
+    min_duration = spotify_details.duration_ms - DURATION_VARIANCE_MS
+    max_duration = spotify_details.duration_ms + DURATION_VARIANCE_MS
+    similar_tracks = (await Track
+                        .filter(duration_ms__gte=min_duration, duration_ms__lte=max_duration)
+                        .filter(trackname=trackname)
+                        .order_by('id')
+                        .all())
+    
+    if len(similar_tracks) > 1:
+        track = similar_tracks[0]
+        logging.info("trackinfo - found similar tracks - %s", track.trackname)
+        await consolidate_tracks(similar_tracks)
     else:
-        logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
-        
-        # what is this?
-        spotify_details = await spotify_object.track(check_spotifyid)
-        
-        # do we have an alternative version already in the db?
-        if spotify_details.linked_from is None:
-        
-            # Create or fetch the track
-            logging.debug("trackinfo - new track [%s]", spotify_details.id)
-            trackartist = " & ".join([artist.name for artist in spotify_details.artists])
-            trackname = f"{trackartist} - {spotify_details.name}"
-            track, created = await Track.get_or_create(
-                                        duration_ms=spotify_details.duration_ms,
-                                        trackuri=spotify_details.uri,
-                                        trackname=trackname,
-                                        defaults={
-                                            'spotifyid': spotify_details.id
-                                        })
-            
-            if created:
-                logging.debug("trackinfo created track [%s][%s] for %s",
-                             track.id, track.spotifyid, track.trackname)
-            
-            # Create the SpotifyID entry
-            sid, created = await SpotifyID.get_or_create(spotifyid=check_spotifyid, track=track)
-            
-            if sid.spotifyid != track.spotifyid:
-                if created:
-                    logging.info("trackinfo - created and linked spotifyid [%s][%s] to [%s][%s] %s",
-                         sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)
-                else:
-                    logging.info("found SpotifyId [%s][%s] linked to Track [%s][%s] %s",
-                         sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)
-            
-        else:
-            logging.warning("trackinfo - spotifyid [%s] linked to [%s], recursively fetching track",
-                            sid.spotifyid, spotify_details.linked_from.id)
-            track = trackinfo(spotify_object, spotify_details.linked_from.id)
+        # Create the track
+        logging.debug("trackinfo - new track [%s] %s", spotify_details.id, trackname)
+        track = await Track.create(
+                                duration_ms=spotify_details.duration_ms,
+                                trackuri=spotify_details.uri,
+                                trackname=trackname,
+                                spotifyid=spotify_details.id
+                                )
+
+    # Create the SpotifyID entry
+    try:
+        sid, created = await SpotifyID.get_or_create(spotifyid=check_spotifyid, track=track)
+    except Exception as e:
+        logging.error("trackinfo - exception creating SpotifyID %s\n%s", check_spotifyid, e)
+        sid = None
+    
+    if created:
+        logging.info("trackinfo - linked spotifyid [%s][%s] to [%s][%s] %s",
+                    sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)   
 
     return track
 
@@ -295,3 +324,63 @@ async def normalizetrack(track):
     
     return track
 
+
+async def consolidate_tracks(tracks):
+    """if we have multiple tracks that are the same, consolidate them"""
+    
+    if len(tracks) < 2:
+        return False
+    
+    # we have multiple tracks that are the same, consolidate them
+    logging.info("consolidate_tracks consolidating %s tracks", len(tracks))
+    
+    # get the original track, based on the lowest id record
+    original_track = tracks[0]
+    
+    for t in tracks[1:]:
+        logging.info("consolidate_tracks consolidating %s into %s", t.id, original_track.id)
+        
+        # update the spotifyids associated with this track to point to the original
+        t_spotifyids = await SpotifyID.filter(track=t)
+        
+        for sid in t_spotifyids:
+            logging.info("consolidate_tracks updating SpotifyID %s to track %s", 
+                         sid.id, original_track.id)
+            sid.track_id = original_track.id
+            await sid.save()
+        
+        ratings = await Rating.filter(track_id=t.id)
+        
+        for rating in ratings:
+            # logging.info("consolidate_tracks updating Rating %s to track %s", 
+                        #  rating.id, original_track.id)
+            rating.track_id = original_track.id
+            try:
+                await rating.save()
+            except IntegrityError as e:
+                logging.debug("consolidate_tracks exception updating Rating %s\n%s", rating.id, e)
+                logging.info("consolidate_tracks deleting duplicate Rating %s", rating.id)
+                await rating.delete()
+                
+            except Exception as e:
+                logging.error("consolidate_tracks exception updating Rating %s\n%s", rating.id, e)
+        
+        playistories = await PlayHistory.filter(track_id=t.id)
+        for playhistory in playistories:
+            logging.info("consolidate_tracks updating PlayHistory %s to track %s", 
+                         playhistory.id, original_track.id)
+            playhistory.track_id = original_track.id
+            try:
+                await playhistory.save()
+            except Exception as e:
+                logging.error("consolidate_tracks exception updating PlayHistory %s\n%s",
+                              playhistory.id, e)
+
+        # delete the track
+        try:
+            await t.delete()
+        except Exception as e:
+            logging.error("consolidate_tracks exception deleting track %s\n%s", t.id, e)
+            
+        return True
+        
