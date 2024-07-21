@@ -246,6 +246,7 @@ class WatcherState():
         await self.user.save()
 
     async def refresh(self):
+        self.user = await User.get(id=self.user.id)
         self.refresh_token()
         self.ttl = dt.now(tz.utc) + timedelta(minutes=20)
         self.position = int((self.currently.progress_ms/self.currently.item.duration_ms) * 100)
