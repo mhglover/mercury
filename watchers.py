@@ -78,6 +78,7 @@ async def spotify_watcher(cred, spotify, user):
             logging.debug("%s player: %s - user: %s - ttl: %s - sleep %ss",
                          procname, state.status, state.user.status,
                          naturaltime(state.ttl), state.sleep)
+            asyncio.sleep(state.sleep)
             continue
 
         # refresh the ttl, token, do some math, etc
