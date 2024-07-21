@@ -18,7 +18,7 @@
     {% for rating in w.ratings %}
         <li> 
           <a href="/track/{{rating.track_id}}" class="{{ rating.color }}">{{ rating.trackname }}</a>
-          {% if rating.comment != None and rating.comment != "" %} - comment {{rating.comment}} {% endif %}</li>
+          {% if rating.comment != None and rating.comment != "" %} - {{rating.comment}} {% endif %}</li>
     {% endfor %}
   </ul>
 {% endif %}
