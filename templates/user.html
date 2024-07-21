@@ -11,12 +11,6 @@
   <p><a href="/user/{{u.user_id}}/impersonate">impersonate this user</a></p>
 {% endif %}
 
-{% if w.user.id == u.user_id %}
-<p>set your displayname:</p>
-<form method="post" action="/user/{{u.user_id}}">
-  <input type="text" name="displayname" value="{{u.displayname}}">
-</form>
-
 
 {% if w.ratings|length > 0 %}
   <h3>ratings</h3>
@@ -29,6 +23,12 @@
   </ul>
 {% endif %}
 
+
+{% if w.user.id == u.user_id %}
+<p>set your displayname:</p>
+<form method="post" action="/user/{{u.user_id}}">
+  <input type="text" name="displayname" value="{{u.displayname}}">
+</form>
 
 <br>
 <hr>
