@@ -251,10 +251,10 @@ async def queue_safely(spotify, token, state):
         if not await Lock.attempt_acquire_lock(state.user.id):
             logging.warning("%s couldn't get queue lock for user %s, won't queue rec",
                             procname, state.user.displayname)
-            return
+            return False
     except Exception as e:
         logging.error("queue_safely - Exception checking lock for user %s: %s", state.user.id, e)
-        return
+        return False
     
     if state.nextup is None:
         # don't send a none

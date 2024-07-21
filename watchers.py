@@ -159,7 +159,12 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # queue up the next track unless there are good reasons
                 # this sets a lock anybody else from sending to the users queue
-                await queue_safely(state.spotify, state.token, state)
+                queued = await queue_safely(state.spotify, state.token, state)
+                if not queued:
+                    # add an expiration to the next track
+                    expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
+                    logging.info("%s expiration set %s - %s", 
+                                 procname, naturaltime(expiration), state.nextup.trackname)
                 
                 # don't repeat this part of the loop until we detect a track change
                 state.finished = True
