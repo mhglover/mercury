@@ -126,7 +126,8 @@ async def rate_history(spotify, user, token, value=1, limit=20):
         track = await trackinfo(spotify, each.track.id)
         rating = await Rating.get_or_none(track_id=track.id, user_id=user.id)
         if rating:
-            logging.info("won't re-rate a history item that has already been rated")
+            logging.debug("rating already exists for %s, %s", user.displayname, track.trackname)
+            
         else:
             await rate(user, track, value=value, last_played=each.played_at)
 
