@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 
+{% if w.track.track_id %}
 <section aria-labelledby="current-track-section">
     <h3 id="current-track-section">playing</h3>
     <div class="track-info">
@@ -11,6 +12,7 @@
         </h2>
     </div>
 </section>
+{% endif %}
 
 {% if w.users|length > 0 %}
     <h3>with</h3>
