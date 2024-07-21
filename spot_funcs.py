@@ -97,7 +97,7 @@ async def trackinfo(spotify_object, check_spotifyid):
         sid = None
     
     if created:
-        logging.info("trackinfo - linked spotifyid [%s][%s] to [%s][%s] %s",
+        logging.debug("trackinfo - linked spotifyid [%s][%s] to [%s][%s] %s",
                     sid.id, sid.spotifyid, track.id, track.spotifyid, track.trackname)   
 
     return track
