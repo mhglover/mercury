@@ -78,7 +78,7 @@ async def spotify_watcher(cred, spotify, user):
             logging.debug("%s player: %s - user: %s - ttl: %s - sleep %ss",
                          procname, state.status, state.user.status,
                          naturaltime(state.ttl), state.sleep)
-            asyncio.sleep(state.sleep)
+            await asyncio.sleep(state.sleep)
             continue
 
         # refresh the ttl, token, do some math, etc
@@ -114,7 +114,7 @@ async def spotify_watcher(cred, spotify, user):
             state.recorded = True
         
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
-        if state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
+        if state.nextup and state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
             logging.info("%s recommendation started %s, no expiration", procname, state.t())
             
             # set it for approximately our endzone, which we can calculate pretty closely

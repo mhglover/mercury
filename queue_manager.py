@@ -5,15 +5,15 @@ import asyncio
 from humanize import naturaltime
 from models import Recommendation, Track, Option, WebTrack, Rating
 from users import getactiveusers
-from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks
+from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks, get_request
 from spot_funcs import validatetrack
 from raters import feelabout
 
 QUEUE_SIZE = 4
-BLOCK = "fresh popular popular spotrec"
+BLOCK = "fresh popular popular spotrec request"
 ENDZONE_THRESHOLD_MS = 30000
 
-async def queue_manager(spotify, sleep=10):
+async def queue_manager(spotify, cred, sleep=10):
     """manage the queue"""
     procname = "queue_manager"
     logging.info('%s starting', procname)
@@ -65,6 +65,9 @@ async def queue_manager(spotify, sleep=10):
             
             elif playtype == "popular":
                 track = await popular_tracks()
+            
+            elif playtype == "request":
+                track = await get_request(spotify, cred)
             
             else:
                 logging.error("%s invalid playtype [%s] returned", procname, playtype)

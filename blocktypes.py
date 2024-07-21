@@ -1,11 +1,12 @@
 """functions for pulling tracks for recommendations"""
 from datetime import timezone as tz, datetime as dt, timedelta
 import logging
+from random import choice
 from tortoise.functions import Sum
 from tortoise.expressions import Subquery
 from tortoise.contrib.postgres.functions import Random
 from models import Rating, PlayHistory, Track, Option
-from users import getactiveusers
+from users import getactiveusers, getuser
 from spot_funcs import trackinfo
 
 # each recommendation function should return a single track object by default
@@ -115,3 +116,44 @@ async def get_fresh_tracks(count=1):
     if len(tracks) == 1:
         return tracks[0]
     return tracks
+
+
+async def get_request(spotify, cred):
+    """get a track from the requests playlist from a random active user"""
+    #get a random active user
+    active_users = await getactiveusers()
+    user = choice(active_users)
+    user, token = await getuser(cred, user)
+    with spotify.token_as(token):
+        playlists = await spotify.playlists(user.spotifyid)
+    
+    request_playlist = next((x.id for x in playlists.items if x.name == "requests"), None)
+        
+    if request_playlist:
+        try:
+            with spotify.token_as(token):
+                request_playlist = await spotify.playlist(request_playlist)
+        except Exception as e:
+            logging.error("get_request exception: %s", e)
+            return await popular_tracks()
+        
+        tracks = request_playlist.tracks.items
+        
+        if len(tracks) == 0:
+            logging.debug("no tracks in the requests playlist")
+            return await popular_tracks()
+        
+        track = choice(tracks)
+        track = await trackinfo(spotify, track.track.id)
+        
+        with spotify.token_as(token):
+            try:
+                await spotify.playlist_remove(request_playlist.id, [track.trackuri])
+            except Exception as e:
+                logging.error("get_request exception: %s", e)
+                return
+        
+        if not track:
+            return await popular_tracks()
+        
+        return track

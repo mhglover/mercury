@@ -110,7 +110,7 @@ async def before_serving():
     
     if "queue_manager" in run_tasks:
         logging.debug("%s creating a queue manager task", procname)
-        qm = asyncio.create_task(queue_manager(spotify),name="queue_manager")
+        qm = asyncio.create_task(queue_manager(spotify, cred),name="queue_manager")
         taskset.add(qm)
         qm.add_done_callback(taskset.remove(qm))
 
