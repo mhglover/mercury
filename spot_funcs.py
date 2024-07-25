@@ -1,5 +1,6 @@
 """spotify support functions"""
 
+import asyncio
 import logging
 from tortoise.exceptions import IntegrityError
 from pprint import pformat
@@ -235,10 +236,25 @@ async def send_to_player(spotify, token, track: Track):
     with spotify.token_as(token):
         try:
             _ = await spotify.playback_queue_add(track.trackuri)
-        except Exception as e: 
-            logging.error(
-                "%s exception spotify.playback_queue_add %s\n%s",
-                "send_to_player", track.trackname, e)
+        except Exception as e:
+            if "502: Bad gateway" in str(e):
+                logging.warning(
+                    "send_to_player - 502 Bad gateway error occurred, retrying once: %s",
+                    track.trackname
+                )
+                await asyncio.sleep(1)  # Wait for 1 second before retrying
+                try:
+                    _ = await spotify.playback_queue_add(track.trackuri)
+                except Exception as e:
+                    logging.error(
+                        "send_to_player - retry failed, unable to add track to queue: %s\n%s",
+                        track.trackname, e
+                    )
+            else:
+                logging.error(
+                    "send_to_player - unknown exception from spotify.playback_queue_add %s\n%s",
+                    track.trackname, e
+                )
 
 
 async def queue_safely(spotify, token, state):
