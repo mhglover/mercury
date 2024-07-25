@@ -129,13 +129,15 @@ async def get_request(spotify, cred):
         user, token = await getuser(cred, user)
         with spotify.token_as(token):
             playlists = await spotify.playlists(user.spotifyid)
-        request_playlist = next((x.id for x in playlists.items if x.name == "requests"), None)
-        if request_playlist:
-            # get one song at random from the playlist
-            tracks = request_playlist.tracks.items
-            if len(tracks) > 0:
-                request = choice(tracks) # request is a playlist track object, not a Track object
-                request_candidates = {user: (token, request)}
+            request_playlist_id = next((x.id for x in playlists.items if x.name == "requests"), None)
+            if request_playlist_id:
+            # get the tracks from the playlist
+                request_playlist = await spotify.playlist(request_playlist_id)
+                tracks = request_playlist.tracks.items
+                if len(tracks) > 0:
+                    # get one song at random from the playlist
+                    request = choice(tracks) # request is a playlist track object not a Track object
+                    request_candidates = {user: (token, request)}
             
     if not request_candidates:
         logging.warning("get_request no request candidates, falling back to popular_tracks")
