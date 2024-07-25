@@ -144,7 +144,8 @@ async def get_request(spotify, cred):
         return await popular_tracks()
     
     # pick one request at random
-    user, (token, request) = choice(request_candidates)
+    user = choice(list(request_candidates.keys()))
+    token, request = request_candidates[user]
     track = await trackinfo(spotify, request.track.id)
     logging.info("get_request recommendation from user %s for track: %s", user.displayname, track.trackname)
     
