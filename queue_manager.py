@@ -56,6 +56,8 @@ async def queue_manager(spotify, cred, sleep=10):
             else:
                 playtype = "spotrec"
             
+            
+            logging.info("%s getting a [%s] recommendation", procname, playtype)
             # pick the next track to add to the queue
             if playtype == "fresh":
                 track = await get_fresh_tracks()

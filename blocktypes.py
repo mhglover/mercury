@@ -122,38 +122,41 @@ async def get_request(spotify, cred):
     """get a track from the requests playlist from a random active user"""
     #get a random active user
     active_users = await getactiveusers()
-    user = choice(active_users)
-    user, token = await getuser(cred, user)
-    with spotify.token_as(token):
-        playlists = await spotify.playlists(user.spotifyid)
+    request_candidates = {}
     
-    request_playlist = next((x.id for x in playlists.items if x.name == "requests"), None)
-        
-    if request_playlist:
-        try:
-            with spotify.token_as(token):
-                request_playlist = await spotify.playlist(request_playlist)
-        except Exception as e:
-            logging.error("get_request exception: %s", e)
-            return await popular_tracks()
-        
-        tracks = request_playlist.tracks.items
-        
-        if len(tracks) == 0:
-            logging.debug("no tracks in the requests playlist")
-            return await popular_tracks()
-        
-        track = choice(tracks)
-        track = await trackinfo(spotify, track.track.id)
-        
+    # get the users that have a "requests" playlist
+    for user in active_users:
+        user, token = await getuser(cred, user)
         with spotify.token_as(token):
-            try:
-                await spotify.playlist_remove(request_playlist.id, [track.trackuri])
-            except Exception as e:
-                logging.error("get_request exception: %s", e)
-                return
-        
-        if not track:
+            playlists = await spotify.playlists(user.spotifyid)
+        request_playlist = next((x.id for x in playlists.items if x.name == "requests"), None)
+        if request_playlist:
+            # get one song at random from the playlist
+            tracks = request_playlist.tracks.items
+            if len(tracks) > 0:
+                request = choice(tracks) # request is a playlist track object, not a Track object
+                request_candidates = {user: (token, request)}
+            
+    if not request_candidates:
+        logging.warning("get_request no request candidates, falling back to popular_tracks")
+        return await popular_tracks()
+    
+    # pick one request at random
+    user, (token, request) = choice(request_candidates)
+    track = await trackinfo(spotify, request.track.id)
+    logging.info("get_request recommendation from user %s for track: %s", user.displayname, track.trackname)
+    
+    with spotify.token_as(token):
+        # remove the track from the user's requests playlist
+        try:
+            await spotify.playlist_remove(request_playlist.id, [track.trackuri])
+        except Exception as e:
+            logging.error("get_request exception removing track from user playlist: %s", e)
             return await popular_tracks()
         
-        return track
+    if not track:
+        logging.warning("get_request no track, falling back to popular_tracks")
+        return await popular_tracks()
+    
+    logging.info("get_request recommendation, user %s: %s", user.displayname, track.trackname)
+    return track
