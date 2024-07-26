@@ -134,9 +134,7 @@ async def validatetrack(spotify, track):
 
     # check the spotid table for this track
     spotifyids = await track.spotifyids.all()
-    
-    if len(spotifyids) > 1:
-        logging.warning("validatetrack found %s spotify ids for this track", len(spotifyids))
+    logging.debug("validatetrack found %s spotify ids for this track", len(spotifyids))
     
     # cheack each of these
     for spotifyid in spotifyids:
