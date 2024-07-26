@@ -128,12 +128,22 @@ async def get_request(spotify, cred):
     for user in active_users:
         user, token = await getuser(cred, user)
         with spotify.token_as(token):
-            playlists = await spotify.playlists(user.spotifyid)
+            try:
+                playlists = await spotify.playlists(user.spotifyid)
+            except Exception as e:
+                logging.error("get_request exception attempting to get playlists for user %s: %s", user.displayname, e)
+                continue
+            
             request_playlist_id = next((x.id for x in playlists.items if x.name == "requests"), None)
             if request_playlist_id:
             # get the tracks from the playlist
-                request_playlist = await spotify.playlist(request_playlist_id)
+                try:
+                    request_playlist = await spotify.playlist(request_playlist_id)
+                except Exception as e:
+                    logging.error("get_request exception attempting to get playlist %s for user %s: %s", request_playlist_id, user.displayname, e)
+                    continue
                 tracks = request_playlist.tracks.items
+                
                 if len(tracks) > 0:
                     # get one song at random from the playlist
                     # request is a tekore.model.PlaylistTrack object not a models.Track object
