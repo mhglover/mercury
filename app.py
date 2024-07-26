@@ -280,6 +280,7 @@ async def spotify_authorization():
             "user-top-read",
             "user-follow-read",
             "playlist-read-private",
+            "playlist_modify_private"
             ]
     auth = tk.UserAuth(cred, scope)
     logging.debug("auth=%s", auth)
