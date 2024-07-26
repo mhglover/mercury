@@ -47,11 +47,17 @@ taskset = set()
 auths = {}
 
 # region: logging configuration
+
+# if there is a TIMESTAMP_LOGS env var, add timestamps to logs
+if os.getenv("TIMESTAMP_LOGS", default="False") == "True":
+    log_format = '%(asctime)s %(levelname)s %(message)s'
+else:
+    log_format = '%(levelname)s %(message)s'
+
 logging.basicConfig(
     level=logging.INFO,
     # format='%(asctime)s %(name)s %(module)s %(funcName)s %(levelname)s %(message)s',
-    # format='%(asctime)s %(levelname)s %(message)s',
-    format='%(levelname)s %(message)s',
+    format=log_format,
     datefmt="%Y-%m-%d %H:%M:%S"
     )
 
