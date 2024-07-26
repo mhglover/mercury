@@ -136,8 +136,12 @@ async def get_request(spotify, cred):
                 tracks = request_playlist.tracks.items
                 if len(tracks) > 0:
                     # get one song at random from the playlist
-                    request = choice(tracks) # request is a playlist track object not a Track object
-                    request_candidates = {user: (token, request)}
+                    # request is a tekore.model.PlaylistTrack object not a models.Track object
+                    request = choice(tracks) 
+                    track = await trackinfo(spotify, request.track.id)
+                    request_candidates = {user: (token, track)}
+                    logging.info("get_request found request from user %s: %s", user.displayname, track.trackname)
+                    
             
     if not request_candidates:
         logging.warning("get_request no request candidates, falling back to popular_tracks")
@@ -145,17 +149,16 @@ async def get_request(spotify, cred):
     
     # pick one request at random
     user = choice(list(request_candidates.keys()))
-    token, request = request_candidates[user]
-    track = await trackinfo(spotify, request.track.id)
-    logging.info("get_request recommendation from user %s for track: %s", user.displayname, track.trackname)
+    token, track = request_candidates[user]
+    logging.info("get_request selected recommendation from user %s: %s", user.displayname, track.trackname)
     
     with spotify.token_as(token):
         # remove the track from the user's requests playlist
         try:
             await spotify.playlist_remove(request_playlist.id, [track.trackuri])
         except Exception as e:
-            logging.error("get_request exception removing track from user playlist: %s", e)
-            return await popular_tracks()
+            logging.error("get_request exception attempting to remove track from playlist\nplaylistid=%s trackuri=%s: \n%s",
+                          request_playlist.id, track.trackuri, e)
         
     if not track:
         logging.warning("get_request no track, falling back to popular_tracks")
