@@ -199,6 +199,13 @@ async def index():
         # see if we need to launch a task for this user
         await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
+    # check the taskset for the queue_manager and if it's not running, start it
+    
+    if not any([x.get_name() == "queue_manager" for x in asyncio.all_tasks()]):
+        logging.info("web_app index - task manager is not running - starting it")
+        qm = asyncio.create_task(queue_manager(spotify, cred),name="queue_manager")
+        taskset.add(qm)
+        qm.add_done_callback(taskset.remove(qm))
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
