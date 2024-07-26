@@ -142,7 +142,7 @@ async def spotify_watcher(cred, spotify, user):
             # if we're listening to the endzone of the upcoming rec, it's time to remove it
             if state.next_is_now_playing():
                 await state.nextup.delete()
-                logging.info("%s removed track from Recommendations: %s", procname, state.n())
+                logging.debug("%s removed track from Recommendations: %s", procname, state.n())
                 
                 # but now get the real next queued track
                 state.nextup = await getnext()
@@ -151,7 +151,7 @@ async def spotify_watcher(cred, spotify, user):
             if not state.finished:
                 # set a rating
                 await rate(state.user, state.track, value=value)
-                logging.info("%s finishing track %s (%s)", procname, state.t(), value)
+                logging.debug("%s finishing track %s (%s)", procname, state.t(), value)
                 
                 # rate a 1 for followers
                 followers = await User.filter(watcherid=user.id)

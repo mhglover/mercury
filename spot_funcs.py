@@ -310,8 +310,8 @@ async def queue_safely(spotify, token, state):
     
     # okay fine, queue it
     await send_to_player(spotify, token, state.nextup.track)
-    logging.info("%s sent to player queue [%s] %s",
-                        procname, state.nextup.reason, state.n())
+    logging.info("%s sent to player queue for %s: [%s] %s",
+                        procname, state.user.displayname, state.nextup.reason, state.n())
     return True
 
 

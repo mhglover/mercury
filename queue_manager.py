@@ -153,7 +153,7 @@ async def set_rec_expiration(recommendation, remaining_ms) -> None:
     now = dt.now(tz.utc)
     expiration_interval = timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
     recommendation.expires_at = now + expiration_interval
-    logging.info("set_rec_expiration - %s %s",
+    logging.debug("set_rec_expiration - %s %s",
                  recommendation.trackname, naturaltime(recommendation.expires_at)
                  )
     await recommendation.save()

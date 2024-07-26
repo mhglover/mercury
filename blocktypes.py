@@ -156,6 +156,7 @@ async def get_request(spotify, cred):
         # remove the track from the user's requests playlist
         try:
             await spotify.playlist_remove(request_playlist.id, [track.trackuri])
+            logging.info("get_request remove request from playlist for %s: %s", user.displayname, track.trackname)
         except Exception as e:
             logging.error("get_request exception attempting to remove track from playlist\nplaylistid=%s trackuri=%s: \n%s",
                           request_playlist.id, track.trackuri, e)
