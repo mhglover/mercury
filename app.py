@@ -13,7 +13,7 @@ from humanize import naturaltime
 from quart import Quart, request, redirect, render_template, session
 from tortoise.contrib.quart import register_tortoise
 
-from models import User, WebData, PlayHistory, WebUser, Rating, Lock, WebTrack
+from models import User, WebData, PlayHistory, WebUser, Rating, Lock, WebTrack, Recommendation
 from watchers import user_reaper, watchman, spotify_watcher
 from users import getactiveusers, getuser, getactivewebusers
 from queue_manager import queue_manager, getnext
@@ -151,25 +151,23 @@ async def index():
     # check whether this is a known user or they need to login
     user_id = session.get('user_id', None)
     
-    nextup = await getnext(webtrack=True)
-    
     # what's happening y'all
     web_data = WebData(
-        nextup=nextup,
         ratings=[]
         )
     
     # go ahead and return if this isn't an active user
     if user_id is None or user_id == '':
+        web_data.nextup = await getnext(webtrack=True) or Recommendation()
         web_data.history = await get_recent_playhistory_with_ratings(2)
         # get outta here kid ya bother me
         return await render_template('index.html', w=web_data.to_dict())
     
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_id)
-    web_data.nextup = await getnext(webtrack=True, user=web_data.user)
+    web_data.nextup = await getnext(webtrack=True, user=web_data.user) or Recommendation()
     
-    if web_data.nextup:
+    if web_data.nextup.track_id:
         web_data.users = await getactivewebusers(web_data.nextup.track_id)
     
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
