@@ -3,6 +3,7 @@ import logging
 from datetime import timezone as tz, datetime as dt, timedelta
 import asyncio
 from humanize import naturaltime
+from tortoise.expressions import Q
 from models import Recommendation, Track, Option, WebTrack, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks, get_request
@@ -113,10 +114,19 @@ async def getnext(get_all=False, webtrack=False, user=None):
     """
     logging.debug("pulling queue from db")
     if get_all:
-        rec = await Recommendation.all().order_by("id").prefetch_related("track")
+        # this includes recommendations where expires_at is null or in the future
+        rec = await (Recommendation.filter(Q(expires_at__isnull=True) | 
+                                           Q(expires_at__gt=dt.now(tz.utc)))
+                                   .order_by("id")
+                                   .prefetch_related("track")
+                    )
         return rec
     
-    rec =  await Recommendation.first().order_by("id").prefetch_related("track")
+    rec =  await (Recommendation.first()
+                                .filter(Q(expires_at__isnull=True) | 
+                                        Q(expires_at__gt=dt.now(tz.utc)))
+                                .order_by("id")
+                                .prefetch_related("track"))
     
     if rec and webtrack:
         if user is not None:
@@ -135,6 +145,7 @@ async def getnext(get_all=False, webtrack=False, user=None):
                         )
         return track
     
+    logging.debug("getnext returning %s", rec.trackname)
     return rec
 
 
@@ -151,10 +162,8 @@ async def expire_queue() -> None:
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
     """set the timestamp for expiring a recommendation"""
     now = dt.now(tz.utc)
-    expiration_interval = timedelta(milliseconds=remaining_ms - ENDZONE_THRESHOLD_MS)
+    expiration_interval = timedelta(milliseconds=(remaining_ms - ENDZONE_THRESHOLD_MS))
     recommendation.expires_at = now + expiration_interval
-    logging.debug("set_rec_expiration - %s %s",
-                 recommendation.trackname, naturaltime(recommendation.expires_at)
-                 )
+    logging.info("set_rec_expiration - %s %s", recommendation.trackname, recommendation.expires_at)
     await recommendation.save()
     return recommendation.expires_at
