@@ -119,7 +119,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # set it for approximately our endzone, which we can calculate pretty closely
             expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.info("%s expiration set %s", procname, naturaltime(expiration))
+            logging.info("%s expiration set %s", procname, expiration)
             
         if state.track_changed():
             # remove the lock we set for the user when we sent the last rec
@@ -165,7 +165,7 @@ async def spotify_watcher(cred, spotify, user):
                     # add an expiration to the next track
                     expiration = await set_rec_expiration(state.nextup, 31000)
                     logging.info("%s expiration set %s - %s", 
-                                 procname, naturaltime(expiration), state.nextup.trackname)
+                                 procname, expiration, state.nextup.trackname)
                 
                 # don't repeat this part of the loop until we detect a track change
                 state.finished = True
