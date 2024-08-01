@@ -606,7 +606,7 @@ async def web_track(track_id):
         )
     
     ph = await PlayHistory.filter(track_id=track.id).order_by('-played_at').prefetch_related("user")
-    history = [f"{x.user.displayname} - {naturaltime(x.played_at)}" for x in ph] 
+    history = [f"{x.user.displayname} - {x.played_at} ({naturaltime(x.played_at)})" for x in ph] 
     
     return await render_template('track.html', history=history, w=w.to_dict())
 
