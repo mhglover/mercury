@@ -14,7 +14,7 @@
 
 <p>comment on this track:</p>
 <form method="post" action="/track/{{w.track.track_id}}">
-  <input type="text" name="comment" value="{{w.track.comment}}">
+  <input type="text" name="comment" value="{{w.track.comment if w.track.comment else ''}}">
 </form>
 
 
