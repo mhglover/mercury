@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """mercury radio"""
 import asyncio
-from datetime import timezone as tz, datetime as dt
+from datetime import timezone as tz, datetime as dt, timedelta as td
 import logging
 import os
 import pickle
@@ -605,10 +605,29 @@ async def web_track(track_id):
         refresh = 0
         )
     
-    ph = await PlayHistory.filter(track_id=track.id).order_by('-played_at').prefetch_related("user")
-    history = [f"{x.user.displayname} - {x.played_at} ({naturaltime(x.played_at)})" for x in ph] 
     
-    return await render_template('track.html', history=history, w=w.to_dict())
+    # ph is a PlayHistory that pulls all the times this track has been played
+    ph = await PlayHistory.filter(track_id=track.id).order_by('-played_at')
+    
+    # combine ph records with overlapping times
+    deduplicated_histories = []
+    last_played_at = None
+    timespan = td(minutes=10)
+    
+    for history in ph:
+        logging.info("last_played: %s history.played_at: %s", last_played_at, history.played_at)
+        if last_played_at is None or (last_played_at - history.played_at) > timespan:
+            ts = naturaltime(history.played_at)
+            if ts not in deduplicated_histories:
+                deduplicated_histories.append(ts)
+            last_played_at = history.played_at
+            logging.info("added %s to deduplicated_histories", history.played_at)
+    
+    
+    # # history is a list of strings displayed as list items on the track page
+    # history = [f"{x.user.displayname} - {x.played_at} ({naturaltime(x.played_at)})" for x in ph] 
+    
+    return await render_template('track.html', history=deduplicated_histories, w=w.to_dict())
 
 
 @app.route('/track/<track_id>/rate/<action>', methods=['GET'])

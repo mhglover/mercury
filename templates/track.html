@@ -24,8 +24,7 @@
     {% for rating in w.ratings %}
         <li> 
           <a href="/user/{{rating.userid}}" class="{{ rating.color }}">{{ rating.displayname }}</a>
-          {% if rating.comment != None and rating.comment != "" %} - {{rating.comment}} {% endif %}
-          {% if rating.last_played != "54 years ago" %} - {{rating.last_played}} {% endif %}</li>
+          {% if rating.comment != None and rating.comment != "" %} - {{rating.comment}} {% endif %}</li>
     {% endfor %}
   </ul>
 {% endif %}
