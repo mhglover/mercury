@@ -117,19 +117,23 @@ async def record(state, user_id=None):
     return history
 
 
-async def rate_history(spotify, user, token, value=1, limit=20):
+async def rate_history(spotify, user, token, value=1, limit=50):
     """pull recently played tracks and write ratings for them"""
     with spotify.token_as(token):
         rp = await spotify.playback_recently_played(limit=limit)
-        # rp = await spotify.all_items()
     for each in rp.items:
         track = await trackinfo(spotify, each.track.id)
         rating = await Rating.get_or_none(track_id=track.id, user_id=user.id)
         if rating:
-            logging.debug("rating already exists for %s, %s", user.displayname, track.trackname)
+            logging.debug("rate_history already exists for %s, %s", user.displayname, track.trackname)
             
         else:
-            await rate(user, track, value=value, last_played=each.played_at)
+            logging.info("rate_history - %s %s %s", user.displayname, track.trackname, value)
+            try:
+                await rate(user, track, value=value, last_played=each.played_at)
+            except Exception as e:
+                logging.error("rate_history exception rating %s\n%s", track.trackname, e)
+    logging.info("rate_history finished for %s", user.displayname)
 
 
 async def rate_saved(spotify, user, token, value=4,

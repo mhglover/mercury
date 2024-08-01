@@ -195,21 +195,25 @@ async def index():
         # web_data.rating = await get_current_rating(
             # web_data.track, activeusers=web_data.activeusers)
 
-    if web_data.user.status == "active":
-        # see if we need to launch a task for this user
-        await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
+    # if web_data.user.status == "active":
+    #     # see if we need to launch a task for this user
+    #     await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
     # check the taskset for the queue_manager and if it's not running, start it
-    
-    if not any([x.get_name() == "queue_manager" for x in asyncio.all_tasks()]):
-        logging.info("web_app index - task manager is not running - starting it")
-        qm = asyncio.create_task(queue_manager(spotify, cred),name="queue_manager")
-        taskset.add(qm)
-        qm.add_done_callback(taskset.remove(qm))
     
     # let's see it then
     return await render_template('index.html', w=web_data.to_dict())
 
+
+def _handle_task_result(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        logging.info('Task cancelled: %r', task)
+        pass  # Task cancellation should not be logged as an error.
+    except Exception:  # pylint: disable=broad-except
+        logging.exception('Exception raised by task = %r', task)
+        
 
 @app.route('/tunein')
 async def tunein():
@@ -238,12 +242,36 @@ async def tunein():
                     "web_listen - no active player for user %s, can't send track to player\n%s",
                     user.displayname, e)
     
-    await watchman(taskset, cred, spotify, spotify_watcher, user)
+    # if the queue manager isn't running, start it
+    taskname = "queue_manager"
+    if ("queue_manager" in os.getenv('RUN_TASKS', '') and
+        not any([x.get_name() == taskname for x in asyncio.all_tasks()])):
+        logging.info("tunein - %s is not running - starting it", taskname)
+        task = asyncio.create_task(queue_manager(spotify, cred),name=taskname)
+        taskset.add(task)
+        task.add_done_callback(taskset.remove(task))
+    
+    # if the user's watcher isn't running, start it
+    # await watchman(taskset, cred, spotify, spotify_watcher, user)
+    taskname = f"watcher_{user.displayname}"
+    if ("spotify_watcher" in os.getenv('RUN_TASKS', '') and
+        not any([x.get_name() == taskname for x in asyncio.all_tasks()])):
+        logging.info("tunein - %s is not running - starting it", taskname)
+        task = await asyncio.create_task(spotify_watcher(cred, spotify, user),name=taskname)
+        taskset.add(task)
+        task.add_done_callback(taskset.remove(task))
     
     # check the user's recent history for unrated tracks
-    await rate_history(spotify, user, token, limit=50)
+    rh_taskname = f"rate_history_{user.displayname}"
+    if not any([x.get_name() == rh_taskname for x in asyncio.all_tasks()]):
+        logging.info("tunein_%s starting rate_history", user.displayname)
+        rh = asyncio.create_task(rate_history(spotify, user, token, limit=50), name=rh_taskname)
+        taskset.add(rh)
+        # if I add "taskset.remove(task)" as the callback, this causes an exception.  Why? 
+        # hell if i know.  this seems to work for some reason.
+        rh.add_done_callback(_handle_task_result)
 
-
+    logging.info("tunein complete, redirecting user to index  - %s - %s", user.displayname, user.status)
     return redirect(request.referrer)
 
 
@@ -408,7 +436,7 @@ async def pullratings(user_id=None):
     with spotify.token_as(token):
 
         # rate recent history (20 items)
-        await rate_history(spotify, user, token)
+        await rate_history(spotify, user, token, limit=20)
         
         # rate saved tracks
         await rate_saved(spotify, user, token)
