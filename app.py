@@ -241,10 +241,12 @@ async def tunein():
                 logging.error(
                     "web_listen - no active player for user %s, can't send track to player\n%s",
                     user.displayname, e)
+
+    run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
     
     # if the queue manager isn't running, start it
     taskname = "queue_manager"
-    if ("queue_manager" in os.getenv('RUN_TASKS', '') and
+    if ("queue_manager" in run_tasks and
         not any([x.get_name() == taskname for x in asyncio.all_tasks()])):
         logging.info("tunein - %s is not running - starting it", taskname)
         task = asyncio.create_task(queue_manager(spotify, cred),name=taskname)
@@ -254,7 +256,7 @@ async def tunein():
     # if the user's watcher isn't running, start it
     # await watchman(taskset, cred, spotify, spotify_watcher, user)
     taskname = f"watcher_{user.displayname}"
-    if ("spotify_watcher" in os.getenv('RUN_TASKS', '') and
+    if ("spotify_watcher" in run_tasks and
         not any([x.get_name() == taskname for x in asyncio.all_tasks()])):
         logging.info("tunein - %s is not running - starting it", taskname)
         task = await asyncio.create_task(spotify_watcher(cred, spotify, user),name=taskname)
