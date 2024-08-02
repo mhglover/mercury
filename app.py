@@ -617,13 +617,13 @@ async def web_track(track_id):
     timespan = td(minutes=10)
     
     for history in ph:
-        logging.info("last_played: %s history.played_at: %s", last_played_at, history.played_at)
+        logging.debug("last_played: %s history.played_at: %s", last_played_at, history.played_at)
         if last_played_at is None or (last_played_at - history.played_at) > timespan:
             ts = naturaltime(history.played_at)
             if ts not in deduplicated_histories:
                 deduplicated_histories.append(ts)
             last_played_at = history.played_at
-            logging.info("added %s to deduplicated_histories", history.played_at)
+            logging.debug("added %s to deduplicated_histories", history.played_at)
     
     
     # # history is a list of strings displayed as list items on the track page
