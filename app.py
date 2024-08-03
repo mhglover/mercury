@@ -187,6 +187,9 @@ async def index():
         web_data.refresh = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
         track = await trackinfo(spotify, currently.item.id)
         web_data.track = await get_webtrack(track, web_data.user)
+        if web_data.track.track_id == web_data.nextup.track_id:
+            web_data.track.reason = web_data.nextup.reason
+
         try:
             web_data.users = await getactivewebusers(track)
         except Exception as e:
