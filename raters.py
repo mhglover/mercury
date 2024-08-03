@@ -1,7 +1,7 @@
 """functions for rating tracks"""
 
 import logging
-from datetime import timezone as tz, datetime as dt
+from datetime import timezone as tz, datetime as dt, timedelta as td
 from tortoise.functions import Sum
 from tortoise.transactions import in_transaction
 from humanize import naturaltime
@@ -104,8 +104,9 @@ async def record_history(state, user_id=None):
         user_id = state.user.id
     
     # check the PlayHistory table for a recent record of this track (within 15 minutes)
+    interval = dt.now(tz.utc) - td(minutes=15)
     
-    recent = await PlayHistory.get_or_none(track_id=state.track.id, last_played__gte=dt.now(tz.utc) - dt.timedelta(minutes=15))
+    recent = await PlayHistory.get_or_none(track_id=state.track.id, played_at__gte=interval)
     if recent:
         logging.warning("record_history found recent playhistory for %s", state.track.trackname)
         return recent
