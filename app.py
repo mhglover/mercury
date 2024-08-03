@@ -192,12 +192,14 @@ async def index():
         except Exception as e:
             logging.error("index - getactivewebusers\n%s", e)
         
-        # web_data.rating = await get_current_rating(
-            # web_data.track, activeusers=web_data.activeusers)
-
-    # if web_data.user.status == "active":
-    #     # see if we need to launch a task for this user
-    #     await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
+    if web_data.user.status == "active":
+        watchname = f"watcher_{web_data.user.displayname}"
+        tasknames = [x.get_name() for x in asyncio.all_tasks()]
+        if watchname in tasknames:
+            logging.debug("%s is already running, won't start another", watchname)
+        else:
+            logging.info("index - starting watcher for %s", web_data.user.displayname)
+            await watchman(taskset, cred, spotify, spotify_watcher, web_data.user)
     
     # check the taskset for the queue_manager and if it's not running, start it
     
