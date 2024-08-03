@@ -139,7 +139,8 @@ async def getnext(get_all=False, webtrack=False, user=None):
         track = WebTrack( trackname=rec.trackname,
                           track_id=rec.track.id,
                           color=feelabout(rating),
-                          rating=rating
+                          rating=rating,
+                          reason=rec.reason,
                         )
         return track
     
