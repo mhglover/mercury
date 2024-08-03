@@ -92,7 +92,7 @@ class PlayHistory(Model):
     id = fields.IntField(primary_key=True)
     played_at = fields.DatetimeField(auto_now=True)
     trackname = fields.TextField()
-    reason: str = ""
+    reason = fields.TextField(null=True)
     track: fields.ForeignKeyRelation[Track] = fields.ForeignKeyField(
         "models.Track", related_name="histories")
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
@@ -144,7 +144,6 @@ class WebTrack():
             "listeners": self.listeners,
             "reason": self.reason
         }
-
 
 @dataclass
 class WebUser():
@@ -201,7 +200,6 @@ class WebData():
             "track": (self.track.to_dict()),
             
         }
-
 
 @dataclass
 class WatcherState():
