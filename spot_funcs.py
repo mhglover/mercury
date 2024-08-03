@@ -140,7 +140,11 @@ async def validatetrack(spotify, track):
     for spotifyid in spotifyids:
         
         # does this exist in Spotify?
-        spot_track = await spotify.track(spotifyid.spotifyid, market='US')
+        try:
+            spot_track = await spotify.track(spotifyid.spotifyid, market='US')
+        except Exception as e:
+            logging.error("validatetrack exception fetching spotify track %s", e)
+            spot_track = None
         
         if track.spotifyid == spotifyid.spotifyid:
             logging.debug("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
