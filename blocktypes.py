@@ -152,10 +152,9 @@ async def get_request(spotify, cred):
                     request_candidates = {user: (token, track)}
                     logging.info("get_request found request from user %s: %s", user.displayname, track.trackname)
                     
-            
     if not request_candidates:
-        logging.debug("get_request no request candidates, falling back to popular_tracks")
-        return await popular_tracks()
+        logging.debug("get_request no request candidates")
+        return None
     
     # pick one request at random
     user = choice(list(request_candidates.keys()))
@@ -172,8 +171,8 @@ async def get_request(spotify, cred):
                           request_playlist.id, track.trackuri, e)
         
     if not track:
-        logging.warning("get_request no track, falling back to popular_tracks")
-        return await popular_tracks()
+        logging.error("get_request - something weird went wrong at the end, no track")
+        return None
     
     logging.info("get_request recommendation, user %s: %s", user.displayname, track.trackname)
     return track
