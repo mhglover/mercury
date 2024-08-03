@@ -59,21 +59,22 @@ async def queue_manager(spotify, cred, sleep=10):
             
             
             logging.info("%s getting a [%s] recommendation", procname, playtype)
+            reason = playtype
             # pick the next track to add to the queue
             if playtype == "request":
-                track = await get_request(spotify, cred)
+                track, reason = await get_request(spotify, cred)
                 if not track:
                     logging.debug("%s no request track returned, switching to popular", procname)
                     playtype = "popular"
             
             if playtype == "fresh":
-                track = await get_fresh_tracks()
+                track, reason = await get_fresh_tracks()
                 
             if playtype == "spotrec":
-                track = await spotrec_tracks(spotify)
+                track, reason = await spotrec_tracks(spotify)
             
             if playtype == "popular":
-                track = await popular_tracks()
+                track, reason = await popular_tracks()
 
             logging.info("%s adding [%s] recommendation: %s", procname, playtype, track.trackname)
             
@@ -86,7 +87,7 @@ async def queue_manager(spotify, cred, sleep=10):
             
             u = await Recommendation.create(track_id=track.id,
                                             trackname=track.trackname,
-                                            reason=playtype)
+                                            reason=reason)
             await u.save()
             recommendations.append(u)
 

@@ -34,7 +34,9 @@ async def popular_tracks(count=1, rating=0):
                                                     defaults = { "option_value": 5 })
     
     # recent_tracks = await recently_rated_tracks(days=1)
-    active_uids = [x.id for x in await getactiveusers()]
+    users = await getactiveusers()
+    active_uids = [x.id for x in users]
+    active_displaynames = [x.displayname for x in users]
     interval = dt.now() - timedelta(
                                             days=int(track_repeat_timeout.option_value))
     recent_tids = await (PlayHistory.filter(played_at__gte=interval)
@@ -59,6 +61,7 @@ async def popular_tracks(count=1, rating=0):
     logging.debug("%s pulled %s results", procname, len(ratings))
     
     tracks = [x.track for x in ratings]
+    reason = "popular tracks for %s" % ", ".join(active_displaynames)
 
     # return an empty list
     if len(tracks) == 0:
@@ -69,7 +72,7 @@ async def popular_tracks(count=1, rating=0):
     if len(tracks) == 1:
         tracks = tracks[0]
     
-    return tracks
+    return tracks, reason
 
 
 async def spotrec_tracks(spotify, count=1):
@@ -86,11 +89,13 @@ async def spotrec_tracks(spotify, count=1):
     seed_tracks = await PlayHistory.filter().order_by('-id').limit(5).prefetch_related('track')
     
     seed_spotifyids = [x.track.spotifyid for x in seed_tracks]
+    seed_names = [x.track.trackname for x in seed_tracks]
 
     logging.debug("%s getting spotify recommendations", procname)
     utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
     
     tracks = [await trackinfo(spotify, x.id) for x in utrack.tracks]
+    reason = "spotify recommendations based on %s" % ", ".join(seed_names)
         
     if len(tracks) == 0:
         logging.warning("%s no potential tracks to queue", procname)
@@ -99,12 +104,14 @@ async def spotrec_tracks(spotify, count=1):
     if len(tracks) == 1:
         tracks = tracks[0]
     
-    return tracks
+    return tracks, reason
 
 
 async def get_fresh_tracks(count=1):
     """get a list of tracks that haven't been rated by the current listeners"""
-    user_ids = [user.id for user in await getactiveusers()]
+    users = await getactiveusers()
+    user_ids = [user.id for user in users]
+    user_displaynames = [user.displayname for user in users]
     subquery = Rating.filter(user_id__in=user_ids).values('track_id')
     tracks = await ( Track.annotate(order=Random())
                           .exclude(id__in=Subquery(subquery))
@@ -112,10 +119,11 @@ async def get_fresh_tracks(count=1):
                           .exclude(duration_ms__gte=420000)
                           .order_by('order')
                           .limit(count))
+    reason = "fresh tracks for %s" % ", ".join(user_displaynames)
 
     if len(tracks) == 1:
-        return tracks[0]
-    return tracks
+        return tracks[0], reason
+    return tracks, reason
 
 
 async def get_request(spotify, cred):
@@ -175,4 +183,5 @@ async def get_request(spotify, cred):
         return None
     
     logging.info("get_request recommendation, user %s: %s", user.displayname, track.trackname)
-    return track
+    reason = "%s's request" % user.displayname
+    return track, reason
