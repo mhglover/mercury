@@ -259,6 +259,11 @@ class WatcherState():
         self.user.last_active = dt.now(tz.utc)
         await self.user.save()
         
+    def l(self):
+        """return a middle-truncated name for the previous track"""
+        if not self.track_last_cycle.id:
+            return None
+        return str(truncate_middle(self.track_last_cycle.trackname))
 
     def t(self):
         """return a middle-truncated track name"""
