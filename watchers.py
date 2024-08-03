@@ -118,12 +118,6 @@ async def spotify_watcher(cred, spotify, user):
             expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
             logging.debug("%s expiration set %s", procname, expiration)
         
-        if state.history.track_id != state.track.id:
-            # record a PlayHistory when we see a track for the first time
-            state.history = await record_history(state)
-            logging.debug("%s found or recorded play history %s", procname, state.t())
-            state.recorded = True
-        
             
         if state.track_last_cycle.id and state.track_changed():
             # remove the lock we set for the user when we sent the last rec
@@ -134,7 +128,7 @@ async def spotify_watcher(cred, spotify, user):
             # logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
             
             logging.info("%s track change from %s at %s%% to %s",
-                         procname, state.l(), state.position, state.track.trackname)
+                         procname, state.l(), state.position_last_cycle, state.track.trackname)
             
             # if we didn't finish cleanly, rate tracks based on last known position
             if state.track_last_cycle.id is not None and not state.finished:
@@ -143,6 +137,12 @@ async def spotify_watcher(cred, spotify, user):
             
             # unset some states so we can handle the next track properly
             state.recorded = state.finished = state.just_rated = False
+        
+        if state.history.track_id != state.track.id:
+            # record a PlayHistory when we see a track for the first time
+            state.history = await record_history(state)
+            logging.debug("%s found or recorded play history %s", procname, state.t())
+            state.recorded = True
 
         if state.endzone: # welcome to the end zone
             

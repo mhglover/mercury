@@ -31,7 +31,7 @@
 <ul>
     {% for track in w.history %}
         {% if track.trackname != w.track.trackname and track.trackname != w.nextup.trackname %}
-            <li><a href="/track/{{track.track_id}}" class="{{ track.color }}">{{ track.trackname }}</a></li>
+            <li><a href="/track/{{track.track_id}}" class="{{ track.color }}" title="{{ track.reason }}">{{ track.trackname }}</a></li>
         {% endif %}
     {% endfor %}
 </ul>

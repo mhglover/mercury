@@ -13,6 +13,7 @@ PLAYHISTORY = """
     SELECT 
         p.track_id,
         t.trackname,
+        string_agg(distinct p.reason, ', ') as reason,
         MAX(p.played_at) as played_at,
         array_agg(distinct u.displayname) as listeners
     FROM 
@@ -106,7 +107,7 @@ async def record_history(state, user_id=None):
     # check the PlayHistory table for a recent record of this track (within 15 minutes)
     interval = dt.now(tz.utc) - td(minutes=15)
     
-    recent = await PlayHistory.get_or_none(track_id=state.track.id, played_at__gte=interval)
+    recent = await PlayHistory.first().filter(track_id=state.track.id, played_at__gte=interval)
     if recent:
         logging.warning("record_history found recent playhistory, not re-recording %s", state.t())
         return recent
@@ -222,7 +223,8 @@ async def get_recent_playhistory_with_ratings(user_id: int):
             color=feelabout(rating.rating if rating else None),
             rating=rating.rating if rating else None,
             timestamp=naturaltime(playhistory['played_at']),
-            listeners=playhistory['listeners']
+            listeners=playhistory['listeners'],
+            reason=playhistory['reason']
         )
 
         results.append(webtrack)
