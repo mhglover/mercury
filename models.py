@@ -127,6 +127,7 @@ class WebTrack():
     rating: int = 0
     comment: str = ""
     timestamp: str = ""
+    reason: str = ""
     listeners: list = field(default_factory=list)
 
     def to_dict(self):
@@ -139,7 +140,8 @@ class WebTrack():
             "rating": self.rating,
             "comment": self.comment,
             "timestamp": self.timestamp,
-            "listeners": self.listeners
+            "listeners": self.listeners,
+            "reason": self.reason
         }
 
 
