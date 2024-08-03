@@ -7,7 +7,7 @@ from humanize import naturaltime
 from models import User, WatcherState, Lock
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
-from raters import rate, record, rate_by_position, get_rating
+from raters import rate, record_history, rate_by_position, get_rating
 from spot_funcs import trackinfo, queue_safely, is_saved
 
 async def user_reaper():
@@ -109,7 +109,7 @@ async def spotify_watcher(cred, spotify, user):
         
         if state.history.track_id != state.track.id:
             # record a PlayHistory when we see a track for the first time
-            state.history = await record(state)
+            state.history = await record_history(state)
             logging.info("%s recorded play history %s", procname, state.t())
             state.recorded = True
         

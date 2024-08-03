@@ -90,7 +90,7 @@ async def get_rating(user, track_id) -> int:
     return rating  
 
 
-async def record(state, user_id=None):
+async def record_history(state, user_id=None):
     """write a record to the play history table"""
     logging.debug("recording play history %s %s", state.user.displayname, state.t())
     
@@ -102,6 +102,13 @@ async def record(state, user_id=None):
     
     if not user_id:
         user_id = state.user.id
+    
+    # check the PlayHistory table for a recent record of this track (within 15 minutes)
+    
+    recent = await PlayHistory.get_or_none(track_id=state.track.id, last_played__gte=dt.now(tz.utc) - dt.timedelta(minutes=15))
+    if recent:
+        logging.warning("record_history found recent playhistory for %s", state.track.trackname)
+        return recent
     
     try:
         history = await PlayHistory.create(
