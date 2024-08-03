@@ -145,6 +145,10 @@ async def getnext(get_all=False, webtrack=False, user=None):
                         )
         return track
     
+    if rec is None:
+        logging.error("getnext returning None - why isn't there a ready recommendation?")
+        return None
+    
     logging.debug("getnext returning %s", rec.trackname)
     return rec
 
@@ -164,6 +168,6 @@ async def set_rec_expiration(recommendation, remaining_ms) -> None:
     now = dt.now(tz.utc)
     expiration_interval = timedelta(milliseconds=(remaining_ms - ENDZONE_THRESHOLD_MS))
     recommendation.expires_at = now + expiration_interval
-    logging.info("set_rec_expiration - %s %s", recommendation.trackname, recommendation.expires_at)
+    logging.debug("set_rec_expiration - %s %s", recommendation.trackname, recommendation.expires_at)
     await recommendation.save()
     return recommendation.expires_at
