@@ -154,7 +154,7 @@ async def get_request(spotify, cred):
                     
             
     if not request_candidates:
-        logging.warning("get_request no request candidates, falling back to popular_tracks")
+        logging.debug("get_request no request candidates, falling back to popular_tracks")
         return await popular_tracks()
     
     # pick one request at random

@@ -115,11 +115,11 @@ async def spotify_watcher(cred, spotify, user):
         
         # we're playing a rec! has anybody set this rec to expire yet? no? I will.
         if state.nextup and state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
-            logging.info("%s recommendation started %s, no expiration", procname, state.t())
+            logging.debug("%s recommendation started %s, no expiration", procname, state.t())
             
             # set it for approximately our endzone, which we can calculate pretty closely
             expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.info("%s expiration set %s", procname, expiration)
+            logging.debug("%s expiration set %s", procname, expiration)
             
         if state.track_changed():
             # remove the lock we set for the user when we sent the last rec
