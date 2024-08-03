@@ -229,10 +229,12 @@ async def get_recent_playhistory_with_ratings(user_id: int):
 
 async def rate_by_position(user, last_track, last_position, value=1):
     """set the rating for a track based on the last position when we last saw it"""
-    if last_position <=33:
+    if last_position <=20:
         value = -2
-    elif last_position <=80:
+    elif last_position <=40:
         value = -1
+    elif last_position <=80:
+        value = 0
     
     await rate(user, last_track, value, downrate=True)
     logging.info("%s track change detected, position autorate %d%% %s %s",
