@@ -116,7 +116,8 @@ async def record_history(state, user_id=None):
             track_id=state.track.id,
             trackname=state.track.trackname,
             user_id=user_id,
-            rating_id=state.rating.id
+            rating_id=state.rating.id,
+            reason=state.reason
         )
     except Exception as e:
         logging.error("record exception creating playhistory\n%s", e)

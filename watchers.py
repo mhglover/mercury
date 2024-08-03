@@ -107,27 +107,34 @@ async def spotify_watcher(cred, spotify, user):
             state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
+        # we're playing a rec! has anybody set this rec to expire yet? no? I will.
+        if state.nextup and state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
+            logging.debug("%s recommendation started %s, no expiration", procname, state.t())
+            
+            # note the reason we're playing this track
+            state.reason = state.nextup.reason
+            
+            # set the expiration for approximately our endzone, which we can calculate pretty closely
+            expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
+            logging.debug("%s expiration set %s", procname, expiration)
+        
         if state.history.track_id != state.track.id:
             # record a PlayHistory when we see a track for the first time
             state.history = await record_history(state)
-            logging.info("%s recorded play history %s", procname, state.t())
+            logging.debug("%s found or recorded play history %s", procname, state.t())
             state.recorded = True
         
-        # we're playing a rec! has anybody set this rec to expire yet? no? I will.
-        if state.nextup and state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
-            logging.info("%s recommendation started %s, no expiration", procname, state.t())
             
-            # set it for approximately our endzone, which we can calculate pretty closely
-            expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.debug("%s expiration set %s", procname, expiration)
-            
-        if state.track_changed():
+        if state.track_last_cycle.id and state.track_changed():
             # remove the lock we set for the user when we sent the last rec
             await Lock.release_lock(state.user.id)
                 
-            logging.info("%s -- track change -- %s%% %s ", 
-                            procname, state.position_last_cycle, state.track_last_cycle.trackname)
-            logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
+            # logging.info("%s -- track change -- %s%% %s ", 
+            #                 procname, state.position_last_cycle, state.track_last_cycle.trackname)
+            # logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
+            
+            logging.info("%s track change from %s at %s%% to %s",
+                         procname, state.l(), state.position, state.track.trackname)
             
             # if we didn't finish cleanly, rate tracks based on last known position
             if state.track_last_cycle.id is not None and not state.finished:
@@ -175,7 +182,7 @@ async def spotify_watcher(cred, spotify, user):
         state.position_last_cycle = state.position
         state.was_saved_last_cycle = state.is_saved
         
-        logging.info("%s sleeping %0.2ds - %s %s %d%%",
+        logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),
                         state.displaytime, state.position)
         await asyncio.sleep(state.sleep)

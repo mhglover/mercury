@@ -215,6 +215,7 @@ class WatcherState():
     nextup: Recommendation = field(default_factory=Recommendation)
     
     track: Track = field(default_factory=Track)
+    reason: str = ""
     rating: Rating = field(default_factory=Rating)
     history: PlayHistory = field(default_factory=PlayHistory)
     displaytime: str = ""
@@ -258,7 +259,7 @@ class WatcherState():
         logging.debug("updating ttl, last_active and status: %s", naturaltime(self.ttl))
         self.user.last_active = dt.now(tz.utc)
         await self.user.save()
-        
+
     def l(self):
         """return a middle-truncated name for the previous track"""
         if not self.track_last_cycle.id:
