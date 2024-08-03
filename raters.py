@@ -95,7 +95,7 @@ async def record_history(state, user_id=None):
     logging.debug("recording play history %s %s", state.user.displayname, state.t())
     
     if state.recorded:
-        logging.warning("state says recorded already, not re-recording")
+        logging.warning("record_history state.recorded is true, not re-recording %s", state.t())
         return state.rating
     
     state.recorded = True
@@ -108,7 +108,7 @@ async def record_history(state, user_id=None):
     
     recent = await PlayHistory.get_or_none(track_id=state.track.id, played_at__gte=interval)
     if recent:
-        logging.warning("record_history found recent playhistory for %s", state.track.trackname)
+        logging.warning("record_history found recent playhistory, not re-recording %s", state.t())
         return recent
     
     try:
@@ -122,6 +122,7 @@ async def record_history(state, user_id=None):
         logging.error("record exception creating playhistory\n%s", e)
         history = None  # Ensure history is defined even in case of an exception
     
+    logging.info("record_history wrote history %s", state.t())
     return history
 
 
