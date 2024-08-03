@@ -6,7 +6,7 @@
     <h3 id="current-track-section">playing</h3>
     <div class="track-info">
         <h2 class="track-title">
-            <a id="currently" class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}">{{ w.track.trackname }}</a>
+            <a id="currently" class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}" title="{{ w.track.reason }}">{{ w.track.trackname }}</a>
             <br>
             <a id="currently_uprate" class="rater love" href="/track/{{w.track.track_id}}/rate/up">+</a>
             <a id="currently_downrate" class="rater hate" href="/track/{{w.track.track_id}}/rate/down" >-</a>
