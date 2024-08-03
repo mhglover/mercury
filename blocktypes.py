@@ -162,7 +162,7 @@ async def get_request(spotify, cred):
                     
     if not request_candidates:
         logging.debug("get_request no request candidates")
-        return None
+        return None, "no request candidates"
     
     # pick one request at random
     user = choice(list(request_candidates.keys()))
@@ -180,7 +180,7 @@ async def get_request(spotify, cred):
         
     if not track:
         logging.error("get_request - something weird went wrong at the end, no track")
-        return None
+        return None, "error selecting candidate"
     
     logging.info("get_request recommendation, user %s: %s", user.displayname, track.trackname)
     reason = "%s's request" % user.displayname
