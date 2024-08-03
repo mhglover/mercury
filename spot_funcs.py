@@ -136,7 +136,7 @@ async def validatetrack(spotify, track):
     spotifyids = await track.spotifyids.all()
     logging.debug("validatetrack found %s spotify ids for this track", len(spotifyids))
     
-    # cheack each of these
+    # check each of these
     for spotifyid in spotifyids:
         
         # does this exist in Spotify?
@@ -164,10 +164,8 @@ async def validatetrack(spotify, track):
 
         # okay, it's real.  is this playable in the US?
         if not spot_track.is_playable:
-            logging.error("validatetrack track is unplayable [%s], rejecting", spotifyid.spotifyid)
-            logging.error("exeternal_urls: %s\nrestrictions: %s",
-                          spot_track.external_urls, spot_track.restrictions)
-            logging.error(pformat(spot_track))
+            logging.error("validatetrack rejected unplayable track: %s [%s](%s)",
+                          track.trackname, spotifyid.spotifyid, spot_track.restrictions)
             return False
     
     return True
