@@ -97,7 +97,6 @@ async def before_serving():
     Tasks:
     - If "queue_manager" is in the `RUN_TASKS` environment variable it creates a queue manager task.
     - If "spotify_watcher" is in the `RUN_TASKS` env var, it performs the following steps:
-        - Updates the `watcherid` field of all users to an empty string.
         - Launches a user_reaper task.
         - Pulls active users for spotify watchers.
         - Calls the `watchman` function for each active user.
@@ -122,8 +121,6 @@ async def before_serving():
         qm.add_done_callback(taskset.remove(qm))
 
     if "spotify_watcher" in run_tasks:
-        
-        await User.select_for_update().exclude(watcherid='').update(watcherid='')
 
         logging.debug("%s launching a user_reaper task", procname)
         reaper_task = asyncio.create_task(user_reaper(), name="user_reaper")
@@ -556,7 +553,7 @@ async def user_impersonate(target_id):
 @app.route('/user/<target_id>/follow')
 async def follow(target_id):
     """listen with a friend"""
-    procname = "follow"
+    procname = "user_follow"
     user_id = session.get('user_id', None)
     if not user_id:
         return redirect(request.referrer)
@@ -571,8 +568,8 @@ async def follow(target_id):
     user.watcherid = target_id
     await user.save()
     
-    logging.info("%s user %s is following user #%s", procname, user.displayname, target_id)
-    return redirect(request.referrer)
+    logging.info("%s set watcherid for %s to #%s", procname, user.displayname, target_id)
+    return redirect("/")
 
 
 @app.route('/track/<track_id>', methods=['GET', 'POST'])
