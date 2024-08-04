@@ -232,7 +232,7 @@ async def get_recent_playhistory_with_ratings(user_id: int):
     return results
 
 
-async def rate_by_position(user, last_track, last_position, value=1):
+async def rate_by_position(user, last_track, last_position):
     """set the rating for a track based on the last position when we last saw it"""
     if last_position <=20:
         value = -2

@@ -131,7 +131,7 @@ async def before_serving():
         reaper_task.add_done_callback(taskset.remove(reaper_task))
         
         logging.debug("%s pulling active users for spotify watchers", procname)
-        active_users = await getactiveusers()
+        active_users = await User.filter(status="active")
         for user in active_users:
             await watchman(taskset, cred, spotify, spotify_watcher, user)
         
@@ -178,9 +178,16 @@ async def index():
     
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     
-    # what's the player's current status?
-    with spotify.token_as(token):
-        currently = await spotify.playback_currently_playing()
+    # if the user is following someone, get their details
+    if web_data.user.status == "following" and web_data.user.watcherid != '':
+        watcher_id = await User.get(id=web_data.user.watcherid)
+        listener, listener_token = await getuser(cred, watcher_id)
+        with spotify.token_as(listener_token):
+            currently = await spotify.playback_currently_playing()
+    else:
+        # what's the player's current status?
+        with spotify.token_as(token):
+            currently = await spotify.playback_currently_playing()
 
     # set some return values
     if currently is not None:
@@ -564,8 +571,7 @@ async def follow(target_id):
     user.watcherid = target_id
     await user.save()
     
-    logging.info("%s updated user %s - status: %s - watcherid: %s", 
-                         procname, user_id, user.status, user.watcherid)
+    logging.info("%s user %s is following user #%s", procname, user.displayname, target_id)
     return redirect(request.referrer)
 
 

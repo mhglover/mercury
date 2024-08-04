@@ -259,6 +259,14 @@ class WatcherState():
         logging.debug("updating ttl, last_active and status: %s", naturaltime(self.ttl))
         self.user.last_active = dt.now(tz.utc)
         await self.user.save()
+        # update follower ttls
+        logging.debug("updating follower ttls")
+        followers = await User.filter(watcherid=self.user.id)
+        for each in followers:
+            each.last_active = dt.now(tz.utc)
+            await each.save()
+            logging.info("updated follower ttl for %s", each.displayname)
+        
 
     def l(self):
         """return a middle-truncated name for the previous track"""

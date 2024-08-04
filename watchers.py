@@ -133,7 +133,14 @@ async def spotify_watcher(cred, spotify, user):
             # if we didn't finish cleanly, rate tracks based on last known position
             if state.track_last_cycle.id is not None and not state.finished:
                 await rate_by_position(user, state.track_last_cycle, 
-                                       state.position_last_cycle, value=value)
+                                       state.position_last_cycle)
+                
+                # position-rate for followers as well, will downrate if necessary
+                followers = await User.filter(watcherid=user.id)
+                for f in followers:
+                    logging.info("%s position-rating %s for %s", procname, value, f.displayname)
+                    await rate_by_position(f, state.track_last_cycle, 
+                                           state.position_last_cycle)
             
             # unset some states so we can handle the next track properly
             state.recorded = state.finished = state.just_rated = False
@@ -160,10 +167,12 @@ async def spotify_watcher(cred, spotify, user):
                 await rate(state.user, state.track, value=value)
                 logging.debug("%s finishing track %s (%s)", procname, state.t(), value)
                 
-                # rate a 1 for followers
+                # rate a 1 for followers when we finish a track - won't auto downrate
                 followers = await User.filter(watcherid=user.id)
+                fvalue = 1
                 for f in followers:
-                    await rate(f, state.track, value=1)
+                    logging.info("%s rating %s for %s", procname, fvalue, f.displayname)
+                    await rate(f, state.track, value=fvalue)
                 
                 # queue up the next track unless there are good reasons
                 # this sets a lock anybody else from sending to the users queue
