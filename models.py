@@ -265,7 +265,7 @@ class WatcherState():
         for each in followers:
             each.last_active = dt.now(tz.utc)
             await each.save()
-            logging.info("updated follower ttl for %s", each.displayname)
+            logging.debug("updated follower ttl for %s", each.displayname)
         
 
     def l(self):
