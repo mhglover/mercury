@@ -239,17 +239,6 @@ async def tunein():
     user.status = "active"
     logging.info("user tuning in - %s", user.displayname)
     await user.save()
-    
-    if (nextup and currently and currently.is_playing is False):
-        with spotify.token_as(token):
-            logging.info("playback_start_tracks - %s - %s",
-                         user.displayname, nextup.track.trackname)
-            try:
-                await spotify.playback_start_tracks([nextup.track.spotifyid])
-            except tk.NotFound as e:
-                logging.error(
-                    "web_listen - no active player for user %s, can't send track to player\n%s",
-                    user.displayname, e)
 
     run_tasks = os.getenv('RUN_TASKS', 'spotify_watcher queue_manager web_ui')
     
