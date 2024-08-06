@@ -158,7 +158,7 @@ async def get_request(spotify, cred):
                     request = choice(tracks) 
                     track = await trackinfo(spotify, request.track.id)
                     request_candidates = {user: (token, track)}
-                    logging.info("get_request found request from user %s: %s", user.displayname, track.trackname)
+                    logging.debug("get_request found request from user %s: %s", user.displayname, track.trackname)
                     
     if not request_candidates:
         logging.debug("get_request no request candidates")
@@ -167,13 +167,13 @@ async def get_request(spotify, cred):
     # pick one request at random
     user = choice(list(request_candidates.keys()))
     token, track = request_candidates[user]
-    logging.info("get_request selected recommendation from user %s: %s", user.displayname, track.trackname)
+    logging.debug("get_request selected recommendation from user %s: %s", user.displayname, track.trackname)
     
     with spotify.token_as(token):
         # remove the track from the user's requests playlist
         try:
             await spotify.playlist_remove(request_playlist.id, [track.trackuri])
-            logging.info("get_request remove request from playlist for %s: %s", user.displayname, track.trackname)
+            logging.debug("get_request remove request from playlist for %s: %s", user.displayname, track.trackname)
         except Exception as e:
             logging.error("get_request exception attempting to remove track from playlist\nplaylistid=%s trackuri=%s: \n%s",
                           request_playlist.id, track.trackuri, e)
@@ -182,6 +182,6 @@ async def get_request(spotify, cred):
         logging.error("get_request - something weird went wrong at the end, no track")
         return None, "error selecting candidate"
     
-    logging.info("get_request recommendation, user %s: %s", user.displayname, track.trackname)
+    logging.debug("get_request recommendation, user %s: %s", user.displayname, track.trackname)
     reason = "%s's request" % user.displayname
     return track, reason

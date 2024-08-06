@@ -127,8 +127,9 @@ async def spotify_watcher(cred, spotify, user):
             #                 procname, state.position_last_cycle, state.track_last_cycle.trackname)
             # logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
             
-            logging.info("%s track change from %s at %s%% to %s",
-                         procname, state.l(), state.position_last_cycle, state.track.trackname)
+            logging.info("%s track change from %s at %s%% to %s (%s)",
+                         procname, state.l(), state.position_last_cycle, 
+                         state.track.trackname, state.reason)
             
             # if we didn't finish cleanly, rate tracks based on last known position
             if state.track_last_cycle.id is not None and not state.finished:

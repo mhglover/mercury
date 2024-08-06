@@ -109,7 +109,7 @@ async def record_history(state, user_id=None):
     
     recent = await PlayHistory.first().filter(track_id=state.track.id, played_at__gte=interval)
     if recent:
-        logging.warning("record_history found recent playhistory, not re-recording %s", state.t())
+        logging.debug("record_history found recent playhistory, not re-recording %s", state.t())
         return recent
     
     try:
