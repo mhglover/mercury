@@ -51,6 +51,7 @@ async def watchman(taskset, cred, spotify, watcher, user):
     
     # add this user task to the global tasks set
     added = taskset.add(user_task)
+    user_task.add_done_callback(taskset.remove)
     if added is not None:
         logging.error("%s failed adding task to taskset?")
 
@@ -79,6 +80,8 @@ async def spotify_watcher(cred, spotify, user):
                          procname, state.status, state.user.status,
                          naturaltime(state.ttl), state.sleep)
             await asyncio.sleep(state.sleep)
+            # update the user record from the database
+            state.user = await User.get(id=state.user.id)
             continue
 
         # refresh the ttl, token, do some math, etc
@@ -191,6 +194,9 @@ async def spotify_watcher(cred, spotify, user):
         state.track_last_cycle = state.track
         state.position_last_cycle = state.position
         state.was_saved_last_cycle = state.is_saved
+        
+        # update the user record from the database
+        state.user = await User.get(id=state.user.id)
         
         logging.debug("%s sleeping %0.2ds - %s %s %d%%",
                         procname, state.sleep, state.t(),
