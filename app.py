@@ -251,14 +251,7 @@ async def tunein():
         task.add_done_callback(taskset.remove(task))
     
     # if the user's watcher isn't running, start it
-    # await watchman(taskset, cred, spotify, spotify_watcher, user)
-    taskname = f"watcher_{user.displayname}"
-    if ("spotify_watcher" in run_tasks and
-        not any([x.get_name() == taskname for x in asyncio.all_tasks()])):
-        logging.info("tunein - %s is not running - starting it", taskname)
-        task = await asyncio.create_task(spotify_watcher(cred, spotify, user),name=taskname)
-        taskset.add(task)
-        task.add_done_callback(taskset.remove(task))
+    await watchman(taskset, cred, spotify, spotify_watcher, user)
     
     # check the user's recent history for unrated tracks
     rh_taskname = f"rate_history_{user.displayname}"
