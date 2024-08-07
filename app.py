@@ -167,7 +167,7 @@ async def index():
     
     # okay, we got a live one - get user details
     web_data.user, token = await getuser(cred, user_id)
-    web_data.nextup = await getnext(webtrack=True, user=web_data.user) or Recommendation()
+    web_data.nextup = await getnext(webtrack=True, user=web_data.user) or WebTrack()
     
     if web_data.nextup.track_id:
         web_data.users = await getactivewebusers(web_data.nextup.track_id)
