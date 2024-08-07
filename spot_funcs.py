@@ -46,7 +46,9 @@ async def trackinfo(spotify_object, check_spotifyid):
     
         if len(similar_tracks) > 1:
             track = similar_tracks[0]
-            logging.info("trackinfo - found similar tracks - %s", track.trackname)
+            logging.info("trackinfo - found %s similar tracks, consolidating - %s",
+                         len(similar_tracks),
+                         track.trackname)
             await consolidate_tracks(similar_tracks)
         
         return track
@@ -78,7 +80,8 @@ async def trackinfo(spotify_object, check_spotifyid):
     
     if len(similar_tracks) > 1:
         track = similar_tracks[0]
-        logging.info("trackinfo - found similar tracks - %s", track.trackname)
+        logging.info("trackinfo - found %s similar tracks, consolidating - %s",
+                     len(similar_tracks), track.trackname)
         await consolidate_tracks(similar_tracks)
     else:
         # Create the track
@@ -149,7 +152,7 @@ async def validatetrack(spotify, track):
         if track.spotifyid == spotifyid.spotifyid:
             logging.debug("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
         else:
-            logging.info("validatetrack secondary spotifyid: [%s]", spotifyid.spotifyid)
+            logging.debug("validatetrack secondary spotifyid: [%s]", spotifyid.spotifyid)
         
         # does this exist in spotify?
         if not spot_track:
@@ -348,19 +351,19 @@ async def consolidate_tracks(tracks):
         return False
     
     # we have multiple tracks that are the same, consolidate them
-    logging.info("consolidate_tracks consolidating %s tracks", len(tracks))
+    logging.debug("consolidate_tracks consolidating %s tracks", len(tracks))
     
     # get the original track, based on the lowest id record
     original_track = tracks[0]
     
     for t in tracks[1:]:
-        logging.info("consolidate_tracks consolidating %s into %s", t.id, original_track.id)
+        logging.debug("consolidate_tracks consolidating %s into %s", t.id, original_track.id)
         
         # update the spotifyids associated with this track to point to the original
         t_spotifyids = await SpotifyID.filter(track=t)
         
         for sid in t_spotifyids:
-            logging.info("consolidate_tracks updating SpotifyID %s to track %s", 
+            logging.debug("consolidate_tracks updating SpotifyID %s to track %s", 
                          sid.id, original_track.id)
             sid.track_id = original_track.id
             await sid.save()
@@ -368,14 +371,12 @@ async def consolidate_tracks(tracks):
         ratings = await Rating.filter(track_id=t.id)
         
         for rating in ratings:
-            # logging.info("consolidate_tracks updating Rating %s to track %s", 
-                        #  rating.id, original_track.id)
             rating.track_id = original_track.id
             try:
                 await rating.save()
             except IntegrityError as e:
                 logging.debug("consolidate_tracks exception updating Rating %s\n%s", rating.id, e)
-                logging.info("consolidate_tracks deleting duplicate Rating %s", rating.id)
+                logging.debug("consolidate_tracks deleting duplicate Rating %s", rating.id)
                 await rating.delete()
                 
             except Exception as e:
@@ -383,7 +384,7 @@ async def consolidate_tracks(tracks):
         
         playistories = await PlayHistory.filter(track_id=t.id)
         for playhistory in playistories:
-            logging.info("consolidate_tracks updating PlayHistory %s to track %s", 
+            logging.debug("consolidate_tracks updating PlayHistory %s to track %s", 
                          playhistory.id, original_track.id)
             playhistory.track_id = original_track.id
             try:
