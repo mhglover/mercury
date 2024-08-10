@@ -1,26 +1,58 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h2>Welcome to Mercury Radio!</h2>
+<h2>What is this?</h2>
 
 <p>
-    This is a rating and recommendation agent. It uses the likes and dislikes of the current 
-    listeners to recommend a song that they will like.  We're all listening to this track together
-    right now:
+    Mercury Radio is a live playlist agent.  As you listen to Spotify, it sends recommendations to
+    your player so that you get a mix of music that you, specifically <strong>you</strong>, like.
 </p>
 
-<h3>{{ trackname }}</h3>
-
+<hr>
+<h3>Ratings</h3>
 <p>
-    If you grant it permission, it will look at your Spotify playlists and history to learn your
-    likes, then it'll check your Spotify player's status. Turn on your Spotify now, listen to
-    whatever you like. Whenever a song is about to end, it will automatically send the next track
-    recommendation to your queue.  If you don't like a song, just hit "Play Next" as usual and 
-    you'll get a song from your own player's queue, then you'll get the next recommendation.
+    
+    Mercury keeps a <strong>ratings database</strong> where it tracks how you feel about each
+    song that plays. When you log in, it checks your recently played history for songs that you
+    like and your <a href="https://open.spotify.com/collection/tracks">Saved Songs</a> for ones
+    that you love. As you listen to the Radio, it adds ratings for every recommendation you hear.
 </p>
 
-<p><b>For access, send Matthew your email address.</b></p>
+<h3>Recommendations</h3>
+<p>
+    Mercury combines the ratings and histories of <strong>active users</strong> to pick songs that
+    y'all already like, love, or have never rated.  It tries to avoid tracks that any of you have 
+    heard recently. It automatically sends tracks to your player queue about 30 seconds before your 
+    current track ends.
+</p>
 
-<h3></h3><a href="{{ spoturl }}">login w/Spotify</a></h3>
+<h3>This Sucks, Change It</h3>
+<p>
+    If you get a Recommendation you don't like, hit <strong>Play Next</strong> in your Spotify player
+    and it will play the next track in your local playlist. Mercury will notice the early track change
+    and add a <strong>negative</strong> rating for you. When that track ends, you'll get a new
+    recommendation that will, hopefully, be a banger.
+</p>
+
+<hr>
+<h3>Current Recommendation</h3>
+<h2>{{ trackname }}</h2>
+<hr>
+
+<h3>Spotify Permissions</h3>
+<p>
+    Mercury will look at your Spotify saved songs and player history to derive ratings. While you
+    are active on the Mercury app and listening to Spotify, it will monitor your Spotify player
+    status every 1-30 seconds.
+</p>
+
+<h3>Privacy Policy</h3>
+<p>
+    Mercury Radio will never share any of your data or any data about you.  To delete your Mercury Radio
+    account and all data associated with your account, use the <strong>Nuke My Account</strong> option
+    on your account page.
+</p>
+
+<h1><a href="{{ spoturl }}">Authorize with Spotify</a></h1>
 
 {% endblock %}
