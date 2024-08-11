@@ -283,7 +283,7 @@ async def queue_safely(spotify, token, state):
     
         # if we've played this rec recently, don't send it again
         if await was_recently_played(spotify, token, rec.track):
-            logging.warning("%s played recently, won't send again to player: %s - %s",
+            logging.warning("%s played recently, won't try to replay: %s - %s",
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
             # we've finished this track, so we can set an immediate expiration
@@ -307,7 +307,7 @@ async def queue_safely(spotify, token, state):
         
         # don't send a track that's currently playing
         if rec in recs and state.track.id == rec.track_id:
-            logging.warning("%s playing now, won't send again to player: %s - %s",
+            logging.warning("%s playing now, won't queue current track to player: %s - %s",
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
             # we're playing this track, so we can set an appropriate expiration
@@ -318,7 +318,7 @@ async def queue_safely(spotify, token, state):
     
         # don't resend something that's already in the player queue/context
         if rec in recs and await is_already_queued(spotify, token, rec.track):
-            logging.warning("%s already queued, won't send again to player: %s - %s",
+            logging.warning("%s currently queued, won't requeue to player: %s - %s",
                             procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
             logging.warning("WHAT? - we shouldn't be here")
