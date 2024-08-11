@@ -2,9 +2,10 @@
 
 import asyncio
 import logging
+import datetime as dt
 from tortoise.exceptions import IntegrityError
 from pprint import pformat
-from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock
+from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock, Recommendation
 from helpers import feelabout
 
 
@@ -274,46 +275,54 @@ async def queue_safely(spotify, token, state):
         logging.error("queue_safely - Exception checking lock for user %s: %s", state.user.id, e)
         return False
     
-    if state.nextup is None:
-        # don't send a none
-        logging.warning("%s no Recommendations, nothing to queue", procname)
+    # don't trust self.nextup, it may be stale, pull all current recommendations
+    recs = await Recommendation.all().prefetch_related("track")
+    
+    for rec in recs:
+        rating = await Rating.get_or_none(user_id=state.user.id, track_id=rec.track_id)
+    
+        # if we've played this rec recently, don't send it again
+        if await was_recently_played(spotify, token, rec.track):
+            logging.warning("%s played recently, won't send again to player: %s - %s",
+                        procname, state.user.displayname, rec.trackname)
+            recs.remove(rec)
+            # we've finished this track, so we can set an immediate expiration
+            logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
+            rec.expires_at = dt.datetime.now(dt.timezone.utc)
+            await rec.save()
+        
+        # don't send a disliked track
+        if rec in recs and rating and rating.rating < -1:
+            logging.warning("%s negative rating, won't sent rec to player: %s - %s",
+                            procname, state.user.displayname, rec.trackname)
+            recs.remove(rec)
+        
+        # don't send a track that's currently playing
+        if rec in recs and state.track.id == rec.track_id:
+            logging.warning("%s playing now, won't send again to player: %s -%s",
+                        procname, state.user.displayname, rec.trackname)
+            recs.remove(rec)
+            
+            # make sure this will expire soon
+            logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
+            rec.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=(state.remaining_ms))
+            await rec.save()
+    
+        # don't resend something that's already in the player queue/context
+        if rec in recs and await is_already_queued(spotify, token, rec.track):
+            logging.warning("%s already queued, won't send again to player: %s - %s",
+                            procname, state.user.displayname, rec.trackname)
+            recs.remove(rec)
+            return False
+    
+    if recs is None:
+        logging.warning("%s no valid Recommendations, nothing to queue", procname)
         return False
     
-    # don't queue songs this user hates
-    rating = await Rating.get_or_none(user_id=state.user.id, track_id=state.nextup.track.id)
-    if rating and rating.rating < -1:
-        logging.warning("%s user has a negative rating (%s), won't sent rec to player: %s", 
-                        procname, rating, state.nextup.track.trackname)
-        return False
-    
-    # don't queue the track we're currently playing, dingus
-    if state.track.id == state.nextup.track.id:
-        logging.warning("%s track is playing now, won't send again, removing rec: %s",
-                        procname, state.nextup.track.trackname)
-        # and remove it from the queue
-        await state.nextup.delete()
-        return False
-    
-    # don't send a track we already played 
-    # this may cause a problem down the road
-    if await was_recently_played(spotify, token, state.nextup.track.spotifyid):
-        logging.warning("%s track was played recently, won't send again, removing - %s",
-                        procname, state.nextup.track.trackname)
-        # and remove it from the queue
-        await state.nextup.track.delete()
-        return False
-    
-    # don't resend something that's already in the player queue/context
-    # figure out the context and ignore those tracks
-    if await is_already_queued(spotify, token, state.nextup.track.spotifyid):
-        logging.warning("%s track already queued, won't send again - %s",
-                        procname, state.nextup.track.trackname)
-        return False
-    
-    # okay fine, queue it
-    await send_to_player(spotify, token, state.nextup.track)
+    # okay fine, queue the first rec
+    await send_to_player(spotify, token, recs[0].track)
     logging.info("%s sent to player queue for %s: [%s] %s",
-                        procname, state.user.displayname, state.nextup.reason, state.n())
+                        procname, state.user.displayname, recs[0].reason, recs[0].trackname)
     return True
 
 
