@@ -296,12 +296,22 @@ class WatcherState():
     def calculate_sleep_duration(self):
         
         min_sleep_duration = 1  # Minimum sleep duration in seconds
+        max_sleep_duration = 30  # Maximum sleep duration in seconds
 
         if self.status == "active":
+            # if we're in the last thirty seconds of a track, sleep for half the remaining time
             if self.remaining_ms < ENDZONE_THRESHOLD_MS:
                 sleep_duration = self.remaining_ms / 2 / 1000
+                
+            # if we're within 30 seconds of the end, sleep until the 30 second mark
             elif (self.remaining_ms - ENDZONE_THRESHOLD_MS) < ENDZONE_THRESHOLD_MS:
                 sleep_duration = (self.remaining_ms - ENDZONE_THRESHOLD_MS) / 1000
+            
+            # if we're in the first 30 seconds of a track, sleep for 3 seconds
+            elif self.currently.progress_ms < 30000:
+                sleep_duration = 3
+                
+            # otherwise we should be in the middle, sleep for 30 seconds
             else:
                 sleep_duration = 30
         else:
@@ -309,6 +319,7 @@ class WatcherState():
 
         # Ensure the sleep duration is at least the minimum sleep duration
         self.sleep = max(sleep_duration, min_sleep_duration)
+        logging.info("position: %s sleep duration: %s", self.position, self.sleep)
 
     def was_skipped(self):
         # if the last position we saw was less than 80% through, consider it a skip
