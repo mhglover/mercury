@@ -300,7 +300,7 @@ async def queue_safely(spotify, token, state):
         
         # don't send a track that's currently playing
         if rec in recs and state.track.id == rec.track_id:
-            logging.warning("%s playing now, won't send again to player: %s -%s",
+            logging.warning("%s playing now, won't send again to player: %s - %s",
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
             # we're playing this track, so we can set an appropriate expiration
