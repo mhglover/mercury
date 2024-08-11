@@ -87,11 +87,13 @@ async def spotify_watcher(cred, spotify, user):
 
         # if we're awake, update the loop ttl, sleep time, etc
         await state.refresh()
-        state.nextup = await getnext()
         state.track = await trackinfo(spotify, state.currently.item.id)
         state.rating = await get_rating(state.user, state.track.id)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 4 if state.is_saved else 1
+        
+        # get a rough guess at what the next rec will be
+        state.nextup = await getnext()
 
         # if the track hasn't changed but the savestate has, rate it love/like
         if not state.track_changed() and state.savestate_changed():
@@ -104,7 +106,8 @@ async def spotify_watcher(cred, spotify, user):
         recs = await Recommendation.all().prefetch_related("track")
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
         
-        # if we're playing a rec, set the expiration and note the reason it was selected
+        # if we've got a Recommendation for the current track,
+        # set the expiration and note the reason it was selected
         if rec and rec.expires_at is None:
             logging.info("%s playing rec: %s", procname, rec.trackname)
             # note the reason we're playing this track
@@ -112,8 +115,12 @@ async def spotify_watcher(cred, spotify, user):
             
             # set expiration if it hasn't been set yet
             logging.debug("%s recommendation started %s, no expiration", procname, state.t())
-            expiration = await set_rec_expiration(rec, state.remaining_ms)
-            logging.info("%s expiration set: %s - %s", procname, rec.trackname, expiration)
+            
+            expiration_interval = timedelta(milliseconds=(state.remaining_ms - 30000))
+            rec.expires_at = dt.now(tz.utc) + expiration_interval
+            await rec.save()
+
+            logging.info("%s expiration set: %s - %s", procname, rec.trackname, rec.expires_at)
 
         # does the user currently a recommendation in the queue?
         if not await user_has_rec_in_queue(state):
@@ -146,7 +153,7 @@ async def spotify_watcher(cred, spotify, user):
             state.recorded = state.finished = state.just_rated = False
         
         if state.history.track_id != state.track.id:
-            # record a PlayHistory when we see a track for the first time
+            # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
             state.history = await record_history(state)
             logging.debug("%s found or recorded play history %s", procname, state.t())
             state.recorded = True
