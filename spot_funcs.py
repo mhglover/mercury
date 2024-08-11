@@ -416,14 +416,14 @@ async def user_has_rec_in_queue(state) -> bool:
     recs = await Recommendation.all().prefetch_related("track")
     logging.debug("rec_in_queue checking %s recommendations", len(recs))
     with state.spotify.token_as(state.token):
-        h = await get_player_queue(state.spotify)
+        q = await get_player_queue(state.spotify)
     
     rec_names = [x.trackname for x in recs]
-    history_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in h.queue]
+    queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in q.queue]
     
     # if any of the rec_names are in history_names, return True
-    for rec in rec_names:
-        if rec in history_names:
+    for rec_name in rec_names:
+        if rec_name in queue_names:
             return True
-    
+
     return False
