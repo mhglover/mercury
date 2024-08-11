@@ -105,17 +105,15 @@ async def spotify_watcher(cred, spotify, user):
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
         
         # if we're playing a rec, set the expiration and note the reason it was selected
-        if rec:
-            logging.debug("%s playing rec: %s", procname, rec.trackname)
-            
+        if rec and rec.expires_at is None:
+            logging.info("%s playing rec: %s", procname, rec.trackname)
             # note the reason we're playing this track
             state.reason = rec.reason
             
             # set expiration if it hasn't been set yet
-            if rec.expires_at is None:
-                logging.debug("%s recommendation started %s, no expiration", procname, state.t())
-                expiration = await set_rec_expiration(rec, state.remaining_ms)
-                logging.info("%s expiration set: %s - %s", procname, rec.trackname, expiration)
+            logging.debug("%s recommendation started %s, no expiration", procname, state.t())
+            expiration = await set_rec_expiration(rec, state.remaining_ms)
+            logging.info("%s expiration set: %s - %s", procname, rec.trackname, expiration)
 
         # does the user currently a recommendation in the queue?
         if not await user_has_rec_in_queue(state):
