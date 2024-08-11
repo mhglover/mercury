@@ -125,8 +125,6 @@ async def spotify_watcher(cred, spotify, user):
             _ = await queue_safely(state.spotify, state.token, state)
         
         if state.track_last_cycle.id and state.track_changed():
-            # remove the lock we set for the user when we sent the last rec
-            await Lock.release_lock(state.user.id)
             
             logging.info("%s track change from %s at %s%% to %s (%s)",
                          procname, state.l(), state.position_last_cycle, 
