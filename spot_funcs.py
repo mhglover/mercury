@@ -287,9 +287,10 @@ async def queue_safely(spotify, token, state):
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
             # we've finished this track, so we can set an immediate expiration
-            logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
-            rec.expires_at = dt.datetime.now(dt.timezone.utc)
-            await rec.save()
+            if rec.expires_at is None:
+                logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
+                rec.expires_at = dt.datetime.now(dt.timezone.utc)
+                await rec.save()
         
         # don't send a disliked track
         if rec in recs and rating and rating.rating < -1:
@@ -302,11 +303,11 @@ async def queue_safely(spotify, token, state):
             logging.warning("%s playing now, won't send again to player: %s -%s",
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
-            
-            # make sure this will expire soon
-            logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
-            rec.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=(state.remaining_ms))
-            await rec.save()
+            # we're playing this track, so we can set an appropriate expiration
+            if rec.expires_at is None:
+                logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
+                rec.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=(state.remaining_ms))
+                await rec.save()
     
         # don't resend something that's already in the player queue/context
         if rec in recs and await is_already_queued(spotify, token, rec.track):
