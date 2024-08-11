@@ -8,7 +8,7 @@ from models import User, WatcherState, Lock
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record_history, rate_by_position, get_rating
-from spot_funcs import trackinfo, queue_safely, is_saved
+from spot_funcs import trackinfo, queue_safely, is_saved, user_has_rec_in_queue
 
 async def user_reaper():
     """check the database every 5 minutes and remove inactive users"""
@@ -71,9 +71,10 @@ async def spotify_watcher(cred, spotify, user):
 
     while (state.ttl > dt.now(tz.utc) and state.user.status == 'active'):
 
+        # first thing is to get the current state of the player, user, recommendations, etc
         state.currently = await getplayer(state)
         
-        # if anything else weird is happening, sleep for a minute and then loop
+        # if if the player is not active, sleep for a bit and check again
         if state.status != "active":
             state.sleep = 10
             logging.debug("%s player: %s - user: %s - ttl: %s - sleep %ss",
@@ -84,23 +85,12 @@ async def spotify_watcher(cred, spotify, user):
             state.user = await User.get(id=state.user.id)
             continue
 
-        # refresh the ttl, token, do some math, etc
+        # if we're awake, update the loop ttl, sleep time, etc
         await state.refresh()
-        
-        # pull details for the next track in the queue
         state.nextup = await getnext()
-
-        # what track are we currently playing?
         state.track = await trackinfo(spotify, state.currently.item.id)
-        
-        state.is_saved = await is_saved(state.spotify, state.token, state.track)
-        
-        # if the track has changed, get the rating
-        # if state.track_changed():
-            
         state.rating = await get_rating(state.user, state.track.id)
-        
-        # figure out the value for an autorate if we need it
+        state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 4 if state.is_saved else 1
 
         # if the track hasn't changed but the savestate has, rate it love/like
@@ -121,7 +111,21 @@ async def spotify_watcher(cred, spotify, user):
             expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
             logging.debug("%s expiration set %s", procname, expiration)
         
+        # does the queue have a recommendation? if not, queue one up
+        if not await user_has_rec_in_queue(state):
+            # drop the lock and queue up a recommendation
+            await Lock.release_lock(state.user.id)
+            _ = await queue_safely(state.spotify, state.token, state)
+        
+        # # if there's no lock, try to queue a recommendation
+        # if await Lock.exists(lock_name=state.user.id):
+        #     logging.info("%s queue locked, won't try to send rec", procname)
+        # else:
+            # queue up the next track if it's not already in the queue
+            # this has a side effect - it sets a lock 
+            # to prevent anything else from queuing another track
             
+        
         if state.track_last_cycle.id and state.track_changed():
             # remove the lock we set for the user when we sent the last rec
             await Lock.release_lock(state.user.id)
@@ -180,7 +184,7 @@ async def spotify_watcher(cred, spotify, user):
                 
                 # queue up the next track unless there are good reasons
                 # this sets a lock anybody else from sending to the users queue
-                queued = await queue_safely(state.spotify, state.token, state)
+                # queued = await queue_safely(state.spotify, state.token, state)
                 # if not queued:
                 #     # add an expiration to the next track
                 #     expiration = await set_rec_expiration(state.nextup, 31000)
