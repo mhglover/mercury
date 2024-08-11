@@ -7,6 +7,7 @@ from tortoise.exceptions import IntegrityError
 from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock, Recommendation
 from helpers import feelabout
+from users import getplayer
 
 
 DURATION_VARIANCE_MS = 60000  # 60 seconds in milliseconds
@@ -279,7 +280,6 @@ async def queue_safely(spotify, token, state):
     recs = await Recommendation.all().prefetch_related("track")
     
     for rec in recs:
-        rating = await Rating.get_or_none(user_id=state.user.id, track_id=rec.track_id)
     
         # if we've played this rec recently, don't send it again
         if await was_recently_played(spotify, token, rec.track):
@@ -292,11 +292,18 @@ async def queue_safely(spotify, token, state):
                 rec.expires_at = dt.datetime.now(dt.timezone.utc)
                 await rec.save()
         
+        # get this user's rating for this rec
+        rating = await Rating.get_or_none(user_id=state.user.id, track_id=rec.track_id)
+        
         # don't send a disliked track
         if rec in recs and rating and rating.rating < -1:
             logging.warning("%s negative rating, won't sent rec to player: %s - %s",
                             procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
+        
+        # refresh the state details
+        state.currently = await getplayer(state)
+        state.track = await trackinfo(state.spotify, state.currently.item.id)
         
         # don't send a track that's currently playing
         if rec in recs and state.track.id == rec.track_id:
@@ -314,6 +321,7 @@ async def queue_safely(spotify, token, state):
             logging.warning("%s already queued, won't send again to player: %s - %s",
                             procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
+            logging.warning("WHAT? - we shouldn't be here")
             return False
     
     if recs is None:
