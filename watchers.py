@@ -96,7 +96,9 @@ async def spotify_watcher(cred, spotify, user):
         state.nextup = await getnext()
 
         # if the track hasn't changed but the savestate has, rate it love/like
-        if not state.track_changed() and state.savestate_changed():
+        if ((state.track_last_cycle.id == state.track.id) and 
+            (state.was_saved_last_cycle != state.is_saved)):
+        
             state.rating.rating = value
             await state.rating.save()
             state.just_rated = True
