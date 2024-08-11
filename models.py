@@ -384,6 +384,10 @@ class Lock(Model):
         except exceptions.IntegrityError:
             # If lock already exists, return False
             return False
+        
+    @classmethod
+    async def check_for_lock(cls, lock_name: str) -> bool:
+        await cls.exists(lock_name=lock_name, instance=INSTANCE_ID)
 
     @classmethod
     async def release_lock(cls, lock_name: str) -> None:
