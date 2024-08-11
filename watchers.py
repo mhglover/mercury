@@ -4,7 +4,7 @@ import logging
 import asyncio
 from datetime import timezone as tz, datetime as dt, timedelta
 from humanize import naturaltime
-from models import User, WatcherState, Lock
+from models import User, WatcherState, Lock, Recommendation
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record_history, rate_by_position, get_rating
@@ -100,39 +100,35 @@ async def spotify_watcher(cred, spotify, user):
             state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
-        # we're playing a rec! has anybody set this rec to expire yet? no? I will.
-        if state.nextup and state.track.id == state.nextup.track.id and state.nextup.expires_at is None:
-            logging.debug("%s recommendation started %s, no expiration", procname, state.t())
+        # if we're playing a rec, get the specific Recommendation object from the database
+        recs = await Recommendation.all().prefetch_related("track")
+        rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
+        
+        # if we're playing a rec, set the expiration and note the reason it was selected
+        if rec:
+            logging.debug("%s playing rec: %s", procname, rec.trackname)
             
             # note the reason we're playing this track
-            state.reason = state.nextup.reason
+            state.reason = rec.reason
             
-            # set the expiration for approximately our endzone, which we can calculate pretty closely
-            expiration = await set_rec_expiration(state.nextup, state.remaining_ms)
-            logging.debug("%s expiration set %s", procname, expiration)
-        
-        # does the queue have a recommendation? if not, queue one up
+            # set expiration if it hasn't been set yet
+            if rec.expires_at is None:
+                logging.debug("%s recommendation started %s, no expiration", procname, state.t())
+                expiration = await set_rec_expiration(rec, state.remaining_ms)
+                logging.info("%s expiration set: %s - %s", procname, rec.trackname, expiration)
+
+        # does the user currently a recommendation in the queue?
         if not await user_has_rec_in_queue(state):
-            # drop the lock and queue up a recommendation
-            await Lock.release_lock(state.user.id)
-            _ = await queue_safely(state.spotify, state.token, state)
-        
-        # # if there's no lock, try to queue a recommendation
-        # if await Lock.exists(lock_name=state.user.id):
-        #     logging.info("%s queue locked, won't try to send rec", procname)
-        # else:
-            # queue up the next track if it's not already in the queue
-            # this has a side effect - it sets a lock 
-            # to prevent anything else from queuing another track
             
+            # drop the lock
+            await Lock.release_lock(state.user.id)
+            
+            # queue up a recommendation, which sets the lock
+            _ = await queue_safely(state.spotify, state.token, state)
         
         if state.track_last_cycle.id and state.track_changed():
             # remove the lock we set for the user when we sent the last rec
             await Lock.release_lock(state.user.id)
-                
-            # logging.info("%s -- track change -- %s%% %s ", 
-            #                 procname, state.position_last_cycle, state.track_last_cycle.trackname)
-            # logging.info("%s -- now playing -- %s", procname, state.track.trackname) 
             
             logging.info("%s track change from %s at %s%% to %s (%s)",
                          procname, state.l(), state.position_last_cycle, 
