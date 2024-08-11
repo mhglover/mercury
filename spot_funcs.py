@@ -221,16 +221,15 @@ async def get_player_queue(spotify):
         logging.error("%s exception %s", procname, e)
 
 
-async def is_already_queued(spotify, token, track: str):
+async def is_already_queued(spotify, token, track):
     """check if track is in player's queue/context"""
     logging.debug("is_already_queued checking player queue")
     with spotify.token_as(token):
         h = await get_player_queue(spotify)
-    tids = [x.id for x in h.queue]
-        
-    if track in tids:
-        return True
-    
+        tracknames = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in h.queue]
+        if track.trackname in tracknames:
+            logging.debug("is_already_queued track is already queued: %s", track.trackname)
+            return True
     return False
 
 
