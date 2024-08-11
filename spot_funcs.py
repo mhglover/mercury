@@ -399,4 +399,22 @@ async def consolidate_tracks(tracks):
             logging.error("consolidate_tracks exception deleting track %s\n%s", t.id, e)
             
         return True
-        
+
+
+async def user_has_rec_in_queue(state) -> bool:
+    """ check if the queue has any of the current recommendations """
+    
+    recs = await Recommendation.all().prefetch_related("track")
+    logging.debug("rec_in_queue checking %s recommendations", len(recs))
+    with state.spotify.token_as(state.token):
+        h = await get_player_queue(state.spotify)
+    
+    rec_names = [x.trackname for x in recs]
+    history_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in h.queue]
+    
+    # if any of the rec_names are in history_names, return True
+    for rec in rec_names:
+        if rec in history_names:
+            return True
+    
+    return False
