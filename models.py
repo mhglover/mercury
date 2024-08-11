@@ -319,7 +319,7 @@ class WatcherState():
 
         # Ensure the sleep duration is at least the minimum sleep duration
         self.sleep = max(sleep_duration, min_sleep_duration)
-        logging.info("position: %s sleep duration: %s", self.position, self.sleep)
+        logging.debug("position: %s sleep duration: %s", self.position, self.sleep)
 
     def was_skipped(self):
         # if the last position we saw was less than 80% through, consider it a skip
