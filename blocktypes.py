@@ -5,6 +5,7 @@ from random import choice
 from tortoise.functions import Sum
 from tortoise.expressions import Subquery
 from tortoise.contrib.postgres.functions import Random
+import tekore as tk
 from models import Rating, PlayHistory, Track, Option
 from users import getactiveusers, getuser
 from spot_funcs import trackinfo
@@ -138,6 +139,9 @@ async def get_request(spotify, cred):
         with spotify.token_as(token):
             try:
                 playlists = await spotify.playlists(user.spotifyid)
+            except tk.Unauthorized as e:
+                logging.error("get_request unauthorized error for user %s: %s", user.displayname, e)
+                continue
             except Exception as e:
                 logging.error("get_request exception attempting to get playlists for user %s: %s", user.displayname, e)
                 continue

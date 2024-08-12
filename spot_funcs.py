@@ -231,8 +231,11 @@ async def get_player_queue(spotify):
     logging.debug("%s fetching player queue", procname)
     try: 
         return await spotify.playback_queue()
+    except tk.Unauthorised as e:
+        logging.error("%s 401 Unauthorised exception %s", procname, e)
     except Exception as e:
         logging.error("%s exception %s", procname, e)
+    return None
 
 
 async def is_already_queued(spotify, token, track):
@@ -240,6 +243,8 @@ async def is_already_queued(spotify, token, track):
     logging.debug("is_already_queued checking player queue")
     with spotify.token_as(token):
         h = await get_player_queue(spotify)
+        if h is None:
+            return False
         tracknames = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in h.queue]
         if track.trackname in tracknames:
             logging.debug("is_already_queued track is already queued: %s", track.trackname)
@@ -252,6 +257,8 @@ async def send_to_player(spotify, token, track: Track):
     with spotify.token_as(token):
         try:
             _ = await spotify.playback_queue_add(track.trackuri)
+        except tk.Unauthorised as e:
+            logging.error("send_to_player - 401 Unauthorised exception %s", e)
         except Exception as e:
             if "502: Bad gateway" in str(e):
                 logging.warning(
