@@ -216,6 +216,9 @@ async def was_recently_played(spotify, token, track):
         with spotify.token_as(token):
             h = await spotify.playback_recently_played()
             tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
+    except tk.Unauthorised as e:
+        logging.error("was_recently_played 401 Unauthorised exception %s", e)
+        logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
     except Exception as e:
         logging.error("was_recently_played exception fetching player history %s", e)
         tracknames = None
@@ -450,6 +453,10 @@ async def user_has_rec_in_queue(state) -> bool:
     try:
         with state.spotify.token_as(state.token):
             q = await get_player_queue(state.spotify)
+    except tk.Unauthorised as e:
+        logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
+        logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
+        return False
     except Exception as e:
         logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
         return False
