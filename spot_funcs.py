@@ -424,8 +424,16 @@ async def user_has_rec_in_queue(state) -> bool:
     
     recs = await Recommendation.all().prefetch_related("track")
     logging.debug("rec_in_queue checking %s recommendations", len(recs))
-    with state.spotify.token_as(state.token):
-        q = await get_player_queue(state.spotify)
+    try:
+        with state.spotify.token_as(state.token):
+            q = await get_player_queue(state.spotify)
+    except Exception as e:
+        logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
+        return False
+    
+    if q is None:
+        logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
+        return False
     
     rec_names = [x.trackname for x in recs]
     queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in q.queue]
