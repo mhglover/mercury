@@ -208,9 +208,10 @@ async def was_recently_played(spotify, token, track):
     try:
         with spotify.token_as(token):
             h = await spotify.playback_recently_played()
+            tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
     except Exception as e:
         logging.error("was_recently_played exception fetching player history %s", e)
-    tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
+        tracknames = None
     
     if track.trackname in tracknames:
         return True
