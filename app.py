@@ -182,8 +182,12 @@ async def index():
             currently = await spotify.playback_currently_playing()
     else:
         # what's the player's current status?
-        with spotify.token_as(token):
-            currently = await spotify.playback_currently_playing()
+        try:
+            with spotify.token_as(token):
+                currently = await spotify.playback_currently_playing()
+        except tk.Unauthorised as e:
+            logging.error("index - unauthorised\n%s", e)
+            return redirect("/")
 
     # set some return values
     if currently is not None:
