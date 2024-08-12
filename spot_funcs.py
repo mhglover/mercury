@@ -4,6 +4,7 @@ import asyncio
 import logging
 import datetime as dt
 from tortoise.exceptions import IntegrityError
+import tekore as tk
 from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock, Recommendation
 from helpers import feelabout
@@ -14,8 +15,14 @@ DURATION_VARIANCE_MS = 60000  # 60 seconds in milliseconds
 
 async def is_saved(spotify, token, track):
     """check whether a track has been saved to your Spotify saved songs"""
-    with spotify.token_as(token):
-        saved = await spotify.saved_tracks_contains([track.spotifyid])
+    try:
+        with spotify.token_as(token):
+            saved = await spotify.saved_tracks_contains([track.spotifyid])
+    except tk.Unauthorised as e:
+        logging.error("is_saved - 401 Unauthorised exception %s", e)
+    except Exception as e:
+        logging.error("is_saved exception %s", e)
+        return False
     return saved[0]
 
 
