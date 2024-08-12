@@ -205,11 +205,15 @@ def truncate_middle(s, n=30):
 async def was_recently_played(spotify, token, track):
     """check player history"""
     logging.debug("was_recently_played checking player history")
-    with spotify.token_as(token):
-        h = await spotify.playback_recently_played()
-        tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
-        if track.trackname in tracknames:
-            return True
+    try:
+        with spotify.token_as(token):
+            h = await spotify.playback_recently_played()
+    except Exception as e:
+        logging.error("was_recently_played exception fetching player history %s", e)
+    tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
+    
+    if track.trackname in tracknames:
+        return True
     return False
 
 
