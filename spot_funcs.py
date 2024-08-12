@@ -303,6 +303,10 @@ async def queue_safely(spotify, token, state):
         
         # refresh the state details
         state.currently = await getplayer(state)
+        if state.currently is None:
+            logging.warning("%s couldn't get player state, won't queue rec", procname)
+            return False
+        
         state.track = await trackinfo(state.spotify, state.currently.item.id)
         
         # don't send a track that's currently playing
