@@ -109,17 +109,20 @@ async def getplayer(state):
     # move into models.WatcherState?
     procname = "getplayer"
     logging.debug("%s checking currently playing", procname)
-    with state.spotify.token_as(state.token):
-        try:
-            currently = await state.spotify.playback_currently_playing()
-        except tk.Unauthorised as e:
-            state.status = "unauthorized"
-            logging.debug("%s unauthorized access from spotify player\n%s", procname, e)
-            return
-        except Exception as e:
-            state.status = "unknown"
-            logging.error("%s exception in spotify.playback_currently_playing\n%s", procname, e)
-            return
+    spotify = state.spotify
+    token = state.token
+
+    try:
+        with spotify.token_as(token):
+            currently = await spotify.playback_currently_playing()
+    except tk.Unauthorised as e:
+        state.status = "unauthorized"
+        logging.debug("%s unauthorized access from spotify player\n%s", procname, e)
+        return
+    except Exception as e:
+        state.status = "unknown"
+        logging.error("%s exception in spotify.playback_currently_playing\n%s", procname, e)
+        return
         
     # is it not playing?
     if currently is None:
