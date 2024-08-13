@@ -315,8 +315,11 @@ async def queue_safely(state):
     logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
     
     recs, rec_in_queue = await get_recs_in_queue(state)
-    # does this user have any of these recommendations in the queue?
-    if rec_in_queue:
+    if recs is None:
+        logging.error("%s --- %s get_recs_in_queue failed", procname, state.user.displayname)
+        return False
+    
+    if recs and rec_in_queue:
         logging.debug("%s --- %s already has rec in queue, no rec needed", procname, state.user.displayname)
         return False
     
@@ -505,15 +508,15 @@ async def get_recs_in_queue(state, rec=None):
     except tk.Unauthorised as e:
         logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
         logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
-        return recs, False
+        return None, False
     
     except Exception as e:
         logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
-        return recs, False
+        return None, False
     
     if queue_context is None:
         logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
-        return recs, False
+        return None, False
     
     rec_names = [x.trackname for x in recs]
     queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in queue_context.queue]
