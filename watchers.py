@@ -117,7 +117,7 @@ async def spotify_watcher(cred, spotify, user):
             state.recorded = state.finished = state.just_rated = False
 
         # every watcher will write a history record for every track they see playing while active
-        if state.history.track_id != state.track.id:
+        if not state.history or state.history.track_id != state.track.id:
             # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
             state.history = await record_history(state)
             state.recorded = True
