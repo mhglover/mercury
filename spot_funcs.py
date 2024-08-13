@@ -34,7 +34,7 @@ async def trackinfo(spotify_object, check_spotifyid):
         spotifyid (str): Spotify's unique track id
 
     Returns:
-        track object
+        track object or None
     """
     # Check if the Spotify ID has already been added to the database
     spotify_id_entry = await SpotifyID.filter(spotifyid=check_spotifyid).first()
@@ -232,12 +232,14 @@ async def was_recently_played(spotify, token, track):
     return False
 
 
-async def get_player_queue(spotify):
+async def get_player_queue(state):
     """fetch the items in the player queue for a given user"""
     procname = "get_player_queue"
     logging.debug("%s fetching player queue", procname)
-    try: 
-        return await spotify.playback_queue()
+    spotify = state.spotify
+    try:
+        with spotify.token_as(state.token):
+            return await spotify.playback_queue()
     except tk.Unauthorised as e:
         logging.error("%s 401 Unauthorised exception %s", procname, e)
     except Exception as e:
@@ -245,11 +247,12 @@ async def get_player_queue(spotify):
     return None
 
 
-async def is_already_queued(spotify, token, track):
+async def is_already_queued(state, track):
     """check if track is in player's queue/context"""
     logging.debug("is_already_queued checking player queue")
-    with spotify.token_as(token):
-        h = await get_player_queue(spotify)
+    spotify = state.spotify
+    with spotify.token_as(state.token):
+        h = await get_player_queue(state)
         if h is None:
             return False
         tracknames = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in h.queue]
@@ -348,7 +351,7 @@ async def queue_safely(spotify, token, state):
                 await rec.save()
     
         # don't resend something that's already in the player queue/context
-        if rec in recs and await is_already_queued(spotify, token, rec.track):
+        if rec in recs and await is_already_queued(state, rec.track):
             logging.warning("%s currently queued, won't requeue to player: %s - %s",
                             procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
@@ -457,7 +460,7 @@ async def user_has_rec_in_queue(state) -> bool:
     logging.debug("rec_in_queue checking %s recommendations", len(recs))
     try:
         with state.spotify.token_as(state.token):
-            q = await get_player_queue(state.spotify)
+            q = await get_player_queue(state)
     except tk.Unauthorised as e:
         logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
         logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
