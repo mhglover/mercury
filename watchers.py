@@ -93,7 +93,30 @@ async def spotify_watcher(cred, spotify, user):
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 4 if state.is_saved else 1
         
-        # every user will write a history record for every track they play while the watcher is running
+        # detect track changes and rate the previous track
+        if state.track_last_cycle.id and state.track_changed():
+            
+            logging.info("%s track change from %s at %s%% to %s (%s)",
+                         procname, state.l(), state.position_last_cycle, 
+                         state.track.trackname, state.reason)
+            
+            # if we didn't finish cleanly, rate tracks based on last known position
+            if state.track_last_cycle.id is not None and not state.finished:
+                await rate_by_position(user, state.track_last_cycle, 
+                                       state.position_last_cycle)
+                
+                # position-rate for followers as well, will downrate if necessary
+                followers = await User.filter(watcherid=user.id)
+                for f in followers:
+                    logging.info("%s position-rating %s for %s", procname, value, f.displayname)
+                    await rate_by_position(f, state.track_last_cycle, 
+                                           state.position_last_cycle)
+            
+            # unset some states so we can handle the next track properly
+            state.history = None
+            state.recorded = state.finished = state.just_rated = False
+
+        # every watcher will write a history record for every track they see playing while active
         if state.history.track_id != state.track.id:
             # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
             state.history = await record_history(state)
@@ -135,27 +158,6 @@ async def spotify_watcher(cred, spotify, user):
         # see if we need to send a recommendation to the player
         _ = await queue_safely(state)
         
-        if state.track_last_cycle.id and state.track_changed():
-            
-            logging.info("%s track change from %s at %s%% to %s (%s)",
-                         procname, state.l(), state.position_last_cycle, 
-                         state.track.trackname, state.reason)
-            
-            # if we didn't finish cleanly, rate tracks based on last known position
-            if state.track_last_cycle.id is not None and not state.finished:
-                await rate_by_position(user, state.track_last_cycle, 
-                                       state.position_last_cycle)
-                
-                # position-rate for followers as well, will downrate if necessary
-                followers = await User.filter(watcherid=user.id)
-                for f in followers:
-                    logging.info("%s position-rating %s for %s", procname, value, f.displayname)
-                    await rate_by_position(f, state.track_last_cycle, 
-                                           state.position_last_cycle)
-            
-            # unset some states so we can handle the next track properly
-            state.recorded = state.finished = state.just_rated = False
-
         if state.endzone: # welcome to the end zone
             
             # if we're listening to the endzone of the upcoming rec, it's time to remove it
