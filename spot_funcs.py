@@ -378,7 +378,7 @@ async def queue_safely(state):
                 logging.debug("%s rec rating is acceptable: %s - (%s) %s ", procname, rating.rating, state.user.displayname, rec.trackname)
         
         # made it through the gauntlet of tests, this is an acceptable rec
-        logging.info("%s --- %s adding rec to candidates: %s", procname, state.user.displayname, rec.trackname)
+        logging.debug("%s --- %s adding rec to candidates: %s", procname, state.user.displayname, rec.trackname)
         good_recs.append(rec)
         
     if len(good_recs) < 1:
