@@ -66,7 +66,11 @@ async def trackinfo(spotify_object, check_spotifyid):
     logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
     
     # we don't have this version of this track in the db, fetch details from Spotify
-    spotify_details = await spotify_object.track(check_spotifyid)
+    try:
+        spotify_details = await spotify_object.track(check_spotifyid)
+    except tk.Unauthorised as e:
+        logging.error("trackinfo - 401 Unauthorised exception %s", e)
+        return None
     
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
@@ -262,6 +266,7 @@ async def send_to_player(spotify, token, track: Track):
             _ = await spotify.playback_queue_add(track.trackuri)
         except tk.Unauthorised as e:
             logging.error("send_to_player - 401 Unauthorised exception %s", e)
+            logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
         except Exception as e:
             if "502: Bad gateway" in str(e):
                 logging.warning(
