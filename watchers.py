@@ -4,11 +4,12 @@ import logging
 import asyncio
 from datetime import timezone as tz, datetime as dt, timedelta
 from humanize import naturaltime
+import tekore as tk
 from models import User, WatcherState, Lock, Recommendation
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record_history, rate_by_position, get_rating
-from spot_funcs import trackinfo, queue_safely, is_saved, user_has_rec_in_queue
+from spot_funcs import trackinfo, queue_safely, is_saved, get_player_queue, send_to_player
 
 async def user_reaper():
     """check the database every 5 minutes and remove inactive users"""
@@ -87,14 +88,11 @@ async def spotify_watcher(cred, spotify, user):
 
         # if we're awake, update the loop ttl, sleep time, etc
         await state.refresh()
-        state.track = await trackinfo(spotify, state.currently.item.id)
+        state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
         state.rating = await get_rating(state.user, state.track.id)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 4 if state.is_saved else 1
         
-        # get a rough guess at what the next rec will be
-        state.nextup = await getnext()
-
         # if the track hasn't changed but the savestate has, rate it love/like
         if ((state.track_last_cycle.id == state.track.id) and 
             (state.was_saved_last_cycle != state.is_saved)):
@@ -104,19 +102,20 @@ async def spotify_watcher(cred, spotify, user):
             state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
-        # if we're playing a rec, get the specific Recommendation object from the database
+        # get the current list of recommended tracks
         recs = await Recommendation.all().prefetch_related("track")
+        
+        # if we're playing a rec, we don't want to send it again, remove it from the list
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
         
-        # if we've got a Recommendation for the current track,
+        # if we're playing a recommendation that doesn't have an expiration
         # set the expiration and note the reason it was selected
         if rec and rec.expires_at is None:
             logging.info("%s playing rec: %s", procname, rec.trackname)
             # note the reason we're playing this track
             state.reason = rec.reason
             
-            # set expiration if it hasn't been set yet
-            logging.debug("%s recommendation started %s, no expiration", procname, state.t())
+            logging.debug("%s recommendation first started, setting expiration: %s", procname, state.t())
             
             expiration_interval = timedelta(milliseconds=(state.remaining_ms - 30000))
             rec.expires_at = dt.now(tz.utc) + expiration_interval
@@ -124,14 +123,11 @@ async def spotify_watcher(cred, spotify, user):
 
             logging.info("%s expiration set: %s - %s", procname, rec.trackname, rec.expires_at)
 
-        # does the user currently a recommendation in the queue?
-        if not await user_has_rec_in_queue(state):
-            
-            # drop the lock
-            await Lock.release_lock(state.user.id)
-            
-            # queue up a recommendation, which sets the lock
-            _ = await queue_safely(state.spotify, state.token, state)
+        # get a rough guess at what the next rec will be
+        state.nextup = recs[0] if recs else None
+        
+        # see if we need to send a recommendation to the player
+        _ = await queue_safely(state)
         
         if state.track_last_cycle.id and state.track_changed():
             
