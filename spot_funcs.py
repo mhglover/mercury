@@ -344,11 +344,6 @@ async def queue_safely(spotify, token, state):
             logging.warning("%s playing now, won't queue current track to player: %s - %s",
                         procname, state.user.displayname, rec.trackname)
             recs.remove(rec)
-            # we're playing this track, so we can set an appropriate expiration
-            if rec.expires_at is None:
-                logging.warning("SIDE EFFECT: setting expiration for %s", rec.trackname)
-                rec.expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(milliseconds=(state.remaining_ms))
-                await rec.save()
     
         # don't resend something that's already in the player queue/context
         if rec in recs and await is_already_queued(state, rec.track):
