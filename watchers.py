@@ -168,25 +168,17 @@ async def spotify_watcher(cred, spotify, user):
 
             # let's wrap this up - this should only run once while in the endzone, not every loop
             if not state.finished:
-                # set a rating
-                logging.info("%s [track endzone] rating track %s (%s)", procname, state.track.trackname, value)
-                await rate(state.user, state.track, value=value)
+                # set a rating if it's still a shrug
+                if state.rating.rating == 0:
+                    logging.info("%s [track endzone] rating track %s (%s)", procname, state.track.trackname, value)
+                    await rate(state.user, state.track, value=value)
                 
-                # rate a 1 for followers when we finish a track - won't auto downrate
-                followers = await User.filter(watcherid=user.id)
-                fvalue = 1
-                for f in followers:
-                    logging.info("%s [track endzone] follower %s rating track (%s)", procname, f.displayname, f.value)
-                    await rate(f, state.track, value=fvalue)
-                
-                # queue up the next track unless there are good reasons
-                # this sets a lock anybody else from sending to the users queue
-                # queued = await queue_safely(state.spotify, state.token, state)
-                # if not queued:
-                #     # add an expiration to the next track
-                #     expiration = await set_rec_expiration(state.nextup, 31000)
-                #     logging.info("%s expiration set %s - %s", 
-                #                  procname, expiration, state.nextup.trackname)
+                    # rate a 1 for followers when we finish a track - won't auto downrate
+                    followers = await User.filter(watcherid=user.id)
+                    fvalue = 1
+                    for f in followers:
+                        logging.info("%s [track endzone] follower %s rating track (%s)", procname, f.displayname, f.value)
+                        await rate(f, state.track, value=fvalue)
                 
                 # don't repeat this part of the loop until we detect a track change
                 state.finished = True
