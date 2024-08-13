@@ -50,7 +50,7 @@ auths = {}
 
 # if there is a TIMESTAMP_LOGS env var, add timestamps to logs
 if os.getenv("TIMESTAMP_LOGS", default="False") == "True":
-    log_format = '%(asctime)s %(levelname)s %(message)s'
+    log_format = '%(asctime)s.%(msecs)03d %(levelname)s %(message)s'
 else:
     log_format = '%(levelname)s %(message)s'
 
