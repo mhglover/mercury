@@ -238,9 +238,10 @@ async def was_recently_played(state):
     
     if state.track.trackname in tracknames:
         logging.debug("was_recently_played track was recently played: %s", state.track.trackname)
-        return True
+        return True, tracknames
+    
     logging.debug("was_recently_played track was not recently played: %s", state.track.trackname)
-    return False
+    return False, tracknames
 
 
 async def get_player_queue(state):
@@ -304,30 +305,41 @@ async def send_to_player(spotify, token, track: Track):
 
 async def queue_safely(state):
     """ check whether the user needs a recommendation and queue the best one """
-    
     procname = "queue_safely"
+    
     spotify = state.spotify
     token = state.token
     good_recs = []
-    recs = await Recommendation.all().prefetch_related("track")
-    
-    # does this user have any of these recommendations in the queue?
-    if await user_has_rec_in_queue(state):
-        logging.debug("%s user already has rec in queue, won't queue", procname)
-        return False
     
     logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
     
-    logging.info("%s --- %s currently playing - %s", procname, state.user.displayname, state.track.trackname)
+    recs, rec_in_queue = await get_recs_in_queue(state)
+    # does this user have any of these recommendations in the queue?
+    if rec_in_queue:
+        logging.debug("%s --- %s already has rec in queue, no rec needed", procname, state.user.displayname)
+        return False
+    
+    logging.debug("%s --- %s currently playing - %s", procname, state.user.displayname, state.track.trackname)
     
     # discard any recs that are not valid
     for rec in recs:
         # get this user's rating for this rec
         rating = await Rating.get_or_none(user_id=state.user.id, track_id=rec.track_id)
         
-        # don't send a track that's currently playing
+        # don't send a track with a recent playhistory for this user
+        # this check should catch most of the cases to avoid
+        interval = dt.datetime.now() - dt.timedelta(minutes=90)
+        in_history = await PlayHistory.exists(track_id=rec.track_id, user_id=state.user.id, played_at__gte=interval)
+        if in_history:
+            logging.warning("%s --- %s rec has recent playhistory, not a good candidate: %s",
+                        procname, state.user.displayname, rec.trackname)
+            continue
+        else:
+            logging.debug("%s --- %s rec doesn't have recent playhistory: %s", procname, state.user.displayname, rec.trackname)
+        
+        # don't send a track that's currently playing (should have a recent PlayHistory)
         if state.track.id == rec.track_id:
-            logging.info("%s --- %s rec playing now, not a good candidate: %s",
+            logging.warning("%s --- %s rec playing now, not a good candidate: %s",
                         procname, state.user.displayname, rec.trackname)
             
             if rec.expires_at is None:
@@ -337,15 +349,25 @@ async def queue_safely(state):
         else:
             logging.debug("%s --- %s rec not currently playing: %s", procname, state.user.displayname, rec.trackname)
         
-        # if we've played this rec recently, don't send it again
-        if await was_recently_played(state):
+        # if a rec was played in the last cycle, don't send that either (should have a recent PlayHistory)
+        if rec.track_id == state.track_last_cycle.id:
+            logging.warning("%s --- %s rec was played last cycle, not a good candidate: %s",
+                        procname, state.user.displayname, rec.trackname)
+            continue
+        else:
+            logging.debug("%s --- %s rec doesn't match track_last_cycle: (rec) %s vs. (prior)%s", procname, state.user.displayname, rec.trackname, state.track_last_cycle.trackname)
+        
+        # if we've played this rec recently, don't send it again (should have a recent PlayHistory)
+        track_was_recently_played, recent_tracks = await was_recently_played(state)
+        if track_was_recently_played:
             logging.warning("%s --- %s rec was recently played, won't try to replay: %s",
                         procname, state.user.displayname, rec.trackname)
             continue
         else:
-            logging.debug("%s --- %s rec not played recently: %s", procname, state.user.displayname, rec.trackname)    
+            logging.debug("%s --- %s rec.trackname not in recent_tracks: %s", procname, state.user.displayname, rec.trackname)
+            
         
-        # don't send a disliked track
+        # don't send a disliked track (must be a track liked by other active listeners, but not this one)
         if rating:
             if rating.rating < 0:
                 logging.warning("%s negative rating, won't sent rec to player: %s - (%s) %s",
@@ -365,14 +387,15 @@ async def queue_safely(state):
     # okay fine, queue the first rec
     first_rec = good_recs[0]
     await send_to_player(spotify, token, first_rec.track)
-    logging.info("%s --- %s sent rec to queue: %s (%s)",
+    logging.info("%s --- %s selected and sent rec to queue: %s (%s)",
                         procname, state.user.displayname, first_rec.trackname, first_rec.reason)
     
     # wait a tick for the queue touch to take effect
     await asyncio.sleep(1)
     
     # make sure the rec was put in the queue
-    if await user_has_rec_in_queue(state):
+    recs, rec_in_queue = await get_recs_in_queue(state)
+    if rec_in_queue:
         logging.debug("%s --- %s has rec in queue", procname, state.user.displayname)
         return True
     else:
@@ -464,35 +487,35 @@ async def consolidate_tracks(tracks):
         return True
 
 
-async def user_has_rec_in_queue(state) -> bool:
-    """ check if the queue has any of the current recommendations """
+async def get_recs_in_queue(state):
+    """ check if the queue or context has any of the current recommendations"""
     spotify = state.spotify
     token = state.token
-    recs = await Recommendation.all().prefetch_related("track")
+    recs = await Recommendation.all().order_by('id').prefetch_related("track")
     
     try:
         with spotify.token_as(token):
-            q = await get_player_queue(state)
+            queue_context = await get_player_queue(state)
             
     except tk.Unauthorised as e:
         logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
         logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
-        return False
+        return recs, False
     
     except Exception as e:
         logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
-        return False
+        return recs, False
     
-    if q is None:
+    if queue_context is None:
         logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
-        return False
+        return recs, False
     
     rec_names = [x.trackname for x in recs]
-    queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in q.queue]
+    queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in queue_context.queue]
     
     # if any of the rec_names are in history_names, return True
     for rec_name in rec_names:
         if rec_name in queue_names:
-            return True
+            return recs, True
 
-    return False
+    return recs, False
