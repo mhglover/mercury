@@ -38,7 +38,7 @@ async def rate(user, track,
     
     track = await normalizetrack(track)
     
-    logging.info("%s writing a rating: %s %s %s", 
+    logging.debug("%s writing a rating: %s %s %s", 
                  procname, user.displayname, track.trackname, value)
 
     # fetch it or create it if it didn't already exist
@@ -109,7 +109,7 @@ async def record_history(state, user_id=None):
     
     recent = await PlayHistory.first().filter(track_id=state.track.id, played_at__gte=interval)
     if recent:
-        logging.debug("record_history found recent playhistory, not re-recording %s", state.t())
+        logging.info("record_history found recent playhistory, not re-recording %s", state.t())
         return recent
     
     try:

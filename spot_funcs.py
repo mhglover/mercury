@@ -36,6 +36,7 @@ async def trackinfo(spotify_object, check_spotifyid):
     Returns:
         track object or None
     """
+    
     # Check if the Spotify ID has already been added to the database
     spotify_id_entry = await SpotifyID.filter(spotifyid=check_spotifyid).first()
 
@@ -227,8 +228,10 @@ async def was_recently_played(spotify, token, track):
         logging.error("was_recently_played exception fetching player history %s", e)
         tracknames = None
     
-    if track.trackname in tracknames:
+    if state.track.trackname in tracknames:
+        logging.debug("was_recently_played track was recently played: %s", state.track.trackname)
         return True
+    logging.debug("was_recently_played track was not recently played: %s", state.track.trackname)
     return False
 
 

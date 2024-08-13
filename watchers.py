@@ -157,7 +157,6 @@ async def spotify_watcher(cred, spotify, user):
         if state.history.track_id != state.track.id:
             # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
             state.history = await record_history(state)
-            logging.debug("%s found or recorded play history %s", procname, state.t())
             state.recorded = True
 
         if state.endzone: # welcome to the end zone
@@ -173,14 +172,14 @@ async def spotify_watcher(cred, spotify, user):
             # let's wrap this up - this should only run once while in the endzone, not every loop
             if not state.finished:
                 # set a rating
+                logging.info("%s [track endzone] rating track %s (%s)", procname, state.track.trackname, value)
                 await rate(state.user, state.track, value=value)
-                logging.debug("%s finishing track %s (%s)", procname, state.t(), value)
                 
                 # rate a 1 for followers when we finish a track - won't auto downrate
                 followers = await User.filter(watcherid=user.id)
                 fvalue = 1
                 for f in followers:
-                    logging.info("%s rating %s for %s", procname, fvalue, f.displayname)
+                    logging.info("%s [track endzone] follower %s rating track (%s)", procname, f.displayname, f.value)
                     await rate(f, state.track, value=fvalue)
                 
                 # queue up the next track unless there are good reasons
