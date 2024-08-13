@@ -341,6 +341,13 @@ async def queue_safely(state):
         else:
             logging.debug("%s --- %s rec doesn't have recent playhistory: %s", procname, state.user.displayname, rec.trackname)
         
+        logging.info("%s --- %s considering rec: %s", procname, state.user.displayname, rec.trackname)
+        logging.info("%s --- %s suspected currently playing: %s", procname, state.user.displayname, state.track.trackname)
+        # recheck what is currently playing
+        state.currently = await getplayer(state)
+        state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
+        logging.info("%s --- %s checked currently playing: %s", procname, state.user.displayname, state.track.trackname)
+
         # don't send a track that's currently playing (should have a recent PlayHistory)
         if state.track.id == rec.track_id:
             logging.warning("%s --- %s rec playing now, not a good candidate: %s",
