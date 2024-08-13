@@ -388,7 +388,7 @@ async def queue_safely(state):
     # okay fine, queue the first rec
     first_rec = good_recs[0]
     await send_to_player(spotify, token, first_rec.track)
-    logging.info("%s --- %s selected and sent rec to queue: %s (%s)",
+    logging.debug("%s --- %s selected and sent rec to queue: %s (%s)",
                         procname, state.user.displayname, first_rec.trackname, first_rec.reason)
     
     # wait a tick for the queue touch to take effect
@@ -396,8 +396,8 @@ async def queue_safely(state):
     
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
-    if rec_in_queue:
-        logging.debug("%s --- %s has rec in queue", procname, state.user.displayname)
+    if first_rec in recs:
+        logging.info("%s --- %s has rec in queue, queuing successful: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return True
     else:
         logging.error("%s --- %s does not have rec in queue, queuing failed", procname, state.user.displayname)
@@ -488,7 +488,7 @@ async def consolidate_tracks(tracks):
         return True
 
 
-async def get_recs_in_queue(state):
+async def get_recs_in_queue(state, rec=None):
     """ check if the queue or context has any of the current recommendations"""
     spotify = state.spotify
     token = state.token
