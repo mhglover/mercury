@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import datetime as dt
+from tortoise.expressions import Q
 from tortoise.exceptions import IntegrityError
 import tekore as tk
 from pprint import pformat
@@ -491,7 +492,11 @@ async def get_recs_in_queue(state):
     """ check if the queue or context has any of the current recommendations"""
     spotify = state.spotify
     token = state.token
-    recs = await Recommendation.all().order_by('id').prefetch_related("track")
+    # only include recs with no expiration
+    recs = ( await Recommendation.filter(Q(expires_at=None) | 
+                                         Q(expires_at__gte=dt.datetime.now(dt.timezone.utc)))
+                                 .order_by('id')
+                                 .prefetch_related("track"))
     
     try:
         with spotify.token_as(token):
