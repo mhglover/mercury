@@ -369,7 +369,6 @@ async def queue_safely(state):
             continue
         else:
             logging.debug("%s --- %s rec.trackname not in recent_tracks: %s", procname, state.user.displayname, rec.trackname)
-            
         
         # don't send a disliked track (must be a track liked by other active listeners, but not this one)
         if rating:
