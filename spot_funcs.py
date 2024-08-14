@@ -314,22 +314,23 @@ async def queue_safely(state):
     
     logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
     
-    recs, rec_in_queue = await get_recs_in_queue(state)
+    recs, rec_in_queue, queue_context = await get_recs_in_queue(state)
     if recs is None:
-        logging.error("%s --- %s get_recs_in_queue failed", procname, state.user.displayname)
+        logging.error("%s --- %s checking queue failed, can't send to queue safely", procname, state.user.displayname)
         return False
     
-    if recs and rec_in_queue:
-        logging.debug("%s --- %s already has rec in queue, no rec needed", procname, state.user.displayname)
+    if rec_in_queue:
+        logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
+        for rec in recs:
+            if rec in queue_context.queue:
+                logging.info("%s --- %s rec in queue: %s", procname, state.user.displayname, rec.trackname)
         return False
     
-    logging.info("%s --- %s suspected currently playing: %s", procname, state.user.displayname, state.track.trackname)
-    # recheck what is currently playing
+    logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
     state.currently = await getplayer(state)
     state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
-    logging.info("%s --- %s checked currently playing: %s", procname, state.user.displayname, state.track.trackname)
+    logging.info("%s --- %s updated currently playing: %s", procname, state.user.displayname, state.track.trackname)
 
-    
     # discard any recs that are not valid
     for rec in recs:
         # get this user's rating for this rec
@@ -346,7 +347,7 @@ async def queue_safely(state):
         else:
             logging.debug("%s --- %s rec doesn't have recent playhistory: %s", procname, state.user.displayname, rec.trackname)
         
-        logging.info("%s --- %s considering rec: %s", procname, state.user.displayname, rec.trackname)
+        logging.debug("%s --- %s considering rec: %s", procname, state.user.displayname, rec.trackname)
         
         # don't send a track that's currently playing (should have a recent PlayHistory)
         if state.track.id == rec.track_id:
@@ -404,12 +405,12 @@ async def queue_safely(state):
     await asyncio.sleep(1)
     
     # make sure the rec was put in the queue
-    recs, rec_in_queue = await get_recs_in_queue(state)
+    recs, rec_in_queue, queue_context = await get_recs_in_queue(state)
     if first_rec in recs:
-        logging.info("%s --- %s has rec in queue, queuing successful: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return True
     else:
-        logging.error("%s --- %s does not have rec in queue, queuing failed", procname, state.user.displayname)
+        logging.error("%s --- %s sent rec but track not in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return False
 
 
@@ -514,22 +515,23 @@ async def get_recs_in_queue(state, rec=None):
     except tk.Unauthorised as e:
         logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
         logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
-        return None, False
+        return None, False, None
     
     except Exception as e:
         logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
-        return None, False
+        return None, False, None
     
     if queue_context is None:
         logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
-        return None, False
+        return None, False, None
     
     rec_names = [x.trackname for x in recs]
     queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in queue_context.queue]
     
-    # if any of the rec_names are in history_names, return True
+    # if any of the rec_names are in queue/context, return the recs list, True, queue_context
     for rec_name in rec_names:
         if rec_name in queue_names:
-            return recs, True
+            logging.info("get_recs_in_queue found rec in queue: %s", rec_name)
+            return recs, True, queue_context
 
-    return recs, False
+    return recs, False, queue_context

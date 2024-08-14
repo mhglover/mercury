@@ -134,7 +134,7 @@ async def spotify_watcher(cred, spotify, user):
         # get the current list of recommended tracks
         recs = await Recommendation.all().prefetch_related("track")
         
-        # if we're playing a rec, we don't want to send it again, remove it from the list
+        # if we're playing a rec, pop that object of the recs list
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
         
         # if we're playing a recommendation that doesn't have an expiration
