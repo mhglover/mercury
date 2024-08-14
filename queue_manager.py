@@ -159,8 +159,8 @@ async def expire_queue() -> None:
     logging.debug("expire_queue removing old tracks")
     expired = await Recommendation.filter(expires_at__lte=now)
     for each in expired:
-        logging.info("expire_queue removing expired recommendation from queue: %s %s", each.trackname, each.expires_at)
         await each.delete()
+        logging.info("expire_queue removed expired recommendation: %s %s", each.trackname, each.expires_at)
 
 
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
