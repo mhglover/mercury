@@ -191,7 +191,8 @@ async def index():
 
     # set some return values
     if currently is not None:
-        web_data.refresh = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
+        refresh_in = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
+        web_data.refresh = min(refresh_in, 30)
         track = await trackinfo(spotify, currently.item.id)
         web_data.track = await get_webtrack(track, web_data.user)
         if web_data.track.track_id == web_data.nextup.track_id:
