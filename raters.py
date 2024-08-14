@@ -95,8 +95,9 @@ async def record_history(state, user_id=None):
     """write a record to the play history table"""
     logging.debug("recording play history %s %s", state.user.displayname, state.t())
     
-    if state.recorded:
-        logging.warning("record_history state.recorded is true, not re-recording %s", state.t())
+    # this should check the history table, not the state
+    if state.history and state.history.track_id == state.track.id:
+        logging.warning("record_history already have a history, not re-recording %s", state.t())
         return state.rating
     
     state.recorded = True
