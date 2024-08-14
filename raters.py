@@ -107,9 +107,15 @@ async def record_history(state, user_id=None):
     # check the PlayHistory table for a recent record of this track (within 15 minutes)
     interval = dt.now(tz.utc) - td(minutes=15)
     
-    recent = await PlayHistory.first().filter(track_id=state.track.id, played_at__gte=interval)
+    recent = await (PlayHistory.filter(track_id=state.track.id,
+                                       user_id=user_id,
+                                       played_at__gte=interval)
+                               .prefetch_related("user")
+                               .first()
+                    )
     if recent:
-        logging.info("record_history found recent playhistory, not re-recording %s", state.t())
+        logging.info("record_history recent playhistory from %s, won't double-record %s", 
+                        recent.user.displayname, state.t())
         return recent
     
     try:
