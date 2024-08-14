@@ -9,7 +9,7 @@ from models import User, WatcherState, Lock, Recommendation
 from users import getuser, getplayer
 from queue_manager import getnext, set_rec_expiration
 from raters import rate, record_history, rate_by_position, get_rating
-from spot_funcs import trackinfo, queue_safely, is_saved, get_player_queue, send_to_player
+from spot_funcs import trackinfo, queue_safely, is_saved
 
 async def user_reaper():
     """check the database every 5 minutes and remove inactive users"""
