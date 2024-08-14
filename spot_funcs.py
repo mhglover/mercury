@@ -319,6 +319,9 @@ async def queue_safely(state):
     
     logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
     
+    # do we need to send a recommendation to the player queue?
+    # no if the recommendation is in the queue within top 5 positions
+    
     recs, rec_in_queue = await get_recs_in_queue(state)
     if recs is None:
         logging.error("%s --- %s checking queue failed, can't send to queue safely", procname, state.user.displayname)
@@ -531,14 +534,14 @@ async def get_recs_in_queue(state, rec=None):
         return None, False
     
     rec_names = [x.trackname for x in recs]
-    queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in queue_context.queue]
-
-    # to figure out where the context begins, we'll check the top track to see if it's in the queue
-    # and assume everything else remaining are locally queued tracks or context
+    
+    # only check the first five items in the queue, we don't care about stuff deep in the context
+    queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name for x in queue_context.queue[:]]
 
     # if the top queue_name is a rec return the recs list, True
-    if queue_names[0] in rec_names:
-        logging.debug("get_recs_in_queue found rec at top of queue: %s", queue_names[0])
+    # check the top five queue_names for matches with rec_names
+    if any(queue_name in rec_names for queue_name in queue_names):
+        logging.debug("get_recs_in_queue found rec in queue: %s", queue_names[0])
         return recs, True
     
     return recs, False
