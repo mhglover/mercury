@@ -337,7 +337,7 @@ async def queue_safely(state):
         return False
     
     # lock the queue so that we don't allow multiple servers to send recs at the same time
-    Lock.attempt_acquire_lock(state.user.id)
+    await Lock.attempt_acquire_lock(state.user.id)
     
     logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
     state.currently = await getplayer(state)
@@ -421,7 +421,7 @@ async def queue_safely(state):
     recs, rec_in_queue = await get_recs_in_queue(state)
     
     # unlock the queue
-    Lock.release_lock(state.user.id)
+    await Lock.release_lock(state.user.id)
     
     if first_rec in recs:
         logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
