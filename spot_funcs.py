@@ -331,6 +331,14 @@ async def queue_safely(state):
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
         return False
     
+    # check for a lock on the queue
+    if await Lock.check_for_lock(state.user.id):
+        logging.warning("%s --- %s queue locked, can't send to queue safely", procname, state.user.displayname)
+        return False
+    
+    # lock the queue so that we don't allow multiple servers to send recs at the same time
+    Lock.attempt_acquire_lock(state.user.id)
+    
     logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
     state.currently = await getplayer(state)
     state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
@@ -411,6 +419,10 @@ async def queue_safely(state):
     
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
+    
+    # unlock the queue
+    Lock.release_lock(state.user.id)
+    
     if first_rec in recs:
         logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return True
