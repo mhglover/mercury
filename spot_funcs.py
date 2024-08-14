@@ -221,7 +221,7 @@ def truncate_middle(s, n=30):
     return '{0}...{1}'.format(s[:n_1], s[-n_2:])
 
 
-async def was_recently_played(state):
+async def was_recently_played(state, rec=None):
     """check player history"""
     spotify = state.spotify
     token = state.token
@@ -237,7 +237,12 @@ async def was_recently_played(state):
         logging.error("was_recently_played exception fetching player history %s", e)
         tracknames = None
     
-    if state.track.trackname in tracknames:
+    if rec:
+        checktrack = rec.track
+    else:
+        checktrack = state.track
+    
+    if checktrack.trackname in tracknames:
         logging.debug("was_recently_played track was recently played: %s", state.track.trackname)
         return True, tracknames
     
@@ -314,16 +319,13 @@ async def queue_safely(state):
     
     logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
     
-    recs, rec_in_queue, queue_context = await get_recs_in_queue(state)
+    recs, rec_in_queue = await get_recs_in_queue(state)
     if recs is None:
         logging.error("%s --- %s checking queue failed, can't send to queue safely", procname, state.user.displayname)
         return False
     
     if rec_in_queue:
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
-        for rec in recs:
-            if rec in queue_context.queue:
-                logging.info("%s --- %s rec in queue: %s", procname, state.user.displayname, rec.trackname)
         return False
     
     logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
@@ -370,7 +372,7 @@ async def queue_safely(state):
             logging.debug("%s --- %s rec doesn't match track_last_cycle: (rec) %s vs. (prior)%s", procname, state.user.displayname, rec.trackname, state.track_last_cycle.trackname)
         
         # if we've played this rec recently, don't send it again (should have a recent PlayHistory)
-        track_was_recently_played, recent_tracks = await was_recently_played(state)
+        track_was_recently_played, recent_tracks = await was_recently_played(state, rec=rec)
         if track_was_recently_played:
             logging.warning("%s --- %s rec was recently played, won't try to replay: %s",
                         procname, state.user.displayname, rec.trackname)
@@ -398,14 +400,14 @@ async def queue_safely(state):
     # okay fine, queue the first rec
     first_rec = good_recs[0]
     await send_to_player(spotify, token, first_rec.track)
-    logging.debug("%s --- %s selected and sent rec to queue: %s (%s)",
+    logging.debug("%s --- %s sent first rec to queue: %s (%s)",
                         procname, state.user.displayname, first_rec.trackname, first_rec.reason)
     
     # wait a tick for the queue touch to take effect
     await asyncio.sleep(1)
     
     # make sure the rec was put in the queue
-    recs, rec_in_queue, queue_context = await get_recs_in_queue(state)
+    recs, rec_in_queue = await get_recs_in_queue(state)
     if first_rec in recs:
         logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return True
@@ -508,6 +510,9 @@ async def get_recs_in_queue(state, rec=None):
                                  .order_by('id')
                                  .prefetch_related("track"))
     
+    # get the list of tracks waiting in the player queue, plus the tracks that
+    # are forthcoming in the player's context, ie album, playlist, artist, etc
+    
     try:
         with spotify.token_as(token):
             queue_context = await get_player_queue(state)
@@ -515,23 +520,25 @@ async def get_recs_in_queue(state, rec=None):
     except tk.Unauthorised as e:
         logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
         logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
-        return None, False, None
+        return None, False
     
     except Exception as e:
         logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
-        return None, False, None
+        return None, False
     
     if queue_context is None:
         logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
-        return None, False, None
+        return None, False
     
     rec_names = [x.trackname for x in recs]
     queue_names = [" & ".join([artist.name for artist in x.artists]) + " - " + x.name  for x in queue_context.queue]
-    
-    # if any of the rec_names are in queue/context, return the recs list, True, queue_context
-    for rec_name in rec_names:
-        if rec_name in queue_names:
-            logging.info("get_recs_in_queue found rec in queue: %s", rec_name)
-            return recs, True, queue_context
 
-    return recs, False, queue_context
+    # to figure out where the context begins, we'll check the top track to see if it's in the queue
+    # and assume everything else remaining are locally queued tracks or context
+
+    # if the top queue_name is a rec return the recs list, True
+    if queue_names[0] in rec_names:
+        logging.debug("get_recs_in_queue found rec at top of queue: %s", queue_names[0])
+        return recs, True
+    
+    return recs, False

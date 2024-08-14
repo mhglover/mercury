@@ -115,12 +115,6 @@ async def spotify_watcher(cred, spotify, user):
             # unset some states so we can handle the next track properly
             state.history = None
             state.recorded = state.finished = state.just_rated = False
-
-        # every watcher will write a history record for every track they see playing while active
-        if not state.history or state.history.track_id != state.track.id:
-            # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
-            state.history = await record_history(state)
-            state.recorded = True
         
         # if the track hasn't changed but the savestate has, rate it love/like
         if ((state.track_last_cycle.id == state.track.id) and 
@@ -137,20 +131,22 @@ async def spotify_watcher(cred, spotify, user):
         # if we're playing a rec, pop that object of the recs list
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
         
-        # if we're playing a recommendation that doesn't have an expiration
-        # set the expiration and note the reason it was selected
-        if rec and rec.expires_at is None:
-            logging.info("%s playing rec: %s", procname, rec.trackname)
+        # if we're playing a recommendation, update the reason and expiration
+        if rec:
+            
             # note the reason we're playing this track
-            state.reason = rec.reason
+            if state.reason != rec.reason:
+                state.reason = rec.reason
+                logging.info("%s playing a recommendation: %s (%s)", procname, rec.track.trackname, rec.reason)
             
-            logging.debug("%s recommendation first started, setting expiration: %s", procname, state.t())
-            
-            expiration_interval = timedelta(milliseconds=(state.remaining_ms - 30000))
-            rec.expires_at = dt.now(tz.utc) + expiration_interval
-            await rec.save()
+            # set the expiration and note the reason it was selected
+            if rec.expires_at is None:
+                logging.debug("%s recommendation first started, setting expiration: %s", procname, state.t())                
+                expiration_interval = timedelta(milliseconds=(state.remaining_ms - 30000))
+                rec.expires_at = dt.now(tz.utc) + expiration_interval
+                await rec.save()
 
-            logging.info("%s expiration set: %s - %s", procname, rec.trackname, rec.expires_at)
+                logging.info("%s expiration set: %s - %s", procname, rec.trackname, rec.expires_at)
 
         # get a rough guess at what the next rec will be
         state.nextup = recs[0] if recs else None
