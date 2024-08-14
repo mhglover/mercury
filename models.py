@@ -240,7 +240,14 @@ class WatcherState():
     
     def refresh_token(self):
         if self.token.is_expiring:
-            self.token = self.cred.refresh(self.token)
+            try:
+                self.token = self.cred.refresh(self.token)
+            except tk.BadRequest as e:
+                logging.error("refresh_token - %s", e)
+                self.token = None
+            except Exception as e:
+                logging.error("refresh_token - %s", e)
+                self.token = None
     
     async def set_watcher_name(self):
         self.user.watcherid = (f"watcher_{self.user.spotifyid}_" 
