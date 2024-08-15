@@ -104,8 +104,8 @@ async def record_history(user, track, reason: str):
                                .first()
                     )
     if recent:
-        logging.info("record_history recent playhistory from %s, won't double-record %s", 
-                        recent.user.displayname, track.trackname)
+        logging.info("record_history %s already wrote history: %s (%s)", user.displayname, track.trackname, reason)
+        
         return recent
     
     # if there's a rating, get it to use in the history record
