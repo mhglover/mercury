@@ -40,6 +40,8 @@ async def queue_manager(spotify, cred, sleep=10):
         # oh honey, fix you a plate
         while len(recommendations) < QUEUE_SIZE:
             logging.debug("%s queue is too small, adding a track", procname)
+            recommendations = await Recommendation.all()
+            
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
             if len(activeusers) > 0:
@@ -56,7 +58,6 @@ async def queue_manager(spotify, cred, sleep=10):
 
             else:
                 playtype = "spotrec"
-            
             
             logging.debug("%s getting a [%s] recommendation", procname, playtype)
             reason = playtype
@@ -83,6 +84,10 @@ async def queue_manager(spotify, cred, sleep=10):
                 logging.error("invalid track, don't recommend: [%s] %s", track.id, track.trackname)
                 # just sleep and loop again
                 logging.error("sleeping until the next loop")
+                continue
+            
+            if track.id in [x.track_id for x in recommendations]:
+                logging.error("queue_manager - track already in Recommendations, skipping: %s %s", track.id, track.trackname)
                 continue
             
             u = await Recommendation.create(track_id=track.id,
