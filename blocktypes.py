@@ -138,7 +138,7 @@ async def get_request(spotify, cred):
         with spotify.token_as(token):
             try:
                 playlists = await spotify.playlists(user.spotifyid)
-            except tk.Unauthorized as e:
+            except tk.Unauthorised as e:
                 logging.error("get_request unauthorized error for user %s: %s", user.displayname, e)
                 continue
             except Exception as e:
