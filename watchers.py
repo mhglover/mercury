@@ -141,7 +141,7 @@ async def spotify_watcher(cred, spotify, user):
             
             # set the expiration and note the reason it was selected
             if rec.expires_at is None:
-                logging.debug("%s recommendation first started, setting expiration: %s", procname, state.t())                
+                logging.info("%s recommendation first started, setting expiration: %s", procname, state.t())                
                 expiration_interval = timedelta(milliseconds=(state.remaining_ms - 30000))
                 rec.expires_at = dt.now(tz.utc) + expiration_interval
                 await rec.save()
