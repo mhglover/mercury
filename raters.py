@@ -13,7 +13,7 @@ PLAYHISTORY = """
     SELECT 
         p.track_id,
         t.trackname,
-        string_agg(distinct p.reason, ', ') as reason,
+        p.reason as reason,
         MAX(p.played_at) as played_at,
         array_agg(distinct u.displayname) as listeners
     FROM 
@@ -23,7 +23,7 @@ PLAYHISTORY = """
     JOIN
         track t ON p.track_id = t.id
     GROUP BY 
-        p.track_id, t.trackname
+        p.track_id, t.trackname, p.reason
     ORDER BY 
         MAX(p.played_at) DESC
     LIMIT 20
