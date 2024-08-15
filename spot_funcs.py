@@ -339,27 +339,30 @@ async def queue_safely(state):
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
         
         if queue_is_locked:
-            logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
+            logging.info("%s --- %s queue is locked, but there's a rec in queue, releasing queue lock", procname, state.user.displayname)
             await Lock.release_lock(state.user.id)
         
         return False
     
     # no rec in the queue but it's locked, don't send
     if queue_is_locked:
-        logging.warning("%s --- %s queue locked, can't send to queue safely", procname, state.user.displayname)
+        logging.warning("%s --- %s no rec in queue, but queue is locked, can't send to queue safely", procname, state.user.displayname)
         return False
     
     # lock the queue so that nobody else can send a rec to this user while we do
+    logging.info("%s --- %s no rec in queue, locking queue", procname, state.user.displayname)
     lock = await Lock.attempt_acquire_lock(state.user.id)
     
     if not lock:
         logging.error("%s --- %s failed to acquire queue lock, can't send to queue safely", procname, state.user.displayname)
         return False
     
-    logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
+    logging.info("%s --- %s no rec found, locked queue, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
+    suspected = state.currently
     state.currently = await getplayer(state)
-    state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
-    logging.info("%s --- %s updated currently playing: %s", procname, state.user.displayname, state.track.trackname)
+    if state.currently.item.id != suspected.item.id:
+        state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
+        logging.info("%s --- %s track changed while locking queue, now playing: %s", procname, state.user.displayname, state.track.trackname)
 
     # discard any recs that are not valid
     for rec in recs:
@@ -441,6 +444,7 @@ async def queue_safely(state):
         logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+        await asyncio.sleep(3)
         await Lock.release_lock(state.user.id)
         return True
     else:
