@@ -371,7 +371,7 @@ async def queue_safely(state):
         interval = dt.datetime.now() - dt.timedelta(minutes=90)
         in_history = await PlayHistory.exists(track_id=rec.track_id, user_id=state.user.id, played_at__gte=interval)
         if in_history:
-            logging.warning("%s --- %s rec has recent playhistory, not a good candidate: %s",
+            logging.debug("%s --- %s rec has recent playhistory, not a good candidate: %s",
                         procname, state.user.displayname, rec.trackname)
             continue
         else:
@@ -381,11 +381,11 @@ async def queue_safely(state):
         
         # don't send a track that's currently playing (should have a recent PlayHistory)
         if state.track.id == rec.track_id:
-            logging.warning("%s --- %s rec playing now, not a good candidate: %s",
+            logging.debug("%s --- %s rec playing now, not a good candidate: %s",
                         procname, state.user.displayname, rec.trackname)
             
             if rec.expires_at is None:
-                logging.warning("%s --- %s currently playing rec has no expiration: %s", procname, state.user.displayname, rec.trackname)
+                logging.debug("%s --- %s currently playing rec has no expiration: %s", procname, state.user.displayname, rec.trackname)
             
             continue
         else:
@@ -393,7 +393,7 @@ async def queue_safely(state):
         
         # if a rec was played in the last cycle, don't send that either (should have a recent PlayHistory)
         if rec.track_id == state.track_last_cycle.id:
-            logging.warning("%s --- %s rec was played last cycle, not a good candidate: %s",
+            logging.debug("%s --- %s rec was played last cycle, not a good candidate: %s",
                         procname, state.user.displayname, rec.trackname)
             continue
         else:
@@ -402,7 +402,7 @@ async def queue_safely(state):
         # if we've played this rec recently, don't send it again (should have a recent PlayHistory)
         track_was_recently_played, recent_tracks = await was_recently_played(state, rec=rec)
         if track_was_recently_played:
-            logging.warning("%s --- %s rec was recently played, won't try to replay: %s",
+            logging.debug("%s --- %s rec was recently played, won't try to replay: %s",
                         procname, state.user.displayname, rec.trackname)
             continue
         else:
