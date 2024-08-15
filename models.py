@@ -225,7 +225,6 @@ class WatcherState():
     endzone: str = None
     finished: bool = False
     remaining_ms: int = 0
-    recorded: bool = False
     
     track_last_cycle: Track = field(default_factory=Track)
     position_last_cycle: int = 0

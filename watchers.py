@@ -114,14 +114,8 @@ async def spotify_watcher(cred, spotify, user):
             
             # unset some states so we can handle the next track properly
             state.history = None
-            state.recorded = state.finished = state.just_rated = False
+            state.finished = state.just_rated = False
 
-        # every watcher will write a history record for every track they see playing while active
-        if not state.history or state.history.track_id != state.track.id:
-            # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
-            state.history = await record_history(state)
-            state.recorded = True
-        
         # if the track hasn't changed but the savestate has, rate it love/like
         if ((state.track_last_cycle.id == state.track.id) and 
             (state.was_saved_last_cycle != state.is_saved)):
@@ -157,6 +151,11 @@ async def spotify_watcher(cred, spotify, user):
         # get a rough guess at what the next rec will be
         state.nextup = recs[0] if recs else None
         
+        # every watcher will write a history record for every track they see playing while active
+        if not state.history or state.history.track_id != state.track.id:
+            # record a PlayHistory when this watcher sees a track playing that doesn't match the state.history
+            state.history = await record_history(state.user, state.track, state.reason)
+
         # see if we need to send a recommendation to the player
         _ = await queue_safely(state)
         

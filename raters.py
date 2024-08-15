@@ -91,47 +91,40 @@ async def get_rating(user, track_id) -> int:
     return rating  
 
 
-async def record_history(state, user_id=None):
+async def record_history(user, track, reason: str):
     """write a record to the play history table"""
-    logging.debug("recording play history %s %s", state.user.displayname, state.t())
+    logging.debug("recording play history %s %s", user.displayname, track.trackname, reason)
     
-    # this should check the history table, not the state
-    if state.history and state.history.track_id == state.track.id:
-        logging.warning("record_history already have a history, not re-recording %s", state.t())
-        return state.rating
-    
-    state.recorded = True
-    
-    if not user_id:
-        user_id = state.user.id
-    
-    # check the PlayHistory table for a recent record of this track (within 15 minutes)
+    # check for a recent record of this track (within 15 minutes)
     interval = dt.now(tz.utc) - td(minutes=15)
-    
-    recent = await (PlayHistory.filter(track_id=state.track.id,
-                                       user_id=user_id,
+    recent = await (PlayHistory.filter(track_id=track.id,
+                                       user_id=user.id,
                                        played_at__gte=interval)
                                .prefetch_related("user")
                                .first()
                     )
     if recent:
         logging.info("record_history recent playhistory from %s, won't double-record %s", 
-                        recent.user.displayname, state.t())
+                        recent.user.displayname, track.trackname)
         return recent
     
+    # if there's a rating, get it to use in the history record
+    rating = await Rating.get_or_none(track_id=track.id, user_id=user.id)
+    
+    # since we didn't find a history, let's make one
     try:
         history = await PlayHistory.create(
-            track_id=state.track.id,
-            trackname=state.track.trackname,
-            user_id=user_id,
-            rating_id=state.rating.id,
-            reason=state.reason
+            track_id=track.id,
+            trackname=track.trackname,
+            user_id=user.id,
+            rating_id=rating.id if rating else None,
+            reason=reason
         )
     except Exception as e:
         logging.error("record exception creating playhistory\n%s", e)
         history = None  # Ensure history is defined even in case of an exception
     
-    logging.info("record_history wrote history %s", state.t())
+    logging.info("record_history %s wrote history: %s", user.displayname, track.trackname)
     return history
 
 
