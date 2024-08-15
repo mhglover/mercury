@@ -316,28 +316,45 @@ async def queue_safely(state):
     spotify = state.spotify
     token = state.token
     good_recs = []
+    queue_is_locked = await Lock.check_for_lock(state.user.id)
     
-    logging.debug("%s --- %s needs a recommendation", procname, state.user.displayname)
+    logging.debug("%s --- %s check whether we can and should send a recommendation", procname, state.user.displayname)
     
-    # do we need to send a recommendation to the player queue?
-    # no if the recommendation is in the queue within top 5 positions
-    
+    # check if the user has a rec in the first five items in the queue/context
     recs, rec_in_queue = await get_recs_in_queue(state)
+    
+    # if we can't get the recs, we can't send to the queue safely, so bail
     if recs is None:
         logging.error("%s --- %s checking queue failed, can't send to queue safely", procname, state.user.displayname)
+        
+        if queue_is_locked:
+            # release the lock
+            logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+            await Lock.release_lock(state.user.id)
+
         return False
     
+    # we have a rec in the queue, don't send another
     if rec_in_queue:
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
+        
+        if queue_is_locked:
+            logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
+            await Lock.release_lock(state.user.id)
+        
         return False
     
-    # check for a lock on the queue
-    if await Lock.check_for_lock(state.user.id):
+    # no rec in the queue but it's locked, don't send
+    if queue_is_locked:
         logging.warning("%s --- %s queue locked, can't send to queue safely", procname, state.user.displayname)
         return False
     
-    # lock the queue so that we don't allow multiple servers to send recs at the same time
-    await Lock.attempt_acquire_lock(state.user.id)
+    # lock the queue so that nobody else can send a rec to this user while we do
+    lock = await Lock.attempt_acquire_lock(state.user.id)
+    
+    if not lock:
+        logging.error("%s --- %s failed to acquire queue lock, can't send to queue safely", procname, state.user.displayname)
+        return False
     
     logging.info("%s --- %s no rec found, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
     state.currently = await getplayer(state)
@@ -420,14 +437,17 @@ async def queue_safely(state):
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
     
-    # unlock the queue
-    await Lock.release_lock(state.user.id)
-    
     if first_rec in recs:
         logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        # release the lock
+        logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+        await Lock.release_lock(state.user.id)
         return True
     else:
         logging.error("%s --- %s sent rec but track not in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        # release the lock
+        logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+        await Lock.release_lock(state.user.id)
         return False
 
 
