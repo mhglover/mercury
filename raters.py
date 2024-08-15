@@ -124,7 +124,7 @@ async def record_history(user, track, reason: str):
         logging.error("record exception creating playhistory\n%s", e)
         history = None  # Ensure history is defined even in case of an exception
     
-    logging.info("record_history %s wrote history: %s", user.displayname, track.trackname)
+    logging.info("record_history %s wrote history: %s (%s)", user.displayname, track.trackname, reason)
     return history
 
 
