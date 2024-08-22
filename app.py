@@ -195,8 +195,7 @@ async def index():
         web_data.refresh = min(refresh_in, 30)
         track = await trackinfo(spotify, currently.item.id)
         web_data.track = await get_webtrack(track, web_data.user)
-        if web_data.track.track_id == web_data.nextup.track_id:
-            web_data.track.reason = web_data.nextup.reason
+        web_data.track.reason = Recommendation.get_or_none(track_id=web_data.track.track_id).values_list('reason', flat=True)
 
         try:
             web_data.users = await getactivewebusers(track)
