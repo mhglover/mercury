@@ -449,6 +449,12 @@ async def queue_safely(state):
         return True
     else:
         logging.error("%s --- %s sent rec but track not in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        logging.error("%s --- %s check for a recent track consolidation", procname, state.user.displayname)
+        logging.error("%s --- %s sleeping for 3 seconds and releasing queue lock", procname, state.user.displayname)
+        logging.info("recs: %s", recs)
+        queue_context = await get_player_queue(state)
+        logging.info("queue_context: %s", queue_context)
+        
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
         await Lock.release_lock(state.user.id)
@@ -540,7 +546,10 @@ async def consolidate_tracks(tracks):
 
 
 async def get_recs_in_queue(state, rec=None):
-    """ check if the queue or context has any of the current recommendations"""
+    """ get the current recommendations and check if any are in the player queue 
+    
+    returns: list of recs, bool
+    """
     spotify = state.spotify
     token = state.token
     # only include recs with no expiration
