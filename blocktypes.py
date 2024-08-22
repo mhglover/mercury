@@ -85,10 +85,13 @@ async def spotrec_tracks(spotify, count=1):
     """
     procname = "spotrec_tracks"
     
-    # get the last five PlayHistory tracks for seeds
-    seed_tracks = await PlayHistory.filter().order_by('-id').limit(5).prefetch_related('track')
     
-    seed_spotifyids = [x.track.spotifyid for x in seed_tracks]
+    # use the recent positively rated tracks as seeds
+    recent_tracks = await PlayHistory.filter().order_by('-id').limit(20).prefetch_related('ratings')
+    
+    seed_tracks = [x.track.spotifyid for x in recent_tracks if x.rating.rating > 0]
+    seed_tracks = seed_tracks[:5]
+    seed_spotifyids = [x.spotifyid for x in seed_tracks]
     seed_names = [x.track.trackname for x in seed_tracks]
 
     logging.debug("%s getting spotify recommendations", procname)
