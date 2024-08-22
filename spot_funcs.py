@@ -257,12 +257,17 @@ async def get_player_queue(state):
     spotify = state.spotify
     try:
         with spotify.token_as(state.token):
-            return await spotify.playback_queue()
+            currently_queue = await spotify.playback_queue()
     except tk.Unauthorised as e:
         logging.error("%s 401 Unauthorised exception %s", procname, e)
+        return None
     except Exception as e:
         logging.error("%s exception %s", procname, e)
-    return None
+        return None
+
+    logging.debug("%s currently playing: %s", procname, currently_queue.currently_playing.name)
+    logging.debug("%s queue (%s items): %s", procname, len(currently_queue.queue), [x.name for x in currently_queue.queue])
+    return currently_queue
 
 
 async def is_already_queued(state, track):
