@@ -188,6 +188,9 @@ async def index():
         except tk.Unauthorised as e:
             logging.error("index - unauthorised\n%s", e)
             return redirect("/")
+        except Exception as e:
+            logging.error("index - playback_currently_playing\n%s", e)
+            return redirect("/")
 
     # set some return values
     if currently is not None:
