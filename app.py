@@ -192,6 +192,10 @@ async def index():
             logging.error("index - playback_currently_playing\n%s", e)
             return redirect("/")
 
+    if currently.currently_playing_type == "unknown":
+        logging.warning("index - currently_playing_type is unknown")
+        return
+    
     # set some return values
     if currently is not None:
         refresh_in = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
