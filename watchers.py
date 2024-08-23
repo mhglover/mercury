@@ -180,7 +180,7 @@ async def spotify_watcher(cred, spotify, user):
                     followers = await User.filter(watcherid=user.id)
                     fvalue = 1
                     for f in followers:
-                        logging.info("%s [track endzone] follower %s rating track (%s)", procname, f.displayname, f.value)
+                        logging.info("%s [track endzone] follower %s rating track (%s)", procname, f.displayname, fvalue)
                         await rate(f, state.track, value=fvalue)
                 
                 # don't repeat this part of the loop until we detect a track change
