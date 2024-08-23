@@ -161,11 +161,22 @@ async def getnext(get_all=False, webtrack=False, user=None):
 async def expire_queue() -> None:
     """remove old tracks from the upcoming queue"""
     now = dt.now(tz.utc)
-    logging.debug("expire_queue removing old tracks")
+    logging.debug("expire_queue removing tracks with expires_at before %s", now)
     expired = await Recommendation.filter(expires_at__lte=now)
     for each in expired:
         await each.delete()
         logging.info("expire_queue removed expired recommendation: %s %s", each.trackname, each.expires_at)
+    
+    # if there are any active users, remove tracks that have been queued for over an hour
+    activeusers = await getactiveusers()
+    if len(activeusers) == 0:
+        return
+    
+    logging.debug("expire_queue removing tracks with creation times over 1 hours ago")
+    expired = await Recommendation.filter(queued_at__lte=now - timedelta(hours=1)) 
+    for each in expired:
+        await each.delete()
+        logging.info("expire_queue removed old recommendation: %s %s", each.trackname, each.queued_at)
 
 
 async def set_rec_expiration(recommendation, remaining_ms) -> None:
