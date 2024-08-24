@@ -79,6 +79,9 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
     except tk.Unauthorised as e:
         logging.error("trackinfo - 401 Unauthorised exception %s", e)
         return None
+    except Exception as e:
+        logging.error("trackinfo - exception fetching spotify track %s", e)
+        return None
     
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
