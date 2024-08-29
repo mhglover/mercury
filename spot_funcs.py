@@ -239,6 +239,7 @@ async def was_recently_played(state, rec=None):
     except Exception as e:
         logging.error("was_recently_played exception fetching player history %s", e)
         tracknames = None
+        return False, tracknames
     
     if rec:
         checktrack = rec.track
