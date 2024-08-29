@@ -298,6 +298,7 @@ async def send_to_player(spotify, token, track: Track):
             logging.error("send_to_player - 401 Unauthorised exception %s", e)
             logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
         except Exception as e:
+            logging.error("send_to_player - exception from spotify.playback_queue_add %s\n%s", type(e).__name__, track.trackname)
             if "502: Bad gateway" in str(e):
                 logging.warning(
                     "send_to_player - 502 Bad gateway error occurred, retrying once: %s",
@@ -314,7 +315,7 @@ async def send_to_player(spotify, token, track: Track):
             else:
                 logging.error(
                     "send_to_player - unknown exception from spotify.playback_queue_add %s\n%s",
-                    track.trackname, e
+                    track.trackname, type(e).__name__
                 )
 
 
