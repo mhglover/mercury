@@ -644,7 +644,7 @@ async def web_rate_track(track_id, action):
     if action not in ['up', 'down']:
         return redirect("/")
     
-    user, _ = await getuser(cred, user_id)
+    user, token = await getuser(cred, user_id)
     
     track = await normalizetrack(track_id)
     
@@ -657,6 +657,12 @@ async def web_rate_track(track_id, action):
         return redirect(request.referrer)
     
     await rating.save()
+    
+    # if the rating is a 2, add the track to the user's saved tracks
+    if rating.rating == 2:
+        logging.info("web_rate_track - %s rated track at 2, adding to their saved tracks: %s", user.displayname, track.trackname)
+        with spotify.token_as(token):
+            await spotify.saved_tracks_add(track.spotifyid)
     
     return redirect(request.referrer)
 
