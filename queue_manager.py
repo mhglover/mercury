@@ -25,7 +25,7 @@ async def queue_manager(spotify, cred, sleep=10):
         logging.debug("%s checking queue state", procname)
 
         # remove the old and busted
-        await expire_queue()
+        # await expire_queue()
 
         # get the new hotness
         recommendations = await Recommendation.all()
