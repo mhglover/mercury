@@ -268,6 +268,10 @@ async def get_player_queue(state):
     except Exception as e:
         logging.error("%s exception %s", procname, e)
         return None
+    
+    if not currently_queue:
+        logging.warning("%s no queue items found", procname)
+        return None
 
     logging.debug("%s currently playing: %s", procname, currently_queue.currently_playing.name)
     logging.debug("%s queue (%s items): %s", procname, len(currently_queue.queue), [x.name for x in currently_queue.queue])
@@ -294,9 +298,14 @@ async def send_to_player(spotify, token, track: Track):
     with spotify.token_as(token):
         try:
             _ = await spotify.playback_queue_add(track.trackuri)
+        
         except tk.Unauthorised as e:
             logging.error("send_to_player - 401 Unauthorised exception %s", e)
             logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
+            return False
+        except tk.NotFound as e:
+            logging.error("send_to_player - 404 Not Found exception - trackuri: %s", track.trackuri)
+            return False
         except Exception as e:
             logging.error("send_to_player - exception from spotify.playback_queue_add %s\n%s", type(e).__name__, track.trackname)
             if "502: Bad gateway" in str(e):
@@ -317,6 +326,8 @@ async def send_to_player(spotify, token, track: Track):
                     "send_to_player - unknown exception from spotify.playback_queue_add %s\n%s",
                     track.trackname, type(e).__name__
                 )
+            return False
+        return True
 
 
 async def queue_safely(state):
@@ -360,7 +371,7 @@ async def queue_safely(state):
         return False
     
     # lock the queue so that nobody else can send a rec to this user while we do
-    logging.info("%s --- %s no rec in queue, locking queue", procname, state.user.displayname)
+    logging.debug("%s --- %s no rec in queue, locking queue", procname, state.user.displayname)
     lock = await Lock.attempt_acquire_lock(state.user.id)
     
     if not lock:
@@ -440,9 +451,13 @@ async def queue_safely(state):
     
     # okay fine, queue the first rec
     first_rec = good_recs[0]
-    await send_to_player(spotify, token, first_rec.track)
+    sent_successfully = await send_to_player(spotify, token, first_rec.track)
     logging.debug("%s --- %s sent first rec to queue: %s (%s)",
                         procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+    
+    if not sent_successfully:
+        logging.error("%s --- %s failed to send rec to queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        return False
     
     # wait a tick for the queue touch to take effect
     await asyncio.sleep(1)
