@@ -7,7 +7,7 @@ from tortoise.expressions import Q
 from models import Recommendation, Track, Option, WebTrack, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks, get_request
-from spot_funcs import validatetrack
+from spot_funcs import validatetrack, get_live_recs
 from raters import feelabout
 
 QUEUE_SIZE = 4
@@ -27,20 +27,20 @@ async def queue_manager(spotify, cred, sleep=10):
         # remove the old and busted
         # await expire_queue()
 
-        # get the new hotness
-        recommendations = await Recommendation.all()
+        # get active recs
+        recommendations = await get_live_recs()
 
         # too much, baby, trim that back
         while len(recommendations) > QUEUE_SIZE:
             newest = recommendations.pop()
-            logging.info("%s queue is too large, removing latest trackid %s",
-                         procname, newest)
-            await Recommendation.filter(id=newest.id).delete()
+            logging.warning("%s queue is too large, removing rec_id:%s track_id:%s trackname:%s",
+                         procname, newest.id, newest.track_id, newest.trackname)
+            await newest.delete()
 
         # oh honey, fix you a plate
         while len(recommendations) < QUEUE_SIZE:
             logging.debug("%s queue is too small, adding a track", procname)
-            recommendations = await Recommendation.all()
+            recommendations = await get_live_recs()
             
             activeusers = await getactiveusers()
             # activeuids = [x.spotifyid for x in activeusers]
@@ -117,22 +117,18 @@ async def getnext(get_all=False, webtrack=False, user=None):
     returns: Recommendation (prefetched track) or WebTrack
     """
     logging.debug("pulling queue from db")
+    recs = await get_live_recs()
+    
+    if not recs:
+        logging.error("getnext - no recommendations found")
+        return None
+    
     if get_all:
-        # this includes recommendations where expires_at is null or in the future
-        rec = await (Recommendation.filter(Q(expires_at__isnull=True) | 
-                                           Q(expires_at__gt=dt.now(tz.utc)))
-                                   .order_by("id")
-                                   .prefetch_related("track")
-                    )
-        return rec
+        return recs
+    else:
+        rec = recs[0]
     
-    rec =  await (Recommendation.first()
-                                .filter(Q(expires_at__isnull=True) | 
-                                        Q(expires_at__gt=dt.now(tz.utc)))
-                                .order_by("id")
-                                .prefetch_related("track"))
-    
-    if rec and webtrack:
+    if webtrack:
         if user is not None:
             rating = await Rating.get_or_none(track_id=rec.track_id,
                                         user_id=user.id).values_list('rating', flat=True)

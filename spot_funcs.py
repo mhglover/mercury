@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import datetime as dt
+from datetime import timezone as tz, datetime as dt, timedelta as td
 from tortoise.expressions import Q
 from tortoise.exceptions import IntegrityError
 import tekore as tk
@@ -392,7 +392,7 @@ async def queue_safely(state):
         
         # don't send a track with a recent playhistory for this user
         # this check should catch most of the cases to avoid
-        interval = dt.datetime.now() - dt.timedelta(minutes=90)
+        interval = dt.now() - td(minutes=90)
         in_history = await PlayHistory.exists(track_id=rec.track_id, user_id=state.user.id, played_at__gte=interval)
         if in_history:
             logging.debug("%s --- %s rec has recent playhistory, not a good candidate: %s",
@@ -578,10 +578,7 @@ async def get_recs_in_queue(state, rec=None):
     spotify = state.spotify
     token = state.token
     # only include recs with no expiration
-    recs = ( await Recommendation.filter(Q(expires_at=None) | 
-                                         Q(expires_at__gte=dt.datetime.now(dt.timezone.utc)))
-                                 .order_by('id')
-                                 .prefetch_related("track"))
+    recs = await get_live_recs()
     
     # get the list of tracks waiting in the player queue, plus the tracks that
     # are forthcoming in the player's context, ie album, playlist, artist, etc
@@ -615,3 +612,13 @@ async def get_recs_in_queue(state, rec=None):
         return recs, True
     
     return recs, False
+
+
+async def get_live_recs():
+    """get a list of recommendations that haven't expired yet with prefetched tracks"""
+    now = dt.now(tz.utc)
+    recs = ( await Recommendation.filter(Q(expires_at__isnull=True) | 
+                                       Q(expires_at__gt=now))
+                               .order_by('id')
+                               .prefetch_related("track"))
+    return recs

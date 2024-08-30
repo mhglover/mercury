@@ -5,11 +5,12 @@ import asyncio
 from datetime import timezone as tz, datetime as dt, timedelta
 from humanize import naturaltime
 import tekore as tk
+from tortoise.expressions import Q
 from models import User, WatcherState, Lock, Recommendation
 from users import getuser, getplayer
-from queue_manager import getnext, set_rec_expiration
+from queue_manager import getnext
 from raters import rate, record_history, rate_by_position, get_rating
-from spot_funcs import trackinfo, queue_safely, is_saved
+from spot_funcs import trackinfo, queue_safely, is_saved, get_live_recs
 
 async def user_reaper():
     """check the database every 5 minutes and remove inactive users"""
@@ -125,8 +126,8 @@ async def spotify_watcher(cred, spotify, user):
             state.just_rated = True
             logging.info("%s savestate rated (%s) %s", procname, value, state.t())
         
-        # get the current list of recommended tracks
-        recs = await Recommendation.all().prefetch_related("track")
+        # get recommendations that haven't expired yet or have no expiration
+        recs = await get_live_recs()
         
         # if we're playing a rec, pop that object of the recs list
         rec = next((rec for rec in recs if rec.track_id == state.track.id), None)
