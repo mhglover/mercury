@@ -237,11 +237,11 @@ async def rate_by_position(user, last_track, last_position):
     if last_position == 0:
         logging.warning("rate_by_position trackchange at 0%, won't rate at all %s %s %s", user.displayname, last_track.trackname, last_position)
         return
-    if last_position <=20:
+    if last_position <=15:
         value = -2
     elif last_position <=40:
         value = -1
-    elif last_position <=80:
+    else:
         value = 0
     
     await rate(user, last_track, value, downrate=True)
