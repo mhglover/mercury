@@ -651,6 +651,11 @@ async def web_rate_track(track_id, action):
     rating = await get_rating(user, track.id)
 
     rating.rating = int(rating.rating) + 1 if action == 'up' else int(rating.rating) - 1
+    
+    if rating.rating < -2 or rating.rating > 2:
+        logging.warning("web_rate_track - attempted rating out of bounds: %s", rating.rating)
+        return redirect(request.referrer)
+    
     await rating.save()
     
     return redirect(request.referrer)
