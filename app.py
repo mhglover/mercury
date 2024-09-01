@@ -649,9 +649,18 @@ async def web_rate_track(track_id, action):
     track = await normalizetrack(track_id)
     
     rating = await get_rating(user, track.id)
+    
+    # reset out-of-bounds ratings to the nearest bound
+    if rating.rating > 2:
+        rating.rating = 2
+    
+    if rating.rating < -2:
+        rating.rating = -2
 
+    # increment or decrement the rating
     rating.rating = int(rating.rating) + 1 if action == 'up' else int(rating.rating) - 1
     
+    # ignore ratings that are out of bounds
     if rating.rating < -2 or rating.rating > 2:
         logging.warning("web_rate_track - attempted rating out of bounds: %s", rating.rating)
         return redirect(request.referrer)
@@ -660,9 +669,15 @@ async def web_rate_track(track_id, action):
     
     # if the rating is a 2, add the track to the user's saved tracks
     if rating.rating == 2:
-        logging.info("web_rate_track - %s rated track at 2, adding to their saved tracks: %s", user.displayname, track.trackname)
+        logging.debug("web_rate_track - %s rated track at 2, adding to their saved tracks: %s", user.displayname, track.trackname)
         with spotify.token_as(token):
-            await spotify.saved_tracks_add(track.spotifyid)
+            await spotify.saved_tracks_add([track.spotifyid])
+
+    # if the rating was down and is now a 1, remove the track from the user's saved tracks
+    if rating.rating == 1 and action == 'down':
+        logging.debug("web_rate_track - %s rated track at 1, removing from their saved tracks: %s", user.displayname, track.trackname)
+        with spotify.token_as(token):
+            await spotify.saved_tracks_delete([track.spotifyid])
     
     return redirect(request.referrer)
 
