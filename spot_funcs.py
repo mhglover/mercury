@@ -80,7 +80,7 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
         logging.error("trackinfo - 401 Unauthorised exception %s", e)
         return None
     except Exception as e:
-        logging.error("trackinfo - exception fetching spotify track %s", e)
+        logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
         return None
     
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
@@ -168,9 +168,10 @@ async def validatetrack(spotify, track):
         
         # does this exist in Spotify?
         try:
+            logging.info("validatetrack fetching spotify trackid: %s", spotifyid.spotifyid)   
             spot_track = await spotify.track(spotifyid.spotifyid, market='US')
         except Exception as e:
-            logging.error("validatetrack exception fetching spotify track %s", e)
+            logging.error("validatetrack - exception fetching spotify track: %s\n%s", type(e).__name__, e)
             spot_track = None
         
         if track.spotifyid == spotifyid.spotifyid:

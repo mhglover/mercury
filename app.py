@@ -133,8 +133,9 @@ async def before_serving():
             await watchman(taskset, cred, spotify, spotify_watcher, user)
         
         nextup = await getnext(get_all=True)
-        for track in nextup:
-            logging.info("upcoming: %s (%s)", track.trackname, track.reason)
+        if nextup:
+            for track in nextup:
+                logging.info("upcoming: %s (%s)", track.trackname, track.reason)
         
         logging.debug("%s ready", procname)
 

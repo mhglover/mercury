@@ -77,6 +77,11 @@ async def queue_manager(spotify, cred, sleep=10):
             if playtype == "popular":
                 track, reason = await popular_tracks()
 
+            if not track:
+                logging.error("%s no track returned, sleeping until the next loop", procname)
+                await asyncio.sleep(sleep)
+                continue
+
             logging.info("%s adding [%s]: %s (%s)", procname, playtype, track.trackname, reason)
             
             # validate the track before we add it to the recommendations
@@ -120,7 +125,7 @@ async def getnext(get_all=False, webtrack=False, user=None):
     recs = await get_live_recs()
     
     if not recs:
-        logging.error("getnext - no recommendations found")
+        logging.error("getnext - no live recommendations found")
         return None
     
     if get_all:
