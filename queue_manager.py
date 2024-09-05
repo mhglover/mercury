@@ -84,12 +84,12 @@ async def queue_manager(spotify, cred, sleep=10):
 
             logging.info("%s adding [%s]: %s (%s)", procname, playtype, track.trackname, reason)
             
-            # validate the track before we add it to the recommendations
-            if not await validatetrack(spotify, track):
-                logging.error("invalid track, don't recommend: [%s] %s", track.id, track.trackname)
-                # just sleep and loop again
-                logging.error("sleeping until the next loop")
-                continue
+            # # validate the track before we add it to the recommendations
+            # if not await validatetrack(spotify, track):
+            #     logging.error("invalid track, don't recommend: [%s] %s", track.id, track.trackname)
+            #     # just sleep and loop again
+            #     logging.error("sleeping until the next loop")
+            #     continue
             
             if track.id in [x.track_id for x in recommendations]:
                 logging.error("queue_manager - track already in Recommendations, skipping: %s %s", track.id, track.trackname)
