@@ -71,7 +71,8 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
             else:
                 spotify_details = await spotify_object.track(check_spotifyid, market="US")
         except Exception as e:
-            logging.error("trackinfo - exception fetching spotify details for track: %s\n%s", type(e).__name__, e.json())
+            logging.error("trackinfo - exception fetching spotify details for track: %s\n%s", 
+                          type(e).__name__, e.json())
             return track
         
         # check to see if we should follow a referral to another spotifyid
@@ -552,7 +553,8 @@ async def consolidate_tracks(tracks):
     original_track = tracks[0]
     
     for t in tracks[1:]:
-        logging.debug("consolidate_tracks consolidating %s into %s", t.id, original_track.id)
+        logging.info("consolidate_tracks %s into %s", t.id, original_track.id)
+        logging.info(t)
         
         # update the spotifyids associated with this track to point to the original
         t_spotifyids = await SpotifyID.filter(track=t)
