@@ -71,15 +71,17 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
             else:
                 spotify_details = await spotify_object.track(check_spotifyid, market="US")
         except Exception as e:
-            logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e.json())
+            logging.error("trackinfo - exception fetching spotify details for track: %s\n%s", type(e).__name__, e.json())
             return track
         
+        # check to see if we should follow a referral to another spotifyid
         if spotify_details.id != check_spotifyid:
-            logging.warning("trackinfo - spotifyid [%s] is linked to [%s], recursively fetching track",
+            logging.warning("trackinfo - spotifyid [%s] is linked to [%s], fetching referred track",
                             check_spotifyid, spotify_details.id)
             track = await trackinfo(spotify_object, spotify_details.id, token=token)
-        
-        return track
+            return track
+        else:
+            return track
     
     
     logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
@@ -592,7 +594,7 @@ async def consolidate_tracks(tracks):
         except Exception as e:
             logging.error("consolidate_tracks exception deleting track %s\n%s", t.id, e)
             
-        return True
+        return original_track
 
 
 async def get_recs_in_queue(state, rec=None):
