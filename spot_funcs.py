@@ -171,7 +171,7 @@ async def validatetrack(spotify, track):
             logging.info("validatetrack fetching spotify trackid: %s", spotifyid.spotifyid)   
             spot_track = await spotify.track(spotifyid.spotifyid, market='US')
         except Exception as e:
-            logging.error("validatetrack - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+            logging.error("validatetrack - exception fetching spotify track: %s\n%s", type(e).__name__, e.json())
             spot_track = None
         
         if track.spotifyid == spotifyid.spotifyid:
