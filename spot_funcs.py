@@ -71,9 +71,9 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
     try:
         if token:
             with spotify_object.token_as(token):
-                spotify_details = await spotify_object.track(check_spotifyid)
+                spotify_details = await spotify_object.track(check_spotifyid, market="US")
         else:
-            spotify_details = await spotify_object.track(check_spotifyid)
+            spotify_details = await spotify_object.track(check_spotifyid, market="US")
         
         
     except tk.Unauthorised as e:
@@ -188,12 +188,17 @@ async def validatetrack(spotify, track):
             if track.spotifyid == spotifyid.spotifyid:
                 logging.error("validatetrack removing canonical spotifyid from Track record")
                 track.spotifyid = ""
-                track.save()
+                await track.save()
 
         # okay, it's real.  is this playable in the US?
-        if not spot_track.is_playable:
-            logging.error("validatetrack rejected unplayable track: %s [%s](%s)",
+        try:
+            if not spot_track.is_playable:
+                logging.error("validatetrack rejected unplayable track: %s [%s](%s)",
                           track.trackname, spotifyid.spotifyid, spot_track.restrictions)
+                return False
+        except:
+            logging.error("validatetrack exception checking is_playable for track: %s [%s]",
+                            track.trackname, spotifyid.spotifyid)
             return False
     
     return True

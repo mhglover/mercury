@@ -161,7 +161,9 @@ async def get_request(spotify, cred):
                 if len(tracks) > 0:
                     # get one song at random from the playlist
                     # request is a tekore.model.PlaylistTrack object not a models.Track object
-                    request = choice(tracks) 
+                    request = choice(tracks)
+                    
+                    # this call is done the user's token, we're still under token_as(token)
                     track = await trackinfo(spotify, request.track.id)
                     request_candidates = {user: (token, track)}
                     logging.debug("get_request found request from user %s: %s", user.displayname, track.trackname)
