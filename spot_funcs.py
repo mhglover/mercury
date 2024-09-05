@@ -60,9 +60,10 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
             logging.info("trackinfo - found %s similar tracks, consolidating - %s",
                          len(similar_tracks),
                          track.trackname)
-            await consolidate_tracks(similar_tracks)
+            original = await consolidate_tracks(similar_tracks)
+            return original
             
-        # check to see if we should recurse
+        # get the details on this track from spotify
         try: 
             if token:
                 with spotify_object.token_as(token):
