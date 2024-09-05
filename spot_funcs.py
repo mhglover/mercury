@@ -27,75 +27,34 @@ async def is_saved(spotify, token, track):
     return saved[0]
 
 
-async def trackinfo(spotify_object, check_spotifyid, token=None):
+async def trackinfo(spotify, spotifyid, token=None):
     """Pull track name (and details)
 
     Args:
         spotify (obj): Spotify object
         spotifyid (str): Spotify's unique track id
+        token (obj): Spotify token object
 
     Returns:
         track object or None
     """
     
-    # Check if the Spotify ID has already been added to the database
-    spotify_id_entry = await SpotifyID.filter(spotifyid=check_spotifyid).first()
+    # Check for this spotifyid in the database
+    spid = await SpotifyID.get_or_none(spotifyid=spotifyid).prefetch_related("track")
 
-    if spotify_id_entry:
-        # Fetch the associated track
-        logging.debug("trackinfo - spotifyid [%s] found in db, fetching track", check_spotifyid)
-        track = await Track.get(id=spotify_id_entry.track_id)
-        
-        # Check if we have a similar track in the database, within a certain duration
-        min_duration = track.duration_ms - DURATION_VARIANCE_MS
-        max_duration = track.duration_ms + DURATION_VARIANCE_MS
-        similar_tracks = (await Track
-                            .filter(duration_ms__gte=min_duration, duration_ms__lte=max_duration)
-                            .filter(trackname=track.trackname)
-                            .order_by('id')
-                            .all())
+    if spid:
+        logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
+        return spid.track
     
-        if len(similar_tracks) > 1:
-            track = similar_tracks[0]
-            logging.info("trackinfo - found %s similar tracks, consolidating - %s",
-                         len(similar_tracks),
-                         track.trackname)
-            original = await consolidate_tracks(similar_tracks)
-            return original
-            
-        # get the details on this track from spotify
-        try: 
-            if token:
-                with spotify_object.token_as(token):
-                    spotify_details = await spotify_object.track(check_spotifyid, market="US")
-            else:
-                spotify_details = await spotify_object.track(check_spotifyid, market="US")
-        except Exception as e:
-            logging.error("trackinfo - exception fetching spotify details for track: %s\n%s", 
-                          type(e).__name__, e.json())
-            return track
-        
-        # check to see if we should follow a referral to another spotifyid
-        if spotify_details.id != check_spotifyid:
-            logging.warning("trackinfo - spotifyid [%s] is linked to [%s], fetching referred track",
-                            check_spotifyid, spotify_details.id)
-            track = await trackinfo(spotify_object, spotify_details.id, token=token)
-            return track
-        else:
-            return track
-    
-    
-    logging.debug("trackinfo - spotifyid not in db %s", check_spotifyid)
-    
-    # we don't have this version of this track in the db, fetch details from Spotify
+    # we don't have this version of this track in the db, fetch it from Spotify
+    logging.info("trackinfo - spotifyid not in db %s", spotifyid)
     try:
         if token:
-            with spotify_object.token_as(token):
-                spotify_details = await spotify_object.track(check_spotifyid, market="US")
+            with spotify.token_as(token):
+                spotify_details = await spotify.track(spotifyid, market="US")
         else:
-            spotify_details = await spotify_object.track(check_spotifyid, market="US")
-        
-        
+            logging.warning("trackinfo - no token provided, fetching track without token")
+            spotify_details = await spotify.track(spotifyid, market="US")
     except tk.Unauthorised as e:
         logging.error("trackinfo - 401 Unauthorised exception %s", e)
         return None
@@ -106,42 +65,46 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
     
-    # does this spotify track actually point to another track? recurse
-    if check_spotifyid != spotify_details.id:
-        logging.warning("trackinfo - spotifyid [%s] is linked to [%s], recursively fetching track",
-                        check_spotifyid, spotify_details.id)
-        track = trackinfo(spotify_object, spotify_details.id)
-        return track
+    logging.info("trackinfo - fetched track [%s] %s - %s", spotifyid, trackartist, trackname)
     
-    # Check if we have a similar track in the database, within a certain duration
-    min_duration = spotify_details.duration_ms - DURATION_VARIANCE_MS
-    max_duration = spotify_details.duration_ms + DURATION_VARIANCE_MS
+    # Check if we already have this track in the database
     similar_tracks = (await Track
-                        .filter(duration_ms__gte=min_duration, duration_ms__lte=max_duration)
                         .filter(trackname=trackname)
                         .order_by('id')
                         .all())
     
+    # if there already is a similar track, just link the spotifyid to it
     if len(similar_tracks) > 1:
         track = similar_tracks[0]
-        logging.info("trackinfo - found %s similar tracks, consolidating - %s",
+        logging.error("trackinfo - creation found %s similar tracks - %s",
                      len(similar_tracks), track.trackname)
-        await consolidate_tracks(similar_tracks)
-    else:
-        # Create the track
-        logging.debug("trackinfo - new track [%s] %s", spotify_details.id, trackname)
+        # create a SpotifyID entry for this track
+        try:
+            sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
+        except Exception as e:
+            logging.error("trackinfo - exception creating SpotifyID %s\n%s", spotifyid, e)
+            sid = None
+        
+        return track
+    
+
+    # Create the track
+    logging.info("trackinfo - new track [%s] %s", spotify_details.id, trackname)
+    try:
         track = await Track.create(
-                                duration_ms=spotify_details.duration_ms,
-                                trackuri=spotify_details.uri,
-                                trackname=trackname,
-                                spotifyid=spotify_details.id
-                                )
+                            duration_ms=spotify_details.duration_ms,
+                            trackuri=spotify_details.uri,
+                            trackname=trackname,
+                            spotifyid=spotify_details.id
+                            )
+    except Exception as e:
+        logging.error("trackinfo - exception creating track %s\n%s", spotifyid, e.json())
 
     # Create the SpotifyID entry
     try:
-        sid, created = await SpotifyID.get_or_create(spotifyid=check_spotifyid, track=track)
+        sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
     except Exception as e:
-        logging.error("trackinfo - exception creating SpotifyID %s\n%s", check_spotifyid, e)
+        logging.error("trackinfo - exception creating SpotifyID %s\n%s", spotifyid, e)
         sid = None
     
     if created:
