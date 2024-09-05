@@ -61,6 +61,22 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
                          len(similar_tracks),
                          track.trackname)
             await consolidate_tracks(similar_tracks)
+            
+        # check to see if we should recurse
+        try: 
+            if token:
+                with spotify_object.token_as(token):
+                    spotify_details = await spotify_object.track(check_spotifyid, market="US")
+            else:
+                spotify_details = await spotify_object.track(check_spotifyid, market="US")
+        except Exception as e:
+            logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e.json())
+            return track
+        
+        if spotify_details.id != check_spotifyid:
+            logging.warning("trackinfo - spotifyid [%s] is linked to [%s], recursively fetching track",
+                            check_spotifyid, spotify_details.id)
+            track = await trackinfo(spotify_object, spotify_details.id, token=token)
         
         return track
     
@@ -87,10 +103,10 @@ async def trackinfo(spotify_object, check_spotifyid, token=None):
     trackname = f"{trackartist} - {spotify_details.name}"
     
     # does this spotify track actually point to another track? recurse
-    if spotify_details.linked_from is not None:
+    if check_spotifyid != spotify_details.id:
         logging.warning("trackinfo - spotifyid [%s] is linked to [%s], recursively fetching track",
-                        check_spotifyid, spotify_details.linked_from.id)
-        track = trackinfo(spotify_object, spotify_details.linked_from.id)
+                        check_spotifyid, spotify_details.id)
+        track = trackinfo(spotify_object, spotify_details.id)
         return track
     
     # Check if we have a similar track in the database, within a certain duration
@@ -526,6 +542,8 @@ async def consolidate_tracks(tracks):
     
     # we have multiple tracks that are the same, consolidate them
     logging.debug("consolidate_tracks consolidating %s tracks", len(tracks))
+    
+    # check each track to see if the spotifyid is the same
     
     # get the original track, based on the lowest id record
     original_track = tracks[0]
