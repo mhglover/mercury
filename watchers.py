@@ -92,7 +92,7 @@ async def spotify_watcher(cred, spotify, user):
         state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
         state.rating = await get_rating(state.user, state.track.id)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
-        value = 4 if state.is_saved else 1
+        value = 2 if state.is_saved else 1
         
         # detect track changes and rate the previous track
         if state.track_last_cycle.id and state.track_changed():
