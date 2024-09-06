@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import timezone as tz, datetime as dt, timedelta as td
 from tortoise.expressions import Q
-from tortoise.exceptions import IntegrityError
+from tortoise.exceptions import IntegrityError, MultipleObjectsReturned
 import tekore as tk
 from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock, Recommendation
@@ -42,7 +42,7 @@ async def trackinfo(spotify, spotifyid, token=None):
     # Check for this spotifyid in the database
     try:
         spid = await SpotifyID.get_or_none(spotifyid=spotifyid).prefetch_related("track")
-    except tk.MultipuleObjectsReturned as e:
+    except MultipleObjectsReturned as e:
         logging.error("trackinfo - multiple spotifyid entries for %s\n%s", spotifyid, e.json())
         spid = await SpotifyID.first(spotifyid=spotifyid).prefetch_related("track")
     except Exception as e:
