@@ -139,62 +139,6 @@ async def get_webtrack(track, user=None):
     return wt
 
 
-async def validatetrack(spotify, track):
-    """for a track in the database, validate it's playable"""
-    logging.debug("validatetrack validating a track: %s", track)
-    
-    track = await normalizetrack(track)
-    
-    # make sure we have a canonical spotifyid in the Track record
-    if not track.spotifyid:
-        logging.warning("validatetrack track missing canonical spotifyid: [%s] %s",
-                        track.id, track.trackname)
-
-    # check the spotid table for this track
-    spotifyids = await track.spotifyids.all()
-    logging.debug("validatetrack found %s spotify ids for this track", len(spotifyids))
-    
-    # check each of these
-    for spotifyid in spotifyids:
-        
-        # does this exist in Spotify?
-        try:
-            logging.info("validatetrack fetching spotify trackid: %s", spotifyid.spotifyid)   
-            spot_track = await spotify.track(spotifyid.spotifyid, market='US')
-        except Exception as e:
-            logging.error("validatetrack - exception fetching spotify track: %s\n%s", type(e).__name__, e.json())
-            spot_track = None
-        
-        if track.spotifyid == spotifyid.spotifyid:
-            logging.debug("validatetrack canonical spotifyid: [%s]", spotifyid.spotifyid)
-        else:
-            logging.debug("validatetrack secondary spotifyid: [%s]", spotifyid.spotifyid)
-        
-        # does this exist in spotify?
-        if not spot_track:
-            logging.error("validatetrack no spotify track for id [%s], removing SpotifyId record",
-                          spotifyid.spotifyid)
-            _ = await SpotifyID.get(spotifyid=spotifyid.spotifyid).delete()
-            
-            if track.spotifyid == spotifyid.spotifyid:
-                logging.error("validatetrack removing canonical spotifyid from Track record")
-                track.spotifyid = ""
-                await track.save()
-
-        # okay, it's real.  is this playable in the US?
-        try:
-            if not spot_track.is_playable:
-                logging.error("validatetrack rejected unplayable track: %s [%s](%s)",
-                          track.trackname, spotifyid.spotifyid, spot_track.restrictions)
-                return False
-        except:
-            logging.error("validatetrack exception checking is_playable for track: %s [%s]",
-                            track.trackname, spotifyid.spotifyid)
-            return False
-    
-    return True
-
-
 async def getrecents(limit=10):
     """pull recently played tracks from history table
     
