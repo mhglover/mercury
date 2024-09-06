@@ -99,6 +99,8 @@ class PlayHistory(Model):
         "models.User", related_name="histories")
     rating: fields.ForeignKeyRelation[Rating] = fields.ForeignKeyField(
         "models.Rating", related_name="histories")
+    recommendation: fields.ForeignKeyRelation["Recommendation"] = fields.ForeignKeyField(
+        "models.Recommendation", related_name="histories")
 
     def __str__(self):
         return str(self.trackname)
