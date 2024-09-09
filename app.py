@@ -202,7 +202,7 @@ async def index():
         
         refresh_in = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
         web_data.refresh = min(refresh_in, 30)
-        track = await trackinfo(spotify, currently.item.id, token=token)
+        track = await trackinfo(spotify, spotifyid=currently.item.id, token=token)
         web_data.track = await get_webtrack(track, web_data.user)
         web_data.track.reason = await Recommendation.get_or_none(track_id=web_data.track.track_id).values_list('reason', flat=True)
 
@@ -577,8 +577,7 @@ async def web_track(track_id):
     
     user, token = await getuser(cred, user_id)
     
-    track = await normalizetrack(track_id)
-    track = await trackinfo(spotify, track.spotifyid, token=token)
+    track = await trackinfo(spotify, trackid=track_id, token=token)
     
     if request.method == "POST":
         now = dt.now(tz.utc)

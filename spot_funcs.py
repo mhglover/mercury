@@ -27,7 +27,7 @@ async def is_saved(spotify, token, track):
     return saved[0]
 
 
-async def trackinfo(spotify, spotifyid, token=None):
+async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
     """Pull track name (and details)
 
     Args:
@@ -38,6 +38,15 @@ async def trackinfo(spotify, spotifyid, token=None):
     Returns:
         track object or None
     """
+    
+    if trackid:
+        logging.debug("trackinfo - fetching track by id: %s", trackid)
+        try:
+            track = await Track.get(id=trackid)
+        except Exception as e:
+            logging.error("trackinfo - exception querying Track table %s\n%s", trackid, e)
+            track = None
+        return track
     
     # Check for this spotifyid in the database
     try:
@@ -320,11 +329,11 @@ async def queue_safely(state):
         logging.error("%s --- %s failed to acquire queue lock, can't send to queue safely", procname, state.user.displayname)
         return False
     
-    logging.info("%s --- %s no rec found, locked queue, verifying currently playing: %s", procname, state.user.displayname, state.track.trackname)
+    logging.info("%s --- %s no rec found, locked queue, verifying currently playing: [%s] %s", procname, state.user.displayname, state.track.spotifyid, state.track.trackname)
     suspected = state.currently
     state.currently = await getplayer(state)
     if state.currently.item.id != suspected.item.id:
-        state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
+        state.track = await trackinfo(spotify, spotifyid=state.currently.item.id, token=state.token)
         logging.info("%s --- %s track changed while locking queue, now playing: %s", procname, state.user.displayname, state.track.trackname)
 
     # discard any recs that are not valid
@@ -408,7 +417,7 @@ async def queue_safely(state):
     recs, rec_in_queue = await get_recs_in_queue(state)
     
     if first_rec in recs:
-        logging.info("%s --- %s sent rec and confirmed track in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        logging.info("%s --- %s sent rec and confirmed track in queue: [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.trackname, first_rec.reason)
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
         await asyncio.sleep(3)
@@ -457,11 +466,15 @@ async def normalizetrack(track):
 async def consolidate_tracks(tracks):
     """if we have multiple tracks that are the same, consolidate them"""
     
+    if len(tracks) == 1:
+        tracks = await Track.filter(trackname=tracks[0].trackname)
+    
     if len(tracks) < 2:
-        return False
+        logging.info("consolidate_tracks only one track, nothing to consolidate")
+        return tracks[0]
     
     # we have multiple tracks that are the same, consolidate them
-    logging.debug("consolidate_tracks consolidating %s tracks", len(tracks))
+    logging.info("consolidate_tracks consolidating %s tracks", len(tracks))
     
     # check each track to see if the spotifyid is the same
     

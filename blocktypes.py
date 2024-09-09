@@ -97,7 +97,7 @@ async def spotrec_tracks(spotify, count=1):
     logging.debug("%s getting spotify recommendations", procname)
     utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
     
-    tracks = [await trackinfo(spotify, x.id) for x in utrack.tracks]
+    tracks = [await trackinfo(spotify, spotifyid=x.id) for x in utrack.tracks]
     reason = "spotify recommendations based on %s" % ", ".join(seed_names)
         
     if len(tracks) == 0:
@@ -164,7 +164,7 @@ async def get_request(spotify, cred):
                     request = choice(tracks)
                     
                     # this call is done the user's token, we're still under token_as(token)
-                    track = await trackinfo(spotify, request.track.id)
+                    track = await trackinfo(spotify, spotifyid=request.track.id)
                     request_candidates = {user: (token, track)}
                     logging.debug("get_request found request from user %s: %s", user.displayname, track.trackname)
                     

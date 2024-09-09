@@ -89,7 +89,7 @@ async def spotify_watcher(cred, spotify, user):
 
         # if we're awake, update the loop ttl, sleep time, etc
         await state.refresh()
-        state.track = await trackinfo(spotify, state.currently.item.id, token=state.token)
+        state.track = await trackinfo(spotify, spotifyid=state.currently.item.id, token=state.token)
         state.rating = await get_rating(state.user, state.track.id)
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 2 if state.is_saved else 1

@@ -133,7 +133,7 @@ async def rate_history(spotify, user, token, value=1, limit=50):
     with spotify.token_as(token):
         rp = await spotify.playback_recently_played(limit=limit)
     for each in rp.items:
-        track = await trackinfo(spotify, each.track.id, token=token)
+        track = await trackinfo(spotify, spotifyid=each.track.id, token=token)
         rating = await Rating.get_or_none(track_id=track.id, user_id=user.id)
         if rating:
             logging.debug("rate_history already exists for %s, %s", user.displayname, track.trackname)
@@ -154,7 +154,7 @@ async def rate_saved(spotify, user, token, value=4,
         pages = await spotify.saved_tracks()
         all_items = [each async for each in spotify.all_items(pages)]
         for each in all_items:
-            track = await trackinfo(spotify, each.track.id, token=token)
+            track = await trackinfo(spotify, spotifyid=each.track.id, token=token)
             await rate(user, track, value=value, last_played=last_played)
 
 
