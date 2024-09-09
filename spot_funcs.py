@@ -41,17 +41,19 @@ async def trackinfo(spotify, spotifyid, token=None):
     
     # Check for this spotifyid in the database
     try:
-        spid = await SpotifyID.get_or_none(spotifyid=spotifyid).prefetch_related("track")
-    except MultipleObjectsReturned as e:
-        logging.error("trackinfo - multiple spotifyid entries for %s\n%s", spotifyid, e)
-        spid = await SpotifyID.first(spotifyid=spotifyid).prefetch_related("track")
+        spid = await SpotifyID.filter(spotifyid=spotifyid).prefetch_related("track")
     except Exception as e:
         logging.error("trackinfo - exception querying SpotifyID table %s\n%s", spotifyid, e.json())
         spid = None
-        
 
     if spid:
         logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
+        if len(spid) > 1:
+            logging.warning("trackinfo - multiple instances of SpotifyID found, using the first: %s", spotifyid)
+            for x in spid:
+                logging.info("trackinfo - %s %s", x.id, x.track.trackname)
+            return spid[0].track
+        
         return spid.track
     
     # we don't have this version of this track in the db, fetch it from Spotify
