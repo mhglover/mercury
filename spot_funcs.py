@@ -43,7 +43,7 @@ async def trackinfo(spotify, spotifyid, token=None):
     try:
         spid = await SpotifyID.get_or_none(spotifyid=spotifyid).prefetch_related("track")
     except MultipleObjectsReturned as e:
-        logging.error("trackinfo - multiple spotifyid entries for %s\n%s", spotifyid, e.json())
+        logging.error("trackinfo - multiple spotifyid entries for %s\n%s", spotifyid, e)
         spid = await SpotifyID.first(spotifyid=spotifyid).prefetch_related("track")
     except Exception as e:
         logging.error("trackinfo - exception querying SpotifyID table %s\n%s", spotifyid, e.json())
