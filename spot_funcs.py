@@ -53,7 +53,6 @@ async def trackinfo(spotify, spotifyid, token=None):
             for x in spid:
                 logging.info("trackinfo - %s %s", x.id, x.track.trackname)
             return spid[0].track
-        logging.info("trackinfo - spotifyid [%s] found in db: %s", spotifyid, spid[0].track.trackname)
         return spid[0].track
     
     # we don't have this version of this track in the db, fetch it from Spotify
