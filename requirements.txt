@@ -1,4 +1,4 @@
-tekore==5.4.0
+tekore==5.5.1
 quart==0.19.6
 python-dotenv==1.0.1
 tortoise-orm==0.21.3
