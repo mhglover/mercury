@@ -94,6 +94,12 @@ async def spotify_watcher(cred, spotify, user):
         state.is_saved = await is_saved(state.spotify, state.token, state.track)
         value = 2 if state.is_saved else 1
         
+        if state.reason == "":
+            rec = await Recommendation.get_or_none(track_id=state.track.id).prefetch_related("track")
+            if rec:
+                logging.info("%s playing a recommendation: %s (%s)", procname, rec.track.trackname, rec.reason)
+                state.reason = rec.reason
+        
         # detect track changes and rate the previous track
         if state.track_last_cycle.id and state.track_changed():
             
