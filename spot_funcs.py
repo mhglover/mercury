@@ -83,19 +83,15 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
     
-    logging.info("trackinfo - fetched track [%s] %s - %s", spotifyid, trackartist, trackname)
+    logging.info("trackinfo - fetched track [%s] - %s", spotifyid, trackname)
     
     # Check if we already have this track in the database
-    similar_tracks = (await Track
-                        .filter(trackname=trackname)
-                        .order_by('id')
-                        .all())
+    similar_tracks = (await Track.filter(trackname=trackname).order_by('id'))
     
     # if there already is a similar track, just link the spotifyid to it
-    if len(similar_tracks) > 1:
+    if len(similar_tracks) > 0:
         track = similar_tracks[0]
-        logging.error("trackinfo - creation found %s similar tracks - %s",
-                     len(similar_tracks), track.trackname)
+        logging.info("trackinfo - found similar track,linking - %s", track.trackname)
         # create a SpotifyID entry for this track
         try:
             sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
@@ -103,10 +99,14 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             logging.error("trackinfo - exception creating SpotifyID %s\n%s", spotifyid, e)
             sid = None
         
+        # consolidate any extra versions of the track
+        if len(similar_tracks) > 1:
+            logging.warning("trackinfo - multiple similar tracks found, consolidating")
+            track = await consolidate_tracks(similar_tracks)
+        
         return track
-    
 
-    # Create the track
+    # No preexisting version, so create the track
     logging.info("trackinfo - new track [%s] %s", spotify_details.id, trackname)
     try:
         track = await Track.create(
@@ -118,7 +118,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
     except Exception as e:
         logging.error("trackinfo - exception creating track %s\n%s", spotifyid, e.json())
 
-    # Create the SpotifyID entry
+    # and create the SpotifyID entry
     try:
         sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
     except Exception as e:
