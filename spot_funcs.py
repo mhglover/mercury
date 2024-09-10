@@ -91,7 +91,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
     # if there already is a similar track, just link the spotifyid to it
     if len(similar_tracks) > 0:
         track = similar_tracks[0]
-        logging.info("trackinfo - found similar track,linking - %s", track.trackname)
+        logging.info("trackinfo - found similar track, linking - %s", track.trackname)
         # create a SpotifyID entry for this track
         try:
             sid, created = await SpotifyID.get_or_create(spotifyid=spotifyid, track=track)
