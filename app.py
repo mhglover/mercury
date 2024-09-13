@@ -633,6 +633,73 @@ async def web_track(track_id):
     return await render_template('track.html', history=deduplicated_histories, w=w.to_dict())
 
 
+@app.route('/spotifyid/<spotifyid>', methods=['GET', 'POST'])
+async def spotifyid_web_track(spotifyid):
+    """display/edit track details"""
+    
+    # get the details we need to show
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect("/")
+    
+    user, token = await getuser(cred, user_id)
+    
+    track = await trackinfo(spotify, spotifyid=spotifyid, token=token)
+    
+    if request.method == "POST":
+        now = dt.now(tz.utc)
+        rating, _ = await Rating.get_or_create(user_id=user.id,
+                                                track_id=track.id,
+                                                trackname=track.trackname,
+                                                defaults={
+                                                   "rating": 0,
+                                                   "last_played": now
+                                                   }
+                                               )
+        form = await request.form
+        rating.comment = form['comment']
+        await rating.save()
+    
+    webtrack = await get_webtrack(track, user=user)
+    
+    # nextup = await getnext(webtrack=True, user=user)
+    
+    ratings = await get_track_ratings(track)
+    
+    # what's happening y'all
+    w = WebData(
+        user = user,
+        track = webtrack,
+        ratings = ratings,
+        # nextup = nextup,
+        refresh = 0
+        )
+    
+    
+    # ph is a PlayHistory that pulls all the times this track has been played
+    ph = await PlayHistory.filter(track_id=track.id).order_by('-played_at')
+    
+    # combine ph records with overlapping times
+    deduplicated_histories = []
+    last_played_at = None
+    timespan = td(minutes=10)
+    
+    for history in ph:
+        logging.debug("last_played: %s history.played_at: %s", last_played_at, history.played_at)
+        if last_played_at is None or (last_played_at - history.played_at) > timespan:
+            ts = naturaltime(history.played_at)
+            if ts not in deduplicated_histories:
+                deduplicated_histories.append(ts)
+            last_played_at = history.played_at
+            logging.debug("added %s to deduplicated_histories", history.played_at)
+    
+    
+    # # history is a list of strings displayed as list items on the track page
+    # history = [f"{x.user.displayname} - {x.played_at} ({naturaltime(x.played_at)})" for x in ph] 
+    
+    return await render_template('track.html', history=deduplicated_histories, w=w.to_dict())
+
+
 @app.route('/track/<track_id>/rate/<action>', methods=['GET'])
 async def web_rate_track(track_id, action):
     """rate a track"""
