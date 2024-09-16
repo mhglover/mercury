@@ -80,6 +80,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
 
     if spid:
         logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
+        with spotify.token_as(token):
+            spotify_details = await spotify.track(spotifyid, market="US")
         
         # if we have extras, consolidate them where possible
         if len(spid) > 1:
@@ -117,9 +119,18 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         return None
     
     # check the track's markets and reject it if it's not available in the US
-    if 'US' not in spotify_details.available_markets:
-        logging.error("trackinfo - track not available in US: %s", spotifyid)
+    if spotify_details.is_playable is not True:
+        logging.error("trackinfo - track not playable: %s", spotifyid)
+        
+        if 'US' not in spotify_details.available_markets:
+            logging.error("trackinfo - track not available in US: %s", spotifyid)
+        
+        if spotify_details.available_markets == []:
+            logging.error("trackinfo - track not available in any markets: %s", spotifyid)
+        
         return None
+    
+    
     
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
@@ -439,7 +450,7 @@ async def queue_safely(state):
            check_track = await spotify.track(rec.track.spotifyid)
     
         if 'US' not in check_track.available_markets:
-            logging.error("%s --- %s track not available in US: %s (%s)", procname, state.user.displayname, rec.trackname, rec.reason)
+            logging.error("%s --- %s track not available in US: %s (%s)\n%s", procname, state.user.displayname, rec.trackname, rec.track.spotifyid, check_track)
             continue
         
         # made it through the gauntlet of tests, this is an acceptable rec
