@@ -57,11 +57,24 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
 
     if spid:
         logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
+        
+        # if we have extras, consolidate them where possible
         if len(spid) > 1:
             logging.warning("trackinfo - multiple instances of SpotifyID found, using the first: %s", spotifyid)
+            
             for x in spid:
-                logging.info("trackinfo - %s %s", x.id, x.track.trackname)
-            return spid[0].track
+                logging.info("trackinfo - %s %s %s", x.id, x.track.trackname, x.track.spotifyid)
+                
+                # for each row after the first, if the track is the same, delete the spid object
+                if x is not spid[0]:
+                    if spid[0].track_id == x.track_id:
+                        logging.warning("trackinfo - duplicate SpotifyID found, deleting: %s", x.id)
+                        await x.delete()
+                        await x.save()
+                    else:
+                        logging.warning("trackinfo - duplicate SpotifyID found, not deleting\nspid: %s\ndupe: %s", spid[0], x)
+            
+
         return spid[0].track
     
     # we don't have this version of this track in the db, fetch it from Spotify
