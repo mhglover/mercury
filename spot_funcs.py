@@ -405,6 +405,15 @@ async def queue_safely(state):
             else:   
                 logging.debug("%s rec rating is acceptable: %s - (%s) %s ", procname, rating.rating, state.user.displayname, rec.trackname)
         
+        
+        # don't send a track that's not available in the user's market
+        with spotify.token_as(token):
+           check_track = await spotify.track(rec.track.spotifyid)
+    
+        if 'US' not in check_track.available_markets:
+            logging.error("%s --- %s track not available in US: %s (%s)", procname, state.user.displayname, rec.trackname, rec.reason)
+            continue
+        
         # made it through the gauntlet of tests, this is an acceptable rec
         logging.debug("%s --- %s adding rec to candidates: %s", procname, state.user.displayname, rec.trackname)
         good_recs.append(rec)
@@ -423,13 +432,13 @@ async def queue_safely(state):
         logging.error("%s --- %s failed to send rec to queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return False
     
-    # wait a tick for the queue touch to take effect
-    await asyncio.sleep(1)
+    # # wait a tick for the  queue touch to take effect
+    # await asyncio.sleep(1)
     
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
     
-    if first_rec in recs:
+    if rec_in_queue:
         logging.info("%s --- %s sent rec and confirmed track in queue: [%s] [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
@@ -437,7 +446,7 @@ async def queue_safely(state):
         await Lock.release_lock(state.user.id)
         return True
     else:
-        logging.error("%s --- %s sent rec but track not in queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        logging.error("%s --- %s sent rec but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.trackname, first_rec.reason, check_track)
         logging.error("%s --- %s check for a recent track consolidation", procname, state.user.displayname)
         logging.error("%s --- %s sleeping for 3 seconds and releasing queue lock", procname, state.user.displayname)
         logging.info("recs: %s", recs)
