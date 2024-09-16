@@ -93,6 +93,11 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
         return None
     
+    # check the track's markets and reject it if it's not available in the US
+    if 'US' not in spotify_details.available_markets:
+        logging.error("trackinfo - track not available in US: %s", spotifyid)
+        return None
+    
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
     
