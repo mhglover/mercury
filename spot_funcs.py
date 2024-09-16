@@ -417,7 +417,7 @@ async def queue_safely(state):
     recs, rec_in_queue = await get_recs_in_queue(state)
     
     if first_rec in recs:
-        logging.info("%s --- %s sent rec and confirmed track in queue: [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.trackname, first_rec.reason)
+        logging.info("%s --- %s sent rec and confirmed track in queue: [%s] [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
         await asyncio.sleep(3)
