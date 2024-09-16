@@ -57,7 +57,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                 with spotify.token_as(token):
                     spotify_details = await spotify.track(spid.spotifyid, market="US")
                 
-                logging.info("trackinfo - %s", spotify_details)
+                if spotify_details.restrictions:
+                    logging.info("trackinfo - restrictions: %s", spotify_details)
                 
                 if spotify_details.id == spid.spotifyid:
                     if track.spotifyid != spotify_details.id:
