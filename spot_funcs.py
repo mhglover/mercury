@@ -70,6 +70,18 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                     logging.warning("trackinfo - non-canonical spotifyid: %s", spotify_details.id)
 
                 spotify_tracks.append(spid.spotifyid)
+        else:
+            with spotify.token_as(token):
+                spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+            
+            if track.spotifyid != spotify_details.id:
+                logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s", track.id, track.trackname)
+                track.spotifyid = spotify_details.id
+                track.trackuri = spotify_details.uri
+                await track.save()
+    
+            logging.info("trackinfo - details: %s", spotify_details)
+        
         return track
     
     # Check for this spotifyid in the database
