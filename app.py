@@ -321,6 +321,7 @@ async def spotify_authorization():
             "streaming",
             "app-remote-control",
             "user-library-read",
+            "user-library-modify",
             "user-top-read",
             "user-follow-read",
             "playlist-read-private",
@@ -744,7 +745,10 @@ async def web_rate_track(track_id, action):
     if rating.rating == 1 and action == 'down':
         logging.debug("web_rate_track - %s rated track at 1, removing from their saved tracks: %s", user.displayname, track.trackname)
         with spotify.token_as(token):
-            await spotify.saved_tracks_delete([track.spotifyid])
+            try:
+                await spotify.saved_tracks_delete([track.spotifyid])
+            except tk.Forbidden as e:
+                logging.error("web_rate_track - %s - %s", e.__name__, e)
     
     return redirect(request.referrer)
 
