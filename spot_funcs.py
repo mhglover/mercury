@@ -46,6 +46,29 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         except Exception as e:
             logging.error("trackinfo - exception querying Track table %s\n%s", trackid, e)
             track = None
+            
+        spids = await SpotifyID.filter(track_id=trackid)
+        if len(spids) > 1:
+            logging.warning("trackinfo - multiple SpotifyID entries for track %s", trackid)
+            spotify_tracks = []
+            
+            for spid in spids:
+                logging.info("trackinfo - %s %s %s", spid.id, spid.spotifyid, spid.track_id)
+                with spotify.token_as(token):
+                    spotify_details = await spotify.track(spid.spotifyid, market="US")
+                
+                logging.info("trackinfo - %s", spotify_details)
+                
+                if spotify_details.id == spid.spotifyid:
+                    if track.spotifyid != spotify_details.id:
+                        logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s", track.id, track.trackname)
+                        track.spotifyid = spotify_details.id
+                        track.trackuri = spotify_details.uri
+                        await track.save()
+                else:
+                    logging.warning("trackinfo - non-canonical spotifyid: %s", spotify_details.id)
+
+                spotify_tracks.append(spid.spotifyid)
         return track
     
     # Check for this spotifyid in the database
