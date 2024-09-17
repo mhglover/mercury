@@ -523,7 +523,7 @@ async def queue_safely(state):
         return False
     
     # # wait a tick for the  queue touch to take effect
-    # await asyncio.sleep(1)
+    await asyncio.sleep(1)
     
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
