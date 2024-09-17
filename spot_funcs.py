@@ -544,8 +544,8 @@ async def queue_safely(state):
     # okay fine, queue the first rec
     first_rec = good_recs[0]
     sent_successfully = await send_to_player(spotify, token, first_rec.track)
-    logging.debug("%s --- %s sent first rec to queue: %s (%s)",
-                        procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+    logging.info("%s --- %s sent first rec to queue: (%s) [%s] %s",
+                        procname, state.user.displayname, first_rec.id, first_rec.spotifyid, first_rec.trackname)
     
     if not sent_successfully:
         logging.error("%s --- %s failed to send rec to queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
