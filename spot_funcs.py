@@ -5,6 +5,7 @@ import logging
 from datetime import timezone as tz, datetime as dt, timedelta as td
 from tortoise.expressions import Q
 from tortoise.exceptions import IntegrityError, MultipleObjectsReturned
+from tortoise.transactions import in_transaction
 import tekore as tk
 from pprint import pformat
 from models import Track, PlayHistory, SpotifyID, WebTrack, Rating, Lock, Recommendation
@@ -410,7 +411,7 @@ async def queue_safely(state):
         return False
     
     # we have a rec in the queue, don't send another
-    if rec_in_queue:
+    if await is_rec_queued(state):
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
         
         if queue_is_locked:
@@ -528,8 +529,8 @@ async def queue_safely(state):
     # make sure the rec was put in the queue
     recs, rec_in_queue = await get_recs_in_queue(state)
     
-    if rec_in_queue:
-        logging.info("%s --- %s sent rec and confirmed track in queue: [%s] [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
+    if await is_rec_queued(state):
+        logging.info("%s --- %s sent rec and confirmed a rec is in queue: [%s] [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
         await asyncio.sleep(3)
@@ -692,3 +693,52 @@ async def get_live_recs():
                                .order_by('id')
                                .prefetch_related("track"))
     return recs
+
+
+async def is_rec_queued(state) -> bool:
+    """check if a recommendation is already queued"""
+
+    spotify = state.spotify
+    token = state.token
+    # get all the spotifyids for the recs that haven't expired yet
+    sql = "SELECT s.spotifyid FROM public.recommendation r left join spotifyid s on r.track_id=s.track_id where (expires_at is null or expires_at < now());"
+    
+    # Main query to get recent play history with user displaynames
+    async with in_transaction() as connection:
+        _, results = await connection.execute_query(sql)
+
+    # get the list of tracks waiting in the player queue, plus the tracks that
+    # are forthcoming in the player's context, ie album, playlist, artist, etc
+    
+    try:
+        if token:
+            with spotify.token_as(token):
+                queue_context = await get_player_queue(state)
+        else:
+            queue_context = await get_player_queue(state)
+            
+    except tk.Unauthorised as e:
+        logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
+        logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
+        return False
+    
+    except Exception as e:
+        logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
+        return False
+    
+    if queue_context is None:
+        logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
+        return False
+    
+    
+    rec_spotids = [x['spotifyid'] for x in results]
+    queue_spotids = [x.id for x in queue_context.queue]
+    
+    # does any rec_spotid appear in queue_spotids
+    queued_recs = [x in queue_spotids for x in rec_spotids]
+    
+    if any(queued_recs):
+        logging.debug("is_rec_queued found rec in queue: %s", rec_spotids[0])
+        return True
+    
+    return False
