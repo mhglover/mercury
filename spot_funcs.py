@@ -545,7 +545,7 @@ async def queue_safely(state):
     first_rec = good_recs[0]
     sent_successfully = await send_to_player(spotify, token, first_rec.track)
     logging.info("%s --- %s sent first rec to queue: (%s) [%s] %s",
-                        procname, state.user.displayname, first_rec.id, first_rec.spotifyid, first_rec.trackname)
+                        procname, state.user.displayname, first_rec.id, first_rec.track.spotifyid, first_rec.trackname)
     
     if not sent_successfully:
         logging.error("%s --- %s failed to send rec to queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
@@ -565,7 +565,7 @@ async def queue_safely(state):
         await Lock.release_lock(state.user.id)
         return True
     else:
-        logging.error("%s --- %s sent rec but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.trackname, first_rec.reason, check_track)
+        logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason, check_track)
         logging.error("%s --- %s check for a recent track consolidation", procname, state.user.displayname)
         logging.error("%s --- %s sleeping for 3 seconds and releasing queue lock", procname, state.user.displayname)
         logging.info("recs: %s", recs)
