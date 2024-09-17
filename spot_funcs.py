@@ -71,6 +71,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
 
                 spotify_tracks.append(spid.spotifyid)
         else:
+            logging.debug("trackinfo - only one SpotifyID entry for track %s", trackid)
+            
             with spotify.token_as(token):
                 spotify_details = await spotify.track(spids[0].spotifyid, market="US")
             
@@ -80,7 +82,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                 track.trackuri = spotify_details.uri
                 await track.save()
     
-            logging.info("trackinfo - details: %s", spotify_details)
+            logging.info("trackinfo - %s %s is_playable: %s restrictions: %s ", track.trackname,
+                         spotify_details.id,
+                         spotify_details.is_playable,
+                         spotify_details.restrictions)
         
         return track
     
@@ -93,7 +98,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
 
     if spid:
         logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
-        with spotify.token_as(token):
+        if token:
+            with spotify.token_as(token):
+                spotify_details = await spotify.track(spotifyid, market="US")
+        else:
             spotify_details = await spotify.track(spotifyid, market="US")
         
         # if we have extras, consolidate them where possible
