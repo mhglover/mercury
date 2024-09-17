@@ -47,7 +47,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         except Exception as e:
             logging.error("trackinfo - exception querying Track table %s\n%s", trackid, e)
             track = None
-            
+        
+        # if we have a track, check for multiple SpotifyID entries
         spids = await SpotifyID.filter(track_id=trackid)
         if len(spids) > 1:
             logging.warning("trackinfo - multiple SpotifyID entries for track %s", trackid)
@@ -55,20 +56,42 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             
             for spid in spids:
                 logging.info("trackinfo - %s %s %s", spid.id, spid.spotifyid, spid.track_id)
+                
+                # pull the spotify track details for this spotifyid
                 with spotify.token_as(token):
                     spotify_details = await spotify.track(spid.spotifyid, market="US")
                 
+                # log any restrictions for troubleshooting
                 if spotify_details.restrictions:
-                    logging.info("trackinfo - restrictions: %s", spotify_details)
+                    logging.warning("trackinfo - restrictions: %s", spotify_details)
                 
+                # if the retrieved spotifyid is the same as the retrieved one, it's canonical for the track
                 if spotify_details.id == spid.spotifyid:
+                    
+                    trackartist = " & ".join([artist.name for artist in spotify_details.artists])
+                    trackname = f"{trackartist} - {spotify_details.name}"
+                    
+                    # make sure the track record is correct
                     if track.spotifyid != spotify_details.id:
                         logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s", track.id, track.trackname)
                         track.spotifyid = spotify_details.id
+                    
+                    if track.trackuri != spotify_details.uri:
+                        logging.warning("trackinfo - correcting trackuri: (%s) %s", track.id, track.trackname)
                         track.trackuri = spotify_details.uri
-                        trackartist = " & ".join([artist.name for artist in spotify_details.artists])
-                        track.trackname = f"{trackartist} - {spotify_details.name}"
+                    
+                    if track.trackname != trackname:
+                        logging.warning("trackinfo - correcting trackname: (%s) %s to %s", track.id, track.trackname, trackname)
+                        track.trackname = trackname
+
+                    try:
                         await track.save()
+                    except IntegrityError as e:
+                        logging.error("trackinfo - IntegrityError saving track %s\n%s", trackid, e)
+                        logging.error("trackinfo - track: %s", track)
+                    except Exception as e:
+                        logging.error("trackinfo - exception saving track %s\n%s", trackid, e)
+                        
                 else:
                     logging.warning("trackinfo - non-canonical spotifyid: %s", spotify_details.id)
 
@@ -84,7 +107,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             spotify_details = await spotify.track(spids[0].spotifyid, market="US")
             
         if spotify_details.linked_from:
-            logging.warning("trackinfo - linked_from: %s", spotify_details.linked_from)
+            logging.info("trackinfo - spotifyid %s links to: %s",
+                         spotify_details.id, spotify_details.linked_from)
             spotify_details = await spotify.track(spotify_details.id, market="US")
         
         if track.spotifyid != spotify_details.id:
@@ -503,6 +527,10 @@ async def queue_safely(state):
     
         if 'US' not in check_track.available_markets:
             logging.error("%s --- %s track not available in US: %s (%s)\n%s", procname, state.user.displayname, rec.trackname, rec.track.spotifyid, check_track)
+            # clean up the track if we can
+            cleaned_id = await trackinfo(spotify, spotifyid=rec.track.spotifyid, token=token)
+            cleaned_track = await trackinfo(spotify, trackid=rec.track_id, token=token)
+
             continue
         
         # made it through the gauntlet of tests, this is an acceptable rec
