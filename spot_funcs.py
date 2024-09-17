@@ -65,6 +65,8 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                         logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s", track.id, track.trackname)
                         track.spotifyid = spotify_details.id
                         track.trackuri = spotify_details.uri
+                        trackartist = " & ".join([artist.name for artist in spotify_details.artists])
+                        track.trackname = f"{trackartist} - {spotify_details.name}"
                         await track.save()
                 else:
                     logging.warning("trackinfo - non-canonical spotifyid: %s", spotify_details.id)
@@ -73,19 +75,49 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         else:
             logging.debug("trackinfo - only one SpotifyID entry for track %s", trackid)
             
+        # clean up the main track record if necessary
+        if token:
             with spotify.token_as(token):
                 spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+        else:
+            spotify_details = await spotify.track(spids[0].spotifyid, market="US")
             
-            if track.spotifyid != spotify_details.id:
-                logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s", track.id, track.trackname)
-                track.spotifyid = spotify_details.id
-                track.trackuri = spotify_details.uri
-                await track.save()
-    
-            logging.info("trackinfo - %s %s is_playable: %s restrictions: %s ", track.trackname,
-                         spotify_details.id,
-                         spotify_details.is_playable,
-                         spotify_details.restrictions)
+        if spotify_details.linked_from:
+            logging.warning("trackinfo - linked_from: %s", spotify_details.linked_from)
+            spotify_details = await spotify.track(spotify_details.id, market="US")
+        
+        if track.spotifyid != spotify_details.id:
+            logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s %s to %s", 
+                            track.id, track.trackname, track.spotifyid, spotify_details.id)
+            track.spotifyid = spotify_details.id
+        
+        if track.trackuri != spotify_details.uri:
+            logging.warning("trackinfo - correcting trackuri: (%s) %s %s to %s", 
+                            track.id, track.trackname, track.trackuri, spotify_details.uri)
+            track.trackuri = spotify_details.uri
+        
+        trackartist = " & ".join([artist.name for artist in spotify_details.artists])
+        trackname = f"{trackartist} - {spotify_details.name}"
+        if track.trackname != trackname:
+            logging.warning("trackinfo - correcting trackname: (%s) %s to %s", track.id, track.trackname, trackname)
+            track.trackname = trackname
+        
+        try:
+            await track.save()
+        except IntegrityError as e:
+            logging.error("trackinfo - IntegrityError saving track %s\n%s", trackid, e)
+            logging.error("trackinfo - track: %s", track)
+            dupe = await Track.filter(trackname=track.trackname).first()
+            await dupe.delete()
+            
+        except Exception as e:
+            logging.error("trackinfo - exception saving track %s\n%s", trackid, e)
+            
+
+        logging.info("trackinfo - %s %s is_playable: %s restrictions: %s ", track.trackname,
+                        spotify_details.id,
+                        spotify_details.is_playable,
+                        spotify_details.restrictions)
         
         return track
     
@@ -150,9 +182,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             logging.error("trackinfo - track not available in any markets: %s", spotifyid)
         
         return None
-    
-    
-    
+
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
     
