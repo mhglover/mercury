@@ -55,7 +55,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             spotify_tracks = []
             
             for spid in spids:
-                logging.info("trackinfo - %s %s %s", spid.id, spid.spotifyid, spid.track_id)
+                logging.debug("trackinfo - %s %s %s", spid.id, spid.spotifyid, spid.track_id)
                 
                 # pull the spotify track details for this spotifyid
                 with spotify.token_as(token):

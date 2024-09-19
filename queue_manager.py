@@ -7,7 +7,7 @@ from tortoise.expressions import Q
 from models import Recommendation, Track, Option, WebTrack, Rating
 from users import getactiveusers
 from blocktypes import popular_tracks, spotrec_tracks, get_fresh_tracks, get_request
-from spot_funcs import get_live_recs
+from spot_funcs import get_live_recs, trackinfo
 from raters import feelabout
 
 QUEUE_SIZE = 4
@@ -87,6 +87,10 @@ async def queue_manager(spotify, cred, sleep=10):
             if track.id in [x.track_id for x in recommendations]:
                 logging.error("queue_manager - track already in Recommendations, skipping: %s %s", track.id, track.trackname)
                 continue
+            
+            # stupid inefficient way to ensure tracks get repaired before adding to recs
+            track = await trackinfo(spotify, trackid=track.id)
+            track = await trackinfo(spotify, spotifyid=track.spotifyid)
             
             u = await Recommendation.create(track_id=track.id,
                                             trackname=track.trackname,
