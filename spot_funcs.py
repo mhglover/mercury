@@ -535,7 +535,9 @@ async def queue_safely(state):
             logging.error("%s --- %s available markets: %s",
                           procname, state.user.displayname, 
                           check_track.available_markets)
-            logging.error("%s --- %s check track: %s", check_track)
+            logging.error("%s --- %s check track: %s",
+                          procname, state.user.displayname
+                          check_track)
             
             # clean up the track if we can
             logging.warning("%s --- %s cleaning up track: %s",
