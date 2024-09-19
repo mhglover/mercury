@@ -109,10 +109,6 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         else:
             spotify_details = await spotify.track(spids[0].spotifyid, market="US")
             
-        if spotify_details.linked_from:
-            logging.info("trackinfo - spotifyid %s links to: %s",
-                         spotify_details.id, spotify_details.linked_from)
-            spotify_details = await spotify.track(spotify_details.id, market="US")
         
         if track.spotifyid != spotify_details.id:
             logging.warning("trackinfo - correcting non-canonical track spotifyid: (%s) %s %s to %s", 
