@@ -142,7 +142,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             logging.error("trackinfo - exception saving track %s\n%s", trackid, e)
             
 
-        logging.info("trackinfo - %s %s is_playable: %s restrictions: %s ", track.trackname,
+        logging.debug("trackinfo - %s %s is_playable: %s restrictions: %s ", track.trackname,
                         spotify_details.id,
                         spotify_details.is_playable,
                         spotify_details.restrictions)
@@ -190,7 +190,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             with spotify.token_as(token):
                 spotify_details = await spotify.track(spotifyid, market="US")
         else:
-            logging.warning("trackinfo - no token provided, fetching track without token")
+            logging.debug("trackinfo - no token provided, fetching track without token")
             spotify_details = await spotify.track(spotifyid, market="US")
     except tk.Unauthorised as e:
         logging.error("trackinfo - 401 Unauthorised exception %s", e)
@@ -214,7 +214,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
     trackartist = " & ".join([artist.name for artist in spotify_details.artists])
     trackname = f"{trackartist} - {spotify_details.name}"
     
-    logging.info("trackinfo - fetched track [%s] - %s", spotifyid, trackname)
+    logging.debug("trackinfo - fetched track [%s] - %s", spotifyid, trackname)
     
     # Check if we already have this track in the database
     similar_tracks = (await Track.filter(trackname=trackname).order_by('id'))
