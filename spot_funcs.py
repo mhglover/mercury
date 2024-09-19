@@ -566,11 +566,16 @@ async def queue_safely(state):
         return True
     else:
         logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason, check_track)
-        logging.error("%s --- %s check for a recent track consolidation", procname, state.user.displayname)
-        logging.error("%s --- %s sleeping for 3 seconds and releasing queue lock", procname, state.user.displayname)
-        logging.info("recs: %s", recs)
+    
+        recs = await Recommendation.all().prefetch_related("track")
+        for rec in recs:
+            logging.error("rec: %s %s", rec.track.spotifyid, rec.trackname)
+    
         queue_context = await get_player_queue(state)
-        logging.info("queue_context: %s", queue_context)
+        logging.error("currently: %s %s", queue_context.currently_playing.id, queue_context.currently_playing.name)
+    
+        for track in queue_context.queue:
+            logging.error("q/c: %s %s", track.id, track.name)
         
         # release the lock
         logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
@@ -729,15 +734,20 @@ async def is_rec_queued(state) -> bool:
     spotify = state.spotify
     token = state.token
     # get all the spotifyids for the recs that haven't expired yet
-    sql = "SELECT s.spotifyid FROM public.recommendation r left join spotifyid s on r.track_id=s.track_id where (expires_at is null or expires_at < now());"
+    # gotta fix the model so this can be done with tortoise
+    sql = "SELECT s.spotifyid FROM public.recommendation r left join spotifyid s on r.track_id=s.track_id;"
     
-    # Main query to get recent play history with user displaynames
-    async with in_transaction() as connection:
-        _, results = await connection.execute_query(sql)
+    try:
+        async with in_transaction() as connection:
+            _, results = await connection.execute_query(sql)
+    except Exception as e:
+        logging.error("is_rec_queued - exception fetching recs %s", e)
+        return False
 
+    logging.debug("is_rec_queued - fetched rec spotifyids")
+    
     # get the list of tracks waiting in the player queue, plus the tracks that
     # are forthcoming in the player's context, ie album, playlist, artist, etc
-    
     try:
         if token:
             with spotify.token_as(token):
@@ -746,27 +756,41 @@ async def is_rec_queued(state) -> bool:
             queue_context = await get_player_queue(state)
             
     except tk.Unauthorised as e:
-        logging.error("user_has_rec_in_queue 401 Unauthorised exception %s", e)
-        logging.error("token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
+        logging.error("is_rec_queued - user_has_rec_in_queue 401 Unauthorised exception %s", e)
+        logging.error("is_rec_queued - token expiring: %s, expiration: %s", state.token.is_expiring,state.token.expires_in)
         return False
     
     except Exception as e:
-        logging.error("user_has_rec_in_queue exception fetching player queue %s", e)
+        logging.error("is_rec_queued - user_has_rec_in_queue exception fetching player queue %s", e)
         return False
     
     if queue_context is None:
-        logging.warning("user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
+        logging.warning("is_rec_queued - user_has_rec_in_queue no queue items, that's weird: %s", state.user.displayname)
         return False
     
+    logging.debug("is_rec_queued - pulled queue/context from spotify")
     
+    # does any rec_spotid appear in queue_spotids?
     rec_spotids = [x['spotifyid'] for x in results]
     queue_spotids = [x.id for x in queue_context.queue]
-    
-    # does any rec_spotid appear in queue_spotids
     queued_recs = [x in queue_spotids for x in rec_spotids]
     
     if any(queued_recs):
         logging.debug("is_rec_queued found rec in queue: %s", rec_spotids[0])
         return True
+
+    # no rec found in queue
+    for x in rec_spotids:
+        logging.debug("rec_spotifyid: %s", x)
+    
+    recs = await Recommendation.all().prefetch_related("track")
+    for rec in recs:
+        logging.debug("rec: %s %s", rec.track.spotifyid, rec.trackname)
+    
+    queue_context = await get_player_queue(state)
+    logging.debug("currently: %s %s", queue_context.currently_playing.id, queue_context.currently_playing.name)
+    
+    for track in queue_context.queue:
+        logging.debug("q/c: %s %s", track.id, track.name)
     
     return False
