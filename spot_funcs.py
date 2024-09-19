@@ -58,7 +58,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                 logging.debug("trackinfo - %s %s %s", spid.id, spid.spotifyid, spid.track_id)
                 
                 # pull the spotify track details for this spotifyid
-                with spotify.token_as(token):
+                if token:
+                    with spotify.token_as(token):
+                        spotify_details = await spotify.track(spid.spotifyid, market="US")
+                else:
                     spotify_details = await spotify.track(spid.spotifyid, market="US")
                 
                 # log any restrictions for troubleshooting
