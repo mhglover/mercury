@@ -96,7 +96,7 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                         logging.error("trackinfo - exception saving track %s\n%s", trackid, e)
                         
                 else:
-                    logging.warning("trackinfo - non-canonical spotifyid: %s", spotify_details.id)
+                    logging.debug("trackinfo - non-canonical spotifyid: %s", spid.id)
 
                 spotify_tracks.append(spid.spotifyid)
         else:
