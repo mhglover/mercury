@@ -526,10 +526,21 @@ async def queue_safely(state):
            check_track = await spotify.track(rec.track.spotifyid)
     
         if 'US' not in check_track.available_markets:
-            logging.error("%s --- %s track not available in US: %s (%s)\n%s", procname, state.user.displayname, rec.trackname, rec.track.spotifyid, check_track)
+            logging.error("%s --- %s track not available in US: %s (%s)", 
+                          procname, state.user.displayname, 
+                          rec.trackname, rec.track.spotifyid)
+            logging.error("%s --- %s available markets: %s",
+                          procname, state.user.displayname, 
+                          check_track.available_markets)
+            logging.error("%s --- %s check track: %s", check_track)
+            
             # clean up the track if we can
-            cleaned_id = await trackinfo(spotify, spotifyid=rec.track.spotifyid, token=token)
+            logging.warning("%s --- %s cleaning up track: %s",
+                            procname, state.user.displayname, rec.trackname)
+            await trackinfo(spotify, spotifyid=rec.track.spotifyid, token=token)
             cleaned_track = await trackinfo(spotify, trackid=rec.track_id, token=token)
+            logging.warning("%s --- %s cleaned track: %s",
+                            procname, state.user.displayname, cleaned_track)
 
             continue
         
@@ -543,12 +554,16 @@ async def queue_safely(state):
     
     # okay fine, queue the first rec
     first_rec = good_recs[0]
-    sent_successfully = await send_to_player(spotify, token, first_rec.track)
-    logging.info("%s --- %s sent first rec to queue: (%s) [%s] %s",
-                        procname, state.user.displayname, first_rec.id, first_rec.track.spotifyid, first_rec.trackname)
+    # get the track object for this rec with the canonical spotifyid
+    queueing = await trackinfo(spotify, trackid=first_rec.track_id, token=token)
+    
+    logging.info("%s --- %s sending first rec to queue: (%s) [%s] %s",
+                        procname, state.user.displayname, queueing.id, queueing.spotifyid, queueing.trackname)
+    sent_successfully = await send_to_player(spotify, token, queueing)
     
     if not sent_successfully:
-        logging.error("%s --- %s failed to send rec to queue: %s (%s)", procname, state.user.displayname, first_rec.trackname, first_rec.reason)
+        logging.error("%s --- %s failed to send rec to queue: %s (%s)", 
+                      procname, state.user.displayname, first_rec.trackname, first_rec.reason)
         return False
     
     # # wait a tick for the  queue touch to take effect
