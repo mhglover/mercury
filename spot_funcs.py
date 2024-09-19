@@ -429,7 +429,7 @@ async def queue_safely(state):
         
         if queue_is_locked:
             # release the lock
-            logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+            logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
             await Lock.release_lock(state.user.id)
 
         return False
@@ -439,7 +439,7 @@ async def queue_safely(state):
         logging.debug("%s --- %s already has rec in queue/context, no rec needed", procname, state.user.displayname)
         
         if queue_is_locked:
-            logging.info("%s --- %s queue is locked, but there's a rec in queue, releasing queue lock", procname, state.user.displayname)
+            logging.debug("%s --- %s queue is locked, but there's a rec in queue, releasing queue lock", procname, state.user.displayname)
             await Lock.release_lock(state.user.id)
         
         return False
@@ -575,7 +575,7 @@ async def queue_safely(state):
     if await is_rec_queued(state):
         logging.info("%s --- %s sent rec and confirmed a rec is in queue: [%s] [%s] %s (%s)", procname, state.user.displayname, first_rec.track_id, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
         # release the lock
-        logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+        logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
         await asyncio.sleep(3)
         await Lock.release_lock(state.user.id)
         return True
@@ -593,7 +593,7 @@ async def queue_safely(state):
             logging.error("q/c: %s %s", track.id, track.name)
         
         # release the lock
-        logging.info("%s --- %s releasing queue lock", procname, state.user.displayname)
+        logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
         await Lock.release_lock(state.user.id)
         return False
 
