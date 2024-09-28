@@ -50,6 +50,11 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         
         # if we have a track, check for multiple SpotifyID entries
         spids = await SpotifyID.filter(track_id=trackid)
+        
+        if not spids:
+            logging.error("trackinfo - no SpotifyID entries for track %s", trackid)
+            return None
+        
         if len(spids) > 1:
             logging.debug("trackinfo - multiple SpotifyID entries for track %s", trackid)
             spotify_tracks = []
