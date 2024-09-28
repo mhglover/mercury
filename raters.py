@@ -80,14 +80,14 @@ async def get_rating(user, track_id) -> int:
     logging.debug("%s get_or_creating a rating: %s %s", procname, user.displayname, track.trackname)
     
     # fetch it or create it if it didn't already exist
-    rating, _ = await Rating.get_or_create(user_id=user.id,
-                                                track_id=track.id,
-                                                trackname=track.trackname,
-                                                defaults={
-                                                   "rating": 0,
-                                                   "last_played": dt.now(tz.utc)
-                                                   }
-                                               )
+    rating, _ = await Rating.get_or_create( user_id=user.id,
+                                            track_id=track.id,
+                                            defaults={
+                                                "trackname": track.trackname,
+                                                "rating": 0,
+                                                "last_played": dt.now(tz.utc)
+                                                }
+                                            )
     return rating  
 
 
