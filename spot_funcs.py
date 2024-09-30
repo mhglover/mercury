@@ -571,14 +571,14 @@ async def queue_safely(state):
         #                   check_track)
             
             # clean up the track if we can
-            logging.warning("%s --- %s cleaning up track: %s",
-                            procname, state.user.displayname, rec.trackname)
-            await trackinfo(spotify, spotifyid=rec.track.spotifyid, token=token)
-            cleaned_track = await trackinfo(spotify, trackid=rec.track_id, token=token)
-            logging.warning("%s --- %s cleaned track: %s",
-                            procname, state.user.displayname, cleaned_track)
+            # logging.warning("%s --- %s cleaning up track: %s",
+            #                 procname, state.user.displayname, rec.trackname)
+            # await trackinfo(spotify, spotifyid=rec.track.spotifyid, token=token)
+            # cleaned_track = await trackinfo(spotify, trackid=rec.track_id, token=token)
+            # logging.warning("%s --- %s cleaned track: %s",
+            #                 procname, state.user.displayname, cleaned_track)
 
-            continue
+            # continue
         
         # made it through the gauntlet of tests, this is an acceptable rec
         logging.debug("%s --- %s adding rec to candidates: %s", procname, state.user.displayname, rec.trackname)
