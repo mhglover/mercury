@@ -334,6 +334,8 @@ class WatcherState():
         return self.position_last_cycle < SKIP_THRESHOLD_PERCENTAGE
 
     def next_is_now_playing(self):
+        if self.nextup is None:
+            return False
         result = (self.nextup and 
                   self.track.id == self.nextup.track.id)
         logging.debug("next_is_nowplaying? %s %s ? %s", result, self.track.id, self.nextup.track.id)
