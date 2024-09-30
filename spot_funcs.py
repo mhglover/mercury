@@ -48,13 +48,27 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             logging.error("trackinfo - exception querying Track table %s\n%s", trackid, e)
             track = None
         
+        # fix tracks with no spotifyid field
+        if track.spotifyid is None or track.spotifyid == "":
+            logging.warning("trackinfo - track %s has no spotifyid, attempting to repair", trackid)
+            if track.trackuri is not None:
+                track.spotifyid = track.trackuri.split(":")[-1]
+                try:
+                    await track.save()
+                    logging.warning("trackinfo - repaired spotifyid: %s", track.spotifyid)
+                except Exception as e:
+                    logging.error("trackinfo - exception saving track %s\n%s", trackid, e)
+                    track = None
+            else:
+                logging.error("trackinfo - track %s has no spotifyid or trackuri, can't repair", trackid)
+        
         # if we have a track, check for multiple SpotifyID entries
         spids = await SpotifyID.filter(track_id=trackid)
         
         if not spids:
             logging.error("trackinfo - no SpotifyID entries for track %s", trackid)
             if track.spotifyid is not None:
-                logging.warning("trackinfo - track has a spotifyid: %s", track.spotifyid)
+                logging.info("trackinfo - track has a spotifyid, attempting to create new spotifyid record: %s", track.spotifyid)
                 try:
                     spid = await SpotifyID.create(spotifyid=track.spotifyid, track=track)
                 except Exception as e:
@@ -62,10 +76,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                     spid = None
                 if spid:
                     logging.debug("trackinfo - created SpotifyID entry: %s", spid.id)
+                    spids.append(spid)
                 else:
                     logging.error("trackinfo - failed to create SpotifyID entry: %s", track.spotifyid)
             
-            return spid
         
         if len(spids) > 1:
             logging.debug("trackinfo - multiple SpotifyID entries for track %s", trackid)
@@ -122,7 +136,11 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         # clean up the main track record if necessary
         if token:
             with spotify.token_as(token):
-                spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+                try:
+                    spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+                except Exception as e:
+                    logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+                    return None
         else:
             spotify_details = await spotify.track(spids[0].spotifyid, market="US")
             
