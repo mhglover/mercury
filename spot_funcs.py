@@ -300,7 +300,7 @@ async def getrecents(limit=10):
     try:
         ph = await PlayHistory.all().order_by('-id').limit(limit).prefetch_related("track")
     except Exception as e:
-        logging.error("exception querying playhistory table %s", e)
+        logging.error("getrecents - exception querying playhistory table %s", e)
 
     return ph
 
@@ -329,10 +329,10 @@ async def was_recently_played(state, rec=None):
             h = await spotify.playback_recently_played()
             tracknames = [" & ".join([artist.name for artist in x.track.artists]) + " - " + x.track.name  for x in h.items]
     except tk.Unauthorised as e:
-        logging.error("was_recently_played 401 Unauthorised exception %s", e)
-        logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
+        logging.error("was_recently_played - 401 Unauthorised exception %s", e)
+        logging.error("was_recently_played - token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
     except Exception as e:
-        logging.error("was_recently_played exception fetching player history %s", e)
+        logging.error("was_recently_played - exception fetching player history %s", e)
         tracknames = None
         return False, tracknames
     
@@ -396,7 +396,7 @@ async def send_to_player(spotify, token, track: Track):
         
         except tk.Unauthorised as e:
             logging.error("send_to_player - 401 Unauthorised exception %s", e)
-            logging.error("token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
+            logging.error("send_to_player - token expiring: %s, expiration: %s", token.is_expiring, token.expires_in)
             return False
         except tk.NotFound as e:
             logging.error("send_to_player - 404 Not Found exception - trackuri: %s", track.trackuri)
@@ -538,19 +538,19 @@ async def queue_safely(state):
         
         
         # don't send a track that's not available in the user's market
-        with spotify.token_as(token):
-           check_track = await spotify.track(rec.track.spotifyid)
+        # with spotify.token_as(token):
+        #    check_track = await spotify.track(rec.track.spotifyid)
     
-        if 'US' not in check_track.available_markets:
-            logging.error("%s --- %s track not available in US: %s (%s)", 
-                          procname, state.user.displayname, 
-                          rec.trackname, rec.track.spotifyid)
-            logging.error("%s --- %s available markets: %s",
-                          procname, state.user.displayname, 
-                          check_track.available_markets)
-            logging.error("%s --- %s check track: %s",
-                          procname, state.user.displayname,
-                          check_track)
+        # if 'US' not in check_track.available_markets:
+        #     logging.error("%s --- %s track not available in US: %s (%s)", 
+        #                   procname, state.user.displayname, 
+        #                   rec.trackname, rec.track.spotifyid)
+        #     logging.error("%s --- %s available markets: %s",
+        #                   procname, state.user.displayname, 
+        #                   check_track.available_markets)
+        #     logging.error("%s --- %s check track: %s",
+        #                   procname, state.user.displayname,
+        #                   check_track)
             
             # clean up the track if we can
             logging.warning("%s --- %s cleaning up track: %s",
@@ -598,7 +598,7 @@ async def queue_safely(state):
         await Lock.release_lock(state.user.id)
         return True
     else:
-        logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason, check_track)
+        logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason, first_rec)
     
         recs = await Recommendation.all().prefetch_related("track")
         for rec in recs:
