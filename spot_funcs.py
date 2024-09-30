@@ -53,7 +53,19 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         
         if not spids:
             logging.error("trackinfo - no SpotifyID entries for track %s", trackid)
-            return None
+            if track.spotifyid is not None:
+                logging.warning("trackinfo - track has a spotifyid: %s", track.spotifyid)
+                try:
+                    spid = await SpotifyID.create(spotifyid=track.spotifyid, track=track)
+                except Exception as e:
+                    logging.error("trackinfo - exception creating SpotifyID %s\n%s", track.spotifyid, e)
+                    spid = None
+                if spid:
+                    logging.debug("trackinfo - created SpotifyID entry: %s", spid.id)
+                else:
+                    logging.error("trackinfo - failed to create SpotifyID entry: %s", track.spotifyid)
+            
+            return spid
         
         if len(spids) > 1:
             logging.debug("trackinfo - multiple SpotifyID entries for track %s", trackid)
