@@ -190,7 +190,7 @@ async def index():
             logging.error("index - unauthorised\n%s", e)
             return redirect("/")
         except Exception as e:
-            logging.error("index - playback_currently_playing - exception %s\n%s", e)
+            logging.error("index - playback_currently_playing - exception\n%s", e)
             return redirect("/")
     
     # set some return values
