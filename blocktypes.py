@@ -1,6 +1,7 @@
 """functions for pulling tracks for recommendations"""
 from datetime import timezone as tz, datetime as dt, timedelta
 import logging
+import asyncio
 from random import choice
 from tortoise.functions import Sum
 from tortoise.expressions import Subquery
@@ -95,7 +96,17 @@ async def spotrec_tracks(spotify, count=1):
     seed_names = [x.trackname for x in seed_tracks]
 
     logging.debug("%s getting spotify recommendations", procname)
-    utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
+    try:
+        utrack = await spotify.recommendations(track_ids=seed_spotifyids, limit=count)
+    except tk.TooManyRequests as e:
+        retry_after = e.response.headers['retry-after']
+        logging.error("%s rate limit timeout - sleeping for %s", procname, retry_after)
+        await asyncio.sleep(retry_after)
+        return [], "too many requests"
+    
+    except Exception as e:
+        logging.error("%s exception getting recommendations: %s", procname, e)
+        return [], "error getting recommendations"
     
     tracks = [await trackinfo(spotify, spotifyid=x.id) for x in utrack.tracks]
     reason = "spotify recommendations based on %s" % ", ".join(seed_names)
