@@ -650,6 +650,9 @@ async def spotifyid_web_track(spotifyid):
     user, token = await getuser(cred, user_id)
     
     track = await trackinfo(spotify, spotifyid=spotifyid, token=token)
+    if track is None:
+        logging.error("spotifyid_web_track - track is None")
+        return redirect("/")
     
     if request.method == "POST":
         now = dt.now(tz.utc)
