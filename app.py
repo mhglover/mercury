@@ -203,6 +203,10 @@ async def index():
         refresh_in = ((currently.item.duration_ms - currently.progress_ms) // 1000) +1
         web_data.refresh = min(refresh_in, 30)
         track = await trackinfo(spotify, spotifyid=currently.item.id, token=token)
+        if track is None:
+            logging.error("index - track is None")
+            return redirect("/")
+        
         web_data.track = await get_webtrack(track, web_data.user)
         web_data.track.reason = await Recommendation.get_or_none(track_id=web_data.track.track_id).values_list('reason', flat=True)
 
