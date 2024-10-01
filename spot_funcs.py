@@ -650,6 +650,9 @@ async def queue_safely(state):
 
 async def normalizetrack(track):
     """figure out where a track is and return it"""
+    if not track:
+        logging.error("normalizetrack no track provided")
+        return None
     
     if isinstance(track, int):
         logging.debug("normalizetrack fetching Track record by id: %s", track)
