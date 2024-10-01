@@ -311,6 +311,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
 async def get_webtrack(track, user=None):
     """accept a track object and return a webtrack"""
     
+    if track is None:
+        logging.error("get_webtrack - no track provided")
+        return None
+    
     track = await normalizetrack(track)
     
     if user is not None:
