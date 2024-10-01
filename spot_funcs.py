@@ -140,9 +140,15 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
                     spotify_details = await spotify.track(spids[0].spotifyid, market="US")
                 except Exception as e:
                     logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+                    logging.info("spids: %s", spids)
                     return None
         else:
-            spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+            try:
+                spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+            except Exception as e:
+                logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+                logging.info("spids: %s", spids)
+                return None
             
         
         if track.spotifyid != spotify_details.id:
