@@ -138,6 +138,11 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
             with spotify.token_as(token):
                 try:
                     spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+                except tk.TooManyRequests as e:
+                    logging.error("trackinfo - 429 Too Many Requests exception, sleeping for five minutes\n%s", e)
+                    asyncio.sleep(300)
+                    return None
+                
                 except Exception as e:
                     logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
                     logging.info("spids: %s", spids)
@@ -145,6 +150,10 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         else:
             try:
                 spotify_details = await spotify.track(spids[0].spotifyid, market="US")
+            except tk.TooManyRequests as e:
+                    logging.error("trackinfo - 429 Too Many Requests exception, sleeping for five minutes\n%s", e)
+                    asyncio.sleep(300)
+                    return None
             except Exception as e:
                 logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
                 logging.info("spids: %s", spids)
