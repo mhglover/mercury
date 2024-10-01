@@ -191,9 +191,17 @@ async def trackinfo(spotify, trackid=None, spotifyid=None, token=None):
         logging.debug("trackinfo - spotifyid [%s] found in db", spotifyid)
         if token:
             with spotify.token_as(token):
-                spotify_details = await spotify.track(spotifyid, market="US")
+                try:
+                    spotify_details = await spotify.track(spotifyid, market="US")
+                except Exception as e:
+                    logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+                    return None
         else:
-            spotify_details = await spotify.track(spotifyid, market="US")
+            try:
+                spotify_details = await spotify.track(spotifyid, market="US")
+            except Exception as e:
+                logging.error("trackinfo - exception fetching spotify track: %s\n%s", type(e).__name__, e)
+                return None
         
         # if we have extras, consolidate them where possible
         if len(spid) > 1:
