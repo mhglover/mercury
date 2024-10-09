@@ -156,6 +156,7 @@ class WebUser():
     rating: int = None
     track_id: int = None
     trackname: str = None
+    role: str = None
 
 
 @dataclass
