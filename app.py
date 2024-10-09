@@ -475,7 +475,8 @@ async def web_user(target_id):
     
     u = WebUser(
         displayname=target.displayname,
-        user_id=target.id
+        user_id=target.id,
+        role=target.role
     )
     w = WebData(user=user)
     
@@ -576,6 +577,25 @@ async def follow(target_id):
     
     
     logging.info("%s set watcherid for %s to #%s", procname, user.displayname, target_id)
+    return redirect("/")
+
+
+# set this user to follow me (admin only)
+@app.route('/user/<target_id>/following')
+async def following(target_id):
+    """a friend is listening with me"""
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect(request.referrer)
+    
+    user, _ = await getuser(cred, user_id)
+    if user.role != "admin":
+        return redirect(request.referrer)
+    
+    target, _ = await getuser(cred, target_id)
+    target.status = "following"
+    target.watcherid = user.id
+    await target.save()
     return redirect("/")
 
 
