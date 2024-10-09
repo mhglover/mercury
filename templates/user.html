@@ -8,6 +8,10 @@
 {% if u.user_id != w.user.id %}
   <p><a href="/user/{{u.user_id}}/follow">I'm listening along with this user's player</a></p>
   <br>
+  {% if u.role == "admin" %}
+    <p><a href="/user/{{u.user_id}}/following">this user is listening along with me</a></p>
+    <br>
+  {% endif %}
   <p><a href="/user/{{u.user_id}}/impersonate">impersonate this user</a></p>
 {% endif %}
 
