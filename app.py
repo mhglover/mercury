@@ -760,6 +760,22 @@ async def web_rate_track(track_id, action):
     return redirect(request.referrer)
 
 
+# view all the users with links to their profiles
+@app.route('/users', methods=['GET'])
+async def users():
+    """show all users"""
+    user_id = session.get('user_id', None)
+    if not user_id:
+        return redirect("/")
+    
+    user, _ = await getuser(cred, user_id)
+    
+    users = await User.all().order_by('id')
+    w = WebData(
+        user = user)
+    
+    return await render_template('users.html', w=w, users=users)
+
 
 async def main():
     """kick it"""

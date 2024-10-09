@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>
+  Users
+</h1>
+
+<ul>
+{% for user in users %}
+  <li>
+    <a href="/user/{{user.id}}" class="{{ user.color }}">{{ user.displayname }}</a>
+  </li>
+{% endfor %}
+</ul>
+
+{% endblock %}

@@ -29,6 +29,7 @@
           {% if w.user.id == None %}
             <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/auth">login w/spotify</a>
           {% else %}
+              <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/users">users</a>
               <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/user/{{w.user.id}}">my ratings</a>
               {% if w.user.status == "inactive" %}
                 <a class="nav-link fw-bold py-1 px-0 active" aria-current="page" href="/tunein">tune in</a>
