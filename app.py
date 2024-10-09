@@ -567,6 +567,14 @@ async def follow(target_id):
     user.watcherid = target_id
     await user.save()
     
+    # set the target user to active
+    target, _ = await getuser(cred, target_id)
+    if target.status != "active":
+        target.status = "active"
+        await target.save()
+        logging.info("follow - target is inactive, tuning them in - %s", target.displayname)
+    
+    
     logging.info("%s set watcherid for %s to #%s", procname, user.displayname, target_id)
     return redirect("/")
 
