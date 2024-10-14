@@ -7,7 +7,7 @@
     <div class="track-info">
         <h2 class="track-title">
             <a id="currently" class="track-name {{ w.track.color }}" href="/track/{{ w.track.track_id }}" title="{{ w.track.reason }}">{{ w.track.trackname }}</a>
-            <br>
+            <p id="reason">{{ w.track.reason if w.track.reason }}</p>
             <a id="currently_uprate" class="rater love" href="/track/{{w.track.track_id}}/rate/up">+</a>
             <a id="currently_downrate" class="rater hate" href="/track/{{w.track.track_id}}/rate/down" >-</a>
         </h2>
@@ -21,6 +21,9 @@
             {% for id, user in w.users.items() %}
                 <li>
                     <a id="user_{{user.user_id}}" href="/user/{{user.user_id}}" class="{{ user.color }}">{{ user.displayname }}</a>
+                    {% if user.comment %}
+                        - {{ user.comment }}
+                    {% endif %}
                 </li>
             {% endfor %}
             </ul>

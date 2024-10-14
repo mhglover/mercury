@@ -87,6 +87,7 @@ async def getactivewebusers(track):
     
     # dict comprehension to create a ratings map
     user_ratings = {rating.user_id: rating.rating for rating in track.ratings}
+    user_comments = {rating.user_id: rating.comment for rating in track.ratings}
     logging.debug("user_ratings: %s", user_ratings)
 
     webusers = [
@@ -95,6 +96,7 @@ async def getactivewebusers(track):
             user_id=user.id,
             color=feelabout(user_ratings.get(user.id)),
             rating=user_ratings.get(user.id),
+            comment=user_comments.get(user.id),
             track_id=track.id,
             trackname=track.trackname
         )

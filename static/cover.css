@@ -80,3 +80,7 @@ ul { list-style-type: none; padding-left: 0;}
   display: block; /* Makes the link behave like a block element */
   max-width: 100%; /* Ensures the element does not overflow its container */
 }
+
+.reason {
+  font-size: 1.5rem;
+}

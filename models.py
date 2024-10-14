@@ -157,6 +157,7 @@ class WebUser():
     track_id: int = None
     trackname: str = None
     role: str = None
+    comment: str = None
 
 
 @dataclass
@@ -195,6 +196,7 @@ class WebData():
                                       "user_id": user.user_id,
                                       "color": user.color,
                                       "rating": user.rating,
+                                      "comment": user.comment,
                                       "track_id": user.track_id,
                                       "trackname": user.trackname
                                       } for user in self.users},
