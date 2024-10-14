@@ -170,8 +170,8 @@ async def index():
     web_data.user, token = await getuser(cred, user_id)
     web_data.nextup = await getnext(webtrack=True, user=web_data.user) or WebTrack()
     
-    if web_data.nextup.track_id:
-        web_data.users = await getactivewebusers(web_data.nextup.track_id)
+    # if web_data.nextup.track_id:
+    #     web_data.users = await getactivewebusers(web_data.nextup.track_id)
     
     web_data.history = await get_recent_playhistory_with_ratings(web_data.user.id)
     
