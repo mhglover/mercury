@@ -643,17 +643,28 @@ async def queue_safely(state):
         await Lock.release_lock(state.user.id)
         return True
     else:
-        logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)\n%s", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason, first_rec)
+        logging.error("%s --- %s sent rec (%s) but track not in queue: %s (%s)", procname, state.user.displayname, first_rec.track.spotifyid, first_rec.trackname, first_rec.reason)
+        
+        # get the spotify details for the first rec
+        with spotify.token_as(token):
+            try:
+                spotify_details = await spotify.track(first_rec.track.spotifyid)
+            except Exception as e:
+                logging.error("%s --- %s exception fetching spotify track: %s\n%s", procname, state.user.displayname, first_rec.track.spotifyid, e)
+                return False
+        
+        logging.error("%s --- %s spotify track details: %s", procname, state.user.displayname, spotify_details)
     
+        # list the recommendations in the queue
         recs = await Recommendation.all().prefetch_related("track")
         for rec in recs:
-            logging.error("rec: %s %s", rec.track.spotifyid, rec.trackname)
+            logging.error("recommendations: %s %s", rec.track.spotifyid, rec.trackname)
     
         queue_context = await get_player_queue(state)
-        logging.error("currently: %s %s", queue_context.currently_playing.id, queue_context.currently_playing.name)
+        logging.error("currently playing: %s %s", queue_context.currently_playing.id, queue_context.currently_playing.name)
     
         for track in queue_context.queue:
-            logging.error("q/c: %s %s", track.id, track.name)
+            logging.error("queue/context: %s %s", track.id, track.name)
         
         # release the lock
         logging.debug("%s --- %s releasing queue lock", procname, state.user.displayname)
