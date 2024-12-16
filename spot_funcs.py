@@ -654,6 +654,10 @@ async def queue_safely(state):
                 return False
         
         logging.error("%s --- %s spotify track details: %s", procname, state.user.displayname, spotify_details)
+        
+        # removing that track from the recommendations
+        logging.error("%s --- %s removing rec from recommendations: %s", procname, state.user.displayname, first_rec.trackname)
+        await first_rec.delete()
     
         # list the recommendations in the queue
         recs = await Recommendation.all().prefetch_related("track")
