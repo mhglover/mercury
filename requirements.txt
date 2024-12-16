@@ -1,5 +1,5 @@
 tekore==5.5.1
-quart==0.19.6
+quart==0.19.9
 python-dotenv==1.0.1
 tortoise-orm==0.21.3
 asyncpg==0.29.0
